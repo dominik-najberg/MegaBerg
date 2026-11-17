@@ -15,6 +15,9 @@ export interface Xf {
   /** Limb swing weight (signed). Vertices below `pivot` swing forward/back in the vertex shader. */
   swing?: number;
   pivot?: number;
+  /** Wing flap weight: vertices further than `flapFrom` from the body axis move up/down. */
+  flap?: number;
+  flapFrom?: number;
   /** Per-triangle brightness jitter, default 0.07. */
   jitter?: number;
 }
@@ -40,8 +43,10 @@ function jrand(): number {
 export class GeoBuilder {
   private readonly pos: number[] = [];
   private readonly col: number[] = [];
-  private readonly swing: number[] = [];
-  private hasSwing = false;
+  private readonly anim: number[] = [];
+  private hasAnim = false;
+  /** Always emit the aAnim attribute (instanced enemy shaders require it). */
+  forceAnim = false;
 
   constructor(seed = 1) {
     jitterSeed = seed;
@@ -58,8 +63,10 @@ export class GeoBuilder {
     const pa = g.getAttribute('position');
     const jitter = xf.jitter ?? 0.07;
     const swing = xf.swing ?? 0;
-    if (swing !== 0) this.hasSwing = true;
+    const flap = xf.flap ?? 0;
+    if (swing !== 0 || flap !== 0) this.hasAnim = true;
     const pivot = xf.pivot ?? 0;
+    const flapFrom = xf.flapFrom ?? 0;
     for (let i = 0; i < pa.count; i += 3) {
       const k = 1 + (jrand() - 0.5) * 2 * jitter;
       _c.set(color);
@@ -67,7 +74,7 @@ export class GeoBuilder {
         _v.fromBufferAttribute(pa, i + j).applyMatrix4(_m);
         this.pos.push(_v.x, _v.y, _v.z);
         this.col.push(_c.r * k, _c.g * k, _c.b * k);
-        this.swing.push(swing * Math.max(0, pivot - _v.y));
+        this.anim.push(swing * Math.max(0, pivot - _v.y), flap * Math.max(0, Math.abs(_v.x) - flapFrom));
       }
     }
     if (g !== geom) g.dispose();
@@ -142,7 +149,7 @@ export class GeoBuilder {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    if (this.hasSwing) g.setAttribute('aSwing', new THREE.Float32BufferAttribute(this.swing, 1));
+    if (this.hasAnim || this.forceAnim) g.setAttribute('aAnim', new THREE.Float32BufferAttribute(this.anim, 2));
     g.computeVertexNormals();
     g.computeBoundingSphere();
     return g;

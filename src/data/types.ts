@@ -119,6 +119,8 @@ export interface PassiveDef {
   perLevel: number;
   /** Formats one level of the bonus for the card text, e.g. "+10% obrażeń". */
   fmt: (v: number) => string;
+  /** Integer-valued passives ignore card rarity and always show this one. */
+  fixedRarity?: Rarity;
   unlock?: string;
 }
 

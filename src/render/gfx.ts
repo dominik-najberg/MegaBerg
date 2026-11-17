@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { clamp, damp } from '../core/math';
 import type { World } from '../sim/world';
 import type { GameMap } from '../sim/terrain';
+import { EnemiesView } from './enemiesView';
+import { FxView } from './fxView';
 import { HeroView } from './hero';
+import { Overlay } from './overlay';
 import { makeGlowTexture, PropsView } from './props';
 import { Sky } from './sky';
 import { TerrainView } from './terrainView';
@@ -19,7 +22,13 @@ export class Gfx {
   readonly terrain: TerrainView;
   readonly props: PropsView;
   readonly hero: HeroView;
+  readonly enemies: EnemiesView;
+  readonly fx: FxView;
+  readonly overlay: Overlay;
   readonly glowTex: THREE.Texture;
+  shakeEnabled = true;
+  /** Extra slow orbit used behind the menus. */
+  menuOrbit = false;
   private readonly heroLight: THREE.PointLight;
   private readonly focus = new THREE.Vector3();
   private focusInit = false;
@@ -32,6 +41,7 @@ export class Gfx {
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
+    overlayCanvas: HTMLCanvasElement,
     private readonly map: GameMap,
     quality: Quality,
   ) {
@@ -52,6 +62,11 @@ export class Gfx {
     this.scene.add(this.hero.group);
     this.heroLight = new THREE.PointLight(0xffc890, 6, 16, 1.5);
     this.scene.add(this.heroLight);
+    this.enemies = new EnemiesView();
+    this.scene.add(this.enemies.group);
+    this.overlay = new Overlay(overlayCanvas);
+    this.fx = new FxView(map, this.overlay, this.glowTex);
+    this.scene.add(this.fx.group);
 
     this.applyQuality(quality);
     this.resize();
@@ -67,6 +82,8 @@ export class Gfx {
     this.sky.sun.shadow.mapSize.setScalar(q === 2 ? 2048 : 1024);
     this.sky.sun.shadow.map?.dispose();
     this.sky.sun.shadow.map = null;
+    this.enemies.setShadows(q > 0);
+    this.fx.setDensity(q === 0 ? 0.5 : q === 1 ? 0.8 : 1);
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (m) m.needsUpdate = true;
@@ -80,6 +97,7 @@ export class Gfx {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
+    this.fx.setViewport(h, this.camera.fov);
   }
 
   rotateCamera(dYaw: number, dPitch: number): void {
@@ -87,9 +105,19 @@ export class Gfx {
     this.camPitch = clamp(this.camPitch + dPitch, 0.08, 1.25);
   }
 
+  /** Call when a new run starts: drops per-run visuals and snaps the camera. */
+  resetRun(): void {
+    this.fx.reset();
+    this.overlay.clear();
+    this.focusInit = false;
+    this.shake = 0;
+  }
+
   render(world: World, alpha: number, frameDt: number): void {
     this.clock += frameDt;
     const p = world.player;
+    if (this.menuOrbit) this.camYaw += frameDt * 0.06;
+    this.hero.group.visible = !world.dead;
     this.hero.update(p, alpha, frameDt, this.clock);
     const hp = this.hero.group.position;
     this.hero.setGround(this.map.heightAt(hp.x, hp.z));
@@ -110,6 +138,9 @@ export class Gfx {
     if (cy < minY) cy = minY;
     this.camera.position.set(cx, cy, cz);
     this.camera.lookAt(this.focus.x, this.focus.y + 0.6, this.focus.z);
+    if (this.fx.shake > this.shake) this.shake = this.fx.shake;
+    this.fx.shake = 0;
+    if (!this.shakeEnabled) this.shake = 0;
     if (this.shake > 0.001) {
       const s = this.shake * 0.35;
       this.camera.position.x += (Math.random() - 0.5) * s;
@@ -125,6 +156,11 @@ export class Gfx {
     this.heroLight.position.set(hp.x, hp.y + 2.6, hp.z);
     this.heroLight.intensity = 5 + this.sky.night * 9;
 
+    for (let i = 0; i < world.shrines.length; i++) this.props.setShrineUsed(i, (world.shrines[i] as { used: boolean }).used);
+    this.enemies.update(world, alpha, this.clock);
+    this.fx.update(world, alpha, frameDt, this.sky.night);
+
     this.renderer.render(this.scene, this.camera);
+    this.overlay.draw(this.camera, frameDt);
   }
 }
