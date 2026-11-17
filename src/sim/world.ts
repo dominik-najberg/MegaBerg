@@ -407,6 +407,8 @@ export class World {
     p.invuln = 0.4;
     p.hurtT = 0;
     this.damageTaken += d;
+    // Heavy blows (boss attacks, charges) freeze the action for a few frames.
+    if (d > this.stats.maxHp * 0.15 && this.hitstop < 0.07) this.hitstop = 0.07;
     this.events.emit(Ev.PlayerHit, p.x, p.y, p.z, d);
     if (p.hp <= 0) {
       if (this.revivesLeft > 0) {

@@ -347,6 +347,34 @@ export class AudioSys {
     }
   }
 
+  private stepDist = 0;
+  private heartT = 0;
+
+  /** Continuous sounds that depend on state rather than events: footsteps, low-health heartbeat. */
+  update(world: World, dt: number): void {
+    if (!this.ctx) return;
+    const p = world.player;
+    const speed = Math.hypot(p.vx, p.vz);
+    if (p.onGround && speed > 1.5 && p.dashT <= 0) {
+      this.stepDist += speed * dt;
+      if (this.stepDist > 2.4) {
+        this.stepDist = 0;
+        if (p.inPuddle) this.hiss('bandpass', 1500, 600, 0.12, 0.1, 0, 0.7);
+        else this.hiss('lowpass', 500 + Math.random() * 200, 200, 0.05, 0.11);
+      }
+    }
+    if (p.hp > 0 && p.hp < world.stats.maxHp * 0.3) {
+      this.heartT -= dt;
+      if (this.heartT <= 0) {
+        this.heartT = 0.85;
+        this.tone('sine', 70, 45, 0.14, 0.4);
+        this.tone('sine', 62, 40, 0.16, 0.3, 0.17);
+      }
+    } else {
+      this.heartT = 0;
+    }
+  }
+
   ui(kind: 'click' | 'hover' | 'buy' | 'deny' | 'card'): void {
     if (!this.ctx) return;
     if (kind === 'hover') {

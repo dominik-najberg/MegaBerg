@@ -34,11 +34,12 @@ export class Gfx {
   private readonly focus = new THREE.Vector3();
   private focusInit = false;
   camYaw = 0;
-  camPitch = 0.4;
+  camPitch = 0.36;
   camDist = 9;
   shake = 0;
   private clock = 0;
   private distExtra = 0;
+  private ghostAcc = 0;
   quality: Quality;
 
   constructor(
@@ -169,6 +170,15 @@ export class Gfx {
 
     for (let i = 0; i < world.shrines.length; i++) this.props.setShrineUsed(i, (world.shrines[i] as { used: boolean }).used);
     this.enemies.update(world, alpha, this.clock);
+    this.fx.camYaw = this.camYaw;
+    this.fx.setFogColor(this.sky.fog.color);
+    if (p.dashT > 0 && frameDt > 0.002) {
+      this.ghostAcc += frameDt;
+      if (this.ghostAcc > 0.045) {
+        this.ghostAcc = 0;
+        this.fx.addGhost(this.hero.group);
+      }
+    }
     this.fx.update(world, alpha, frameDt, this.sky.night);
 
     this.renderer.render(this.scene, this.camera);

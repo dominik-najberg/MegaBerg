@@ -196,6 +196,8 @@ export class FxView {
   readonly dust = new Particles(700, false, 1);
   shake = 0;
   showNumbers = true;
+  /** Camera yaw, so billboards can face the camera. */
+  camYaw = 0;
 
   private readonly gems: THREE.InstancedMesh;
   private readonly coins: THREE.InstancedMesh;
@@ -230,6 +232,11 @@ export class FxView {
   private readonly chestViews: Array<{ group: THREE.Group; lid: THREE.Mesh; glow: THREE.Sprite; openT: number }> = [];
   private readonly chestParts = chestGeo();
   private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  private readonly gemGlow: THREE.InstancedMesh;
+  private readonly heroRing: THREE.Mesh;
+  private readonly mist: THREE.InstancedMesh;
+  private readonly mistSeeds: Float32Array;
+  private readonly ghosts: Array<{ mesh: THREE.Mesh; t: number }> = [];
   private readonly fireflies: THREE.Points;
   private readonly fireflyMat: THREE.ShaderMaterial;
   private emitAcc = 0;
@@ -248,6 +255,32 @@ export class FxView {
     this.honey = instanced(honeyGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x3a2808 }), 64);
     this.flower = instanced(flowerGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x802a60 }), 16);
     g.add(this.gems, this.coins, this.bread, this.honey, this.flower);
+    // Soft additive glow on the ground under every gem (cheap: one instanced quad each).
+    this.gemGlow = instanced(
+      new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xff9a2a, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }),
+      MAX_GEMS,
+    );
+    this.gemGlow.renderOrder = 2;
+    g.add(this.gemGlow);
+    // Golden ring under the hero: keeps him readable inside a crowd.
+    this.heroRing = new THREE.Mesh(
+      arcGeometry(0.72, 1, 0, TAU, 32, false),
+      new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffd060, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }),
+    );
+    this.heroRing.renderOrder = 3;
+    g.add(this.heroRing);
+    // Ground mist: big soft billboards drifting around the hero.
+    const mistCount = 46;
+    this.mistSeeds = new Float32Array(mistCount * 4);
+    for (let i = 0; i < this.mistSeeds.length; i++) this.mistSeeds[i] = Math.random();
+    this.mist = instanced(
+      new THREE.PlaneGeometry(1, 1),
+      new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0x9a8ac8, transparent: true, opacity: 0.2, depthWrite: false, fog: false }),
+      mistCount,
+    );
+    this.mist.renderOrder = 1;
+    g.add(this.mist);
 
     // --- orbiting sickles + their additive trails
     this.blades = instanced(sickleGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xb07a10 }), 40, true);
@@ -393,6 +426,30 @@ void main() {
   setDensity(k: number): void {
     this.sparks.density = k;
     this.dust.density = k;
+    this.mist.visible = k > 0.6;
+  }
+
+  /** Mist takes the colour of the fog so it blends with the time of day. */
+  setFogColor(c: THREE.Color): void {
+    (this.mist.material as THREE.MeshBasicMaterial).color.copy(c).multiplyScalar(1.5);
+  }
+
+  /** Short-lived translucent copies of the hero left behind while dashing. */
+  addGhost(source: THREE.Object3D): void {
+    let slot = this.ghosts.find((x) => x.t <= 0);
+    if (!slot) {
+      if (this.ghosts.length >= 6) return;
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.7, 0.4), new THREE.MeshBasicMaterial({ color: 0xffe6a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      mesh.renderOrder = 4;
+      this.group.add(mesh);
+      slot = { mesh, t: 0 };
+      this.ghosts.push(slot);
+    }
+    slot.t = 0.28;
+    slot.mesh.visible = true;
+    slot.mesh.position.copy(source.position);
+    slot.mesh.position.y += 0.85;
+    slot.mesh.rotation.set(0.7, source.rotation.y, 0, 'YXZ');
   }
 
   // ---------------------------------------------------------------- events
@@ -688,9 +745,12 @@ void main() {
         const y = (g.y[i] as number) + (g.mag[i] ? 0 : 0.42 + Math.sin(time * 3 + i) * 0.1 + Math.sin(pop * Math.PI) * 0.9);
         writeMatrix(arr, n, g.x[i] as number, y, g.z[i] as number, time * 2 + i, s, s * 1.3, s);
         setColor(this.gems, n, tier === 2 ? 0xfff0a0 : tier === 1 ? 0xff7a30 : 0xffb030);
+        const gs = (1.5 + tier * 0.9) * (0.9 + Math.sin(time * 4 + i) * 0.1);
+        writeMatrix(this.gemGlow.instanceMatrix.array, n, g.x[i] as number, y - 0.3, g.z[i] as number, 0, gs, 1, gs);
         n++;
       }
       flush(this.gems, n);
+      flush(this.gemGlow, n);
     }
     // pickups
     {
@@ -716,6 +776,51 @@ void main() {
       flush(this.flower, nf);
     }
     this.syncChests(world, dt, time);
+
+    // hero ring + wading splashes + dash afterimages
+    {
+      const ground = map.heightAt(hx, hz);
+      this.heroRing.visible = !world.dead;
+      this.heroRing.position.set(hx, ground + 0.12, hz);
+      this.heroRing.scale.setScalar(0.95 + Math.sin(time * 3) * 0.05);
+      (this.heroRing.material as THREE.MeshBasicMaterial).opacity = (p.invuln > 0 ? 0.75 : 0.42) * Math.max(0.3, 1 - (hy - ground) / 5);
+      const speed = Math.hypot(p.vx, p.vz);
+      if (emit && p.inPuddle && speed > 1) {
+        sp.emit(hx + (Math.random() - 0.5) * 0.6, ground + 0.3, hz + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 2, 2.5 + Math.random() * 2, (Math.random() - 0.5) * 2, 0.45, 0.2, 0xa8c8e8, 12, 0);
+      }
+      if (emit && p.onGround && speed > 6 && Math.random() < 0.35 && !p.inPuddle) {
+        this.dust.emit(hx, ground + 0.15, hz, (Math.random() - 0.5) * 0.8, 0.7, (Math.random() - 0.5) * 0.8, 0.45, 0.7, 0x8a7a66, -0.3, 1);
+      }
+      for (const gh of this.ghosts) {
+        if (gh.t <= 0) continue;
+        gh.t -= dt;
+        gh.mesh.visible = gh.t > 0;
+        (gh.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, gh.t / 0.28) * 0.35;
+      }
+    }
+
+    // ground mist billboards (wrap around the hero, always face the camera horizontally)
+    if (this.mist.visible) {
+      const arr = this.mist.instanceMatrix.array;
+      const seeds = this.mistSeeds;
+      const cell = 110;
+      const n = this.mist.instanceMatrix.count;
+      for (let i = 0; i < n; i++) {
+        const sx = (seeds[i * 4] as number) * cell + time * (0.35 + (seeds[i * 4 + 2] as number) * 0.5);
+        const sz = (seeds[i * 4 + 1] as number) * cell + time * 0.2;
+        const rx = ((((sx - hx + cell / 2) % cell) + cell) % cell) - cell / 2;
+        const rz = ((((sz - hz + cell / 2) % cell) + cell) % cell) - cell / 2;
+        const d = Math.hypot(rx, rz);
+        // Fade out near the hero (so it never covers the fight) and at the wrap border.
+        const k = Math.min(1, Math.max(0, (d - 14) / 14)) * Math.min(1, Math.max(0, (cell / 2 - d) / 12));
+        const size = (16 + (seeds[i * 4 + 3] as number) * 16) * k;
+        const x = hx + rx;
+        const z = hz + rz;
+        writeMatrix(arr, i, x, map.heightAt(x, z) + 1.2 + (seeds[i * 4 + 3] as number) * 1.5, z, this.camYaw, size, size * 0.3, 1);
+      }
+      this.mist.count = n;
+      this.mist.instanceMatrix.needsUpdate = true;
+    }
 
     // weapons: orbit blades, aura, cone, ravens
     {
@@ -1034,6 +1139,10 @@ void main() {
     for (const v of this.chestViews) this.group.remove(v.group);
     this.chestViews.length = 0;
     for (const list of [this.sweeps, this.bolts, this.booms, this.warns]) for (const s of list) s.mesh.visible = false;
+    for (const gh of this.ghosts) {
+      gh.t = 0;
+      gh.mesh.visible = false;
+    }
     this.shake = 0;
   }
 }

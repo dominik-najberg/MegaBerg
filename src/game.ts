@@ -114,7 +114,7 @@ export class Game {
     this.gfx.resetRun();
     this.gfx.menuOrbit = false;
     this.gfx.camYaw = 0;
-    this.gfx.camPitch = 0.4;
+    this.gfx.camPitch = 0.36;
     this.ui.close();
     this.ui.resetHud();
     this.ui.setHud(true);
@@ -306,6 +306,7 @@ export class Game {
     w.step(dt, s);
     this.gfx.fx.handleEvents(w);
     this.audio.handleEvents(w);
+    this.audio.update(w, dt);
     w.events.clear();
     if (w.hitstop > 0) {
       this.hitstopT = w.hitstop;
