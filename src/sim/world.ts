@@ -404,7 +404,7 @@ export class World {
     if (p.invuln > 0 || this.dead || (this.won && !this.endless)) return;
     const d = damageAfterArmor(damage, this.stats.armor);
     p.hp -= d;
-    p.invuln = 0.4;
+    p.invuln = 0.5;
     p.hurtT = 0;
     this.damageTaken += d;
     // Heavy blows (boss attacks, charges) freeze the action for a few frames.
@@ -464,7 +464,7 @@ export class World {
     e.px[i] = x;
     e.py[i] = y;
     e.pz[i] = z;
-    const rankMul = def.rank ? Math.max(1, this.hpMul * 0.55) : this.hpMul;
+    const rankMul = def.rank ? Math.max(1, this.hpMul * 0.42) : this.hpMul;
     const hp = def.hp * rankMul * (elite ? ELITE_HP_MUL : 1);
     e.hp[i] = hp;
     e.maxHp[i] = hp;
@@ -473,7 +473,7 @@ export class World {
     e.radius[i] = def.radius * (elite ? 1.35 : 1);
     e.elite[i] = elite ? 1 : 0;
     e.t1[i] = 1 + this.rng.next() * 2.5;
-    e.t2[i] = 0;
+    e.t2[i] = def.ai === 'jaga' ? 5 : 0;
     e.t3[i] = 4 + this.rng.next() * 3;
     e.ax[i] = this.rng.next() < 0.5 ? -1 : 1;
     e.oy[i] = def.flying ? 1.3 : 0;
@@ -721,7 +721,7 @@ export class World {
         s.progress += dt;
         if (s.progress >= 0.9) {
           s.progress = 0;
-          this.choice = { type: 'shrine', index: i, options: BLESSINGS };
+          this.choice = { type: 'shrine', index: i, options: this.blessingOptions() };
           this.events.emit(Ev.Shrine, s.x, s.y, s.z);
           return;
         }
@@ -730,6 +730,12 @@ export class World {
       }
       pr.progress = s.progress / 0.9;
     }
+  }
+
+  /** Each god grants at most two blessings per run. */
+  private blessingOptions(): BlessingDef[] {
+    const opts = BLESSINGS.filter((b) => this.blessings.filter((x) => x.id === b.id).length < 2);
+    return opts.length > 0 ? opts : BLESSINGS;
   }
 
   private openChest(c: Chest): void {

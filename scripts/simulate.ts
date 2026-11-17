@@ -1,6 +1,6 @@
 /**
  * Headless balance simulation: plays whole runs with the bot and prints how they went.
- * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [character=wojmir] [maxMinutes=14]
+ * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [set=sila:2,zdrowie:1] [character=wojmir] [pool=all] [verbose=1]
  */
 import { CHARACTER_BY_ID } from '../src/data/characters';
 import { PASSIVES } from '../src/data/passives';
@@ -22,6 +22,8 @@ const verbose = args.verbose === '1';
 const map = new GameMap();
 const shop: Record<string, number> = {};
 for (const item of SHOP) shop[item.id] = item.id === 'odrodzenie' ? (shopLevel >= 4 ? 1 : 0) : Math.min(item.maxLevel, shopLevel);
+// Targeted purchases, e.g. set=sila:2,zdrowie:2,pancerz:1
+if (args.set) for (const pair of args.set.split(',')) shop[pair.split(':')[0] as string] = Number(pair.split(':')[1]);
 
 const fmt = (t: number): string => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 let wins = 0;

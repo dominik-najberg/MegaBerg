@@ -5,21 +5,21 @@ export const RUN_LENGTH = 600;
 
 /** Enemy mix and density over the run. Phases are picked by `from` (seconds). */
 export const WAVES: WavePhase[] = [
-  { from: 0, alive: [10, 24], rate: 1.5, mix: { chochlik: 1 } },
-  { from: 45, alive: [24, 42], rate: 2.2, mix: { chochlik: 3, utopiec: 1 } },
-  { from: 90, alive: [42, 66], rate: 3, mix: { chochlik: 3, utopiec: 2, kruk: 1.5 } },
-  { from: 150, alive: [66, 92], rate: 3.6, mix: { chochlik: 3, utopiec: 2, kruk: 2, ognik: 1 } },
+  { from: 0, alive: [8, 20], rate: 1.4, mix: { chochlik: 1 } },
+  { from: 45, alive: [20, 36], rate: 2.0, mix: { chochlik: 3, utopiec: 1 } },
+  { from: 90, alive: [36, 60], rate: 3, mix: { chochlik: 3, utopiec: 2, kruk: 1.5 } },
+  { from: 150, alive: [60, 90], rate: 3.6, mix: { chochlik: 3, utopiec: 2, kruk: 2, ognik: 1 } },
   { from: 210, alive: [92, 120], rate: 4.2, mix: { chochlik: 2.5, utopiec: 3, kruk: 2, ognik: 1.3, strzyga: 1.5 } },
   { from: 270, alive: [120, 150], rate: 5, mix: { chochlik: 2.5, utopiec: 3, kruk: 2, ognik: 1.3, strzyga: 2, wilkolak: 1 } },
   { from: 330, alive: [150, 185], rate: 6, mix: { chochlik: 3, utopiec: 3, kruk: 2, ognik: 1.5, strzyga: 2, wilkolak: 1.5, bies: 1 } },
-  { from: 390, alive: [185, 220], rate: 7, mix: { chochlik: 3, utopiec: 3, kruk: 2, ognik: 1.5, strzyga: 2, wilkolak: 1.5, bies: 1.2, licho: 1 } },
-  { from: 450, alive: [220, 260], rate: 8, mix: { chochlik: 3, utopiec: 3, kruk: 2.5, ognik: 2, strzyga: 2.5, wilkolak: 2, bies: 1.5, licho: 1.3 } },
-  { from: 520, alive: [260, 300], rate: 9, mix: { chochlik: 3, utopiec: 3.5, kruk: 2.5, ognik: 2, strzyga: 3, wilkolak: 2.5, bies: 1.8, licho: 1.6 } },
+  { from: 390, alive: [185, 220], rate: 9, mix: { chochlik: 3, utopiec: 3, kruk: 2, ognik: 1.5, strzyga: 2, wilkolak: 1.5, bies: 1.2, licho: 1 } },
+  { from: 450, alive: [220, 260], rate: 11, mix: { chochlik: 3, utopiec: 3, kruk: 2.5, ognik: 2, strzyga: 2.5, wilkolak: 2, bies: 1.5, licho: 1.3 } },
+  { from: 520, alive: [260, 300], rate: 13, mix: { chochlik: 3, utopiec: 3.5, kruk: 2.5, ognik: 2, strzyga: 3, wilkolak: 2.5, bies: 1.8, licho: 1.6 } },
   { from: RUN_LENGTH, alive: [150, 170], rate: 6, mix: { chochlik: 3, utopiec: 2, kruk: 2, strzyga: 2, wilkolak: 1.5, ognik: 1 } },
 ];
 
 export const WAVE_EVENTS: WaveEvent[] = [
-  { at: 60, kind: 'swarm', enemy: 'chochlik', count: 22, text: 'Chochliki wyłażą z kniei!' },
+  { at: 60, kind: 'swarm', enemy: 'chochlik', count: 16, text: 'Chochliki wyłażą z kniei!' },
   { at: 150, kind: 'mini', enemy: 'jaga', text: 'Baba Jaga nadlatuje w moździerzu!' },
   { at: 225, kind: 'swarm', enemy: 'kruk', count: 20, text: 'Stado kruków zasłania niebo!' },
   { at: 300, kind: 'mini', enemy: 'poludnica', text: 'Południca wychodzi z mgły!' },
@@ -37,12 +37,12 @@ export const ELITE_HP_MUL = 8;
 /** Enemy health multiplier at run time t (seconds). */
 export function enemyHpMul(t: number): number {
   const m = t / 60;
-  return 1 + Math.pow(m, 1.4) * 0.3;
+  return 1 + Math.pow(m, 1.55) * 0.33;
 }
 
 /** Enemy damage multiplier at run time t (seconds). */
 export function enemyDamageMul(t: number): number {
-  return 1 + (t / RUN_LENGTH) * 1.1;
+  return 1 + (t / RUN_LENGTH) * 0.8;
 }
 
 /** Wave phase active at time t. */
@@ -60,5 +60,5 @@ export function phaseAt(t: number): { phase: WavePhase; progress: number } {
 
 /** XP needed to advance from `level` to the next one. */
 export function xpForLevel(level: number): number {
-  return Math.floor(4 + level * 5 + level * level * 0.55);
+  return Math.floor(4 + level * 5 + level * level * 0.9);
 }

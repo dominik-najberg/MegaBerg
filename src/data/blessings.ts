@@ -6,10 +6,10 @@ export const BLESSINGS: BlessingDef[] = [
     id: 'perun',
     god: 'Perun',
     name: 'Gniew Peruna',
-    desc: '+20% obrażeń wszystkich broni.',
+    desc: '+15% obrażeń wszystkich broni.',
     icon: 'bolt',
     color: 0x9fd0ff,
-    mods: [{ stat: 'damage', add: 0.2 }],
+    mods: [{ stat: 'damage', add: 0.15 }],
   },
   {
     id: 'swarog',

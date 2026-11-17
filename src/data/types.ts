@@ -36,7 +36,7 @@ export interface StatMod {
 
 export const BASE_STATS: Readonly<Stats> = {
   maxHp: 100,
-  regen: 0,
+  regen: 0.25,
   armor: 0,
   moveSpeed: 1,
   damage: 1,

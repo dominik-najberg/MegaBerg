@@ -32,22 +32,42 @@ export class Bot {
     // Novices re-evaluate only a few times per second.
     this.react -= dt;
     const think = good || this.react <= 0;
-    if (!good && this.react <= 0) this.react = 0.28;
+    if (!good && this.react <= 0) this.react = 0.22;
 
     let tx = 0;
     let tz = 0;
     let threat = 0;
-    const seeR = good ? 10 : 4.5;
+    // A person stays close enough for short-range weapons to connect and only backs off when
+    // enemies are in their face (or health is low). Novices notice danger later.
+    const hpFrac = p.hp / w.stats.maxHp;
+    const comfort = good ? 2.3 + Math.max(0, 0.65 - hpFrac) * 9 : 2.5 + Math.max(0, 0.5 - hpFrac) * 5;
+    let nearD = 1e9;
+    let nearX = 0;
+    let nearZ = 0;
     for (let i = 0; i < e.n; i++) {
       if (!e.alive[i]) continue;
       const dx = p.x - (e.x[i] as number);
       const dz = p.z - (e.z[i] as number);
       const r = e.radius[i] as number;
-      const d = Math.hypot(dx, dz) - r;
-      const see = seeR + r * 2;
-      if (d > see) continue;
-      const k = 1 / Math.max(0.25, d) ** 2;
       const m = Math.hypot(dx, dz) || 1;
+      const d = m - r;
+      if (d < nearD) {
+        nearD = d;
+        nearX = -dx / m;
+        nearZ = -dz / m;
+      }
+      // Sidestep telegraphed charges (wolves, Południca, Leszy, Baba Jaga's swoop).
+      const st = e.state[i] as number;
+      if (good && r > 0.6 && m < 16 && (st === 1 || st === 2 || st === 3)) {
+        const side = dx * (e.vz[i] as number) - dz * (e.vx[i] as number) >= 0 ? 1 : -1;
+        tx += (dz / m) * side * 0.9;
+        tz += (-dx / m) * side * 0.9;
+        threat += 0.3;
+      }
+      // Big or charging enemies deserve more room.
+      const reach = comfort + (r > 1 ? r * 1.6 : 0) + (e.state[i] === 2 ? 2.5 : 0);
+      if (d > reach) continue;
+      const k = (1 / Math.max(0.25, d) ** 2) * (r > 1 ? 2 : 1);
       tx += (dx / m) * k;
       tz += (dz / m) * k;
       threat += k;
@@ -146,6 +166,13 @@ export class Bot {
       }
     }
 
+    // Hunt: close the distance to the nearest enemy so the weapons have something to hit.
+    if (nearD < 40 && nearD > comfort + (good ? 0.6 : 2.5)) {
+      const k = good ? 0.5 : 0.12;
+      ax += nearX * k;
+      az += nearZ * k;
+    }
+
     // Stay away from the map edge.
     const pd = Math.hypot(p.x, p.z);
     if (pd > 60) {
@@ -199,7 +226,7 @@ export class Bot {
       return i >= 0 ? i : 0;
     }
     if (c.type === 'chest') return 0;
-    if (this.skill === 'novice') return w.rng.int(c.cards.length);
+    if (this.skill === 'novice' && w.rng.chance(0.5)) return w.rng.int(c.cards.length);
     let best = 0;
     let bestScore = -1;
     c.cards.forEach((card, i) => {

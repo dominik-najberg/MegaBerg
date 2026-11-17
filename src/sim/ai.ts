@@ -299,34 +299,60 @@ export function updateEnemies(w: World, dt: number): void {
         break;
       }
       case 7: {
-        // Baba Jaga: circles the hero in her mortar, drops bombs, summons imps.
-        oy = 2.2 + Math.sin(time * 2.2) * 0.4;
-        const want = 10;
-        const radial = Math.max(-1, Math.min(1, (dist - want) / 4));
-        const side = e.ax[i] as number;
-        mvx = (nx * radial - nz * side * 0.85) * sp;
-        mvz = (nz * radial + nx * side * 0.85) * sp;
-        faceX = mvx;
-        faceZ = mvz;
+        // Baba Jaga: circles the hero in her mortar dropping bombs, then swoops through him
+        // (so melee builds can reach her too), and summons imps.
         const enraged = (e.hp[i] as number) < (e.maxHp[i] as number) * 0.5;
-        e.t1[i] = (e.t1[i] as number) - dt;
-        if ((e.t1[i] as number) <= 0 && (e.spawnT[i] as number) <= 0) {
-          e.t1[i] = enraged ? 1.6 : 2.4;
-          const lead = 0.55;
-          const hx = p.x + p.vx * lead;
-          const hz = p.z + p.vz * lead;
-          w.addHazard(hx, hz, 3, 1.1, (e.dmg[i] as number) * 1.1, true);
-          if (enraged) {
-            const a = rng.next() * TAU;
-            w.addHazard(hx + Math.cos(a) * 4.2, hz + Math.sin(a) * 4.2, 2.6, 1.3, (e.dmg[i] as number) * 1.1, true);
-            w.addHazard(hx - Math.cos(a) * 4.2, hz - Math.sin(a) * 4.2, 2.6, 1.5, (e.dmg[i] as number) * 1.1, true);
+        const side = e.ax[i] as number;
+        e.t2[i] = (e.t2[i] as number) - dt;
+        if (e.state[i] === 0) {
+          oy = 2.2 + Math.sin(time * 2.2) * 0.4;
+          const want = 8.5;
+          const radial = Math.max(-1, Math.min(1, (dist - want) / 4));
+          mvx = (nx * radial - nz * side * 0.85) * sp;
+          mvz = (nz * radial + nx * side * 0.85) * sp;
+          faceX = mvx;
+          faceZ = mvz;
+          e.t1[i] = (e.t1[i] as number) - dt;
+          if ((e.t1[i] as number) <= 0 && (e.spawnT[i] as number) <= 0) {
+            e.t1[i] = enraged ? 1.6 : 2.4;
+            const lead = 0.55;
+            const hx = p.x + p.vx * lead;
+            const hz = p.z + p.vz * lead;
+            w.addHazard(hx, hz, 3, 1.1, (e.dmg[i] as number) * 1.1, true);
+            if (enraged) {
+              const a = rng.next() * TAU;
+              w.addHazard(hx + Math.cos(a) * 4.2, hz + Math.sin(a) * 4.2, 2.6, 1.3, (e.dmg[i] as number) * 1.1, true);
+              w.addHazard(hx - Math.cos(a) * 4.2, hz - Math.sin(a) * 4.2, 2.6, 1.5, (e.dmg[i] as number) * 1.1, true);
+            }
+            w.events.emit(Ev.EnemyShoot, x, (e.y[i] as number) + oy, z);
           }
-          w.events.emit(Ev.EnemyShoot, x, (e.y[i] as number) + oy, z);
+          if ((e.t2[i] as number) <= 0) {
+            // Start a swoop: lock the direction through the hero.
+            e.state[i] = 1;
+            e.t2[i] = 2.0;
+            e.az[i] = Math.atan2(nx, nz);
+            w.events.emit(Ev.ChargeWarn, x, e.y[i] as number, z, nx, nz, 14);
+          }
+        } else {
+          // Swoop low along the locked direction, then climb back into orbit.
+          const k = Math.max(0, e.t2[i] as number) / 2.0;
+          oy = 0.5 + Math.abs(k - 0.5) * 3.4;
+          const a = e.az[i] as number;
+          const speed = k > 0.85 ? 2 : 13;
+          mvx = Math.sin(a) * speed;
+          mvz = Math.cos(a) * speed;
+          faceX = mvx;
+          faceZ = mvz;
+          contactMul = 1.2;
+          if ((e.t2[i] as number) <= 0) {
+            e.state[i] = 0;
+            e.t2[i] = enraged ? 4 : 5.5;
+            e.ax[i] = -side;
+          }
         }
         e.t3[i] = (e.t3[i] as number) - dt;
         if ((e.t3[i] as number) <= 0) {
-          e.t3[i] = 10;
-          e.ax[i] = -side;
+          e.t3[i] = 11;
           summonAround(w, T_CHOCHLIK, x, z, enraged ? 8 : 5, 2.5);
         }
         break;
@@ -344,8 +370,8 @@ export function updateEnemies(w: World, dt: number): void {
           if ((e.t1[i] as number) <= 0 && (e.spawnT[i] as number) <= 0) {
             if (dist < 6.5) {
               e.state[i] = 1;
-              e.t2[i] = 0.9;
-              w.addHazard(x, z, 5.4, 0.9, (e.dmg[i] as number) * 1.3);
+              e.t2[i] = 1.05;
+              w.addHazard(x, z, 5.4, 1.05, (e.dmg[i] as number) * 1.3);
             } else if (dist < 22) {
               e.state[i] = 2;
               e.t2[i] = 0.65;
@@ -539,7 +565,7 @@ export function updateEnemies(w: World, dt: number): void {
         const feet = p.onGround ? pGround : p.y;
         if (feet < top && feet + p.height > bottom) {
           w.hurtPlayer((e.dmg[i] as number) * contactMul);
-          e.atk[i] = 0.8;
+          e.atk[i] = 1.0;
         }
       }
     }

@@ -172,7 +172,7 @@ export class EnemiesView {
           else if (state === 3) tilt = 0.25;
           break;
         case 'jaga':
-          tilt = 0.12 + Math.sin(time * 1.7) * 0.08;
+          tilt = state === 1 ? 0.5 : 0.12 + Math.sin(time * 1.7) * 0.08;
           break;
         default:
           break;
