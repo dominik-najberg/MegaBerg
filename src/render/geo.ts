@@ -156,8 +156,52 @@ export class GeoBuilder {
   }
 }
 
-/** Shared flat-shaded vertex-colour material for static props and the hero. */
+/** Camera and hero positions for the see-through effect of the prop material. */
+export const propUniforms = {
+  uCam: { value: new THREE.Vector3() },
+  uHero: { value: new THREE.Vector3() },
+};
+
+/**
+ * Shared flat-shaded vertex-colour material for scenery (trees, rocks, shrines, undergrowth).
+ * Anything standing between the camera and the hero is dissolved with a dither pattern,
+ * so trees never hide the fight.
+ */
 export const propMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+propMaterial.onBeforeCompile = (shader) => {
+  shader.uniforms.uCam = propUniforms.uCam;
+  shader.uniforms.uHero = propUniforms.uHero;
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;')
+    .replace(
+      '#include <project_vertex>',
+      `#include <project_vertex>
+vec4 mbWorld = vec4(transformed, 1.0);
+#ifdef USE_INSTANCING
+mbWorld = instanceMatrix * mbWorld;
+#endif
+vMbWorld = (modelMatrix * mbWorld).xyz;`,
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;\nuniform vec3 uCam;\nuniform vec3 uHero;')
+    .replace(
+      '#include <clipping_planes_fragment>',
+      `#include <clipping_planes_fragment>
+{
+  vec3 mbAB = uHero - uCam;
+  vec3 mbAP = vMbWorld - uCam;
+  float mbT = clamp(dot(mbAP, mbAB) / dot(mbAB, mbAB), 0.0, 1.0);
+  if (mbT < 0.9) {
+    float mbD = length(mbAP - mbAB * mbT);
+    float mbR = mix(3.4, 1.7, mbT);
+    float mbA = smoothstep(mbR * 0.5, mbR, mbD);
+    float mbN = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    if (mbA < mbN) discard;
+  }
+}`,
+    );
+};
+propMaterial.customProgramCacheKey = () => 'mb-prop';
 
 /** Writes a TRS (yaw-only rotation) matrix straight into an instanceMatrix array. */
 export function writeMatrix(

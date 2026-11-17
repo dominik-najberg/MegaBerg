@@ -5,6 +5,7 @@ import { CHARACTER_BY_ID, CHARACTERS } from './data/characters';
 import type { CharacterDef } from './data/types';
 import { RUN_LENGTH } from './data/waves';
 import { Bot, type BotSkill } from './debug/bot';
+import { DebugTools } from './debug/tools';
 import { applyRun, buyShopItem, isUnlocked, unlockedPassiveIds, unlockedWeaponIds } from './meta/progress';
 import { browserStorage, SaveStore } from './meta/save';
 import { Gfx, type Quality } from './render/gfx';
@@ -27,6 +28,7 @@ export class Game {
   world: World;
   state: State = 'menu';
   bot: Bot | null = null;
+  readonly debug = new DebugTools(this);
   private readonly simInput = emptyInput();
   private jumpQueued = false;
   private dashQueued = false;

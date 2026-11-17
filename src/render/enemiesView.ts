@@ -60,6 +60,8 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), vFx.x);`,
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
+// A little self-illumination keeps silhouettes readable in the dark forest.
+totalEmissiveRadiance += diffuseColor.rgb * 0.22;
 totalEmissiveRadiance += vec3(1.0) * vFx.x * 0.85;
 totalEmissiveRadiance += vec3(1.0, 0.7, 0.15) * vFx.y * (0.3 + 0.2 * sin(uTime * 6.0));`,
       );

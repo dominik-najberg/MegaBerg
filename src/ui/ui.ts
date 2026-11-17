@@ -233,7 +233,7 @@ export class UI {
   key(code: string): boolean {
     const digit = code.startsWith('Digit') ? Number(code.slice(5)) : code.startsWith('Numpad') ? Number(code.slice(6)) : NaN;
     if (this.screen === 'choice') {
-      const n = this.panel.querySelectorAll('[data-act="choose"]').length;
+      const n = this.panel.querySelectorAll('.card[data-act="choose"]').length;
       if (digit >= 1 && digit <= n) {
         this.actions.choose(digit - 1);
         return true;

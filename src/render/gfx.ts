@@ -6,6 +6,7 @@ import { EnemiesView } from './enemiesView';
 import { FxView } from './fxView';
 import { HeroView } from './hero';
 import { Overlay } from './overlay';
+import { propUniforms } from './geo';
 import { makeGlowTexture, PropsView } from './props';
 import { Sky } from './sky';
 import { TerrainView } from './terrainView';
@@ -37,6 +38,7 @@ export class Gfx {
   camDist = 9;
   shake = 0;
   private clock = 0;
+  private distExtra = 0;
   quality: Quality;
 
   constructor(
@@ -130,10 +132,16 @@ export class Gfx {
     this.focus.x = damp(this.focus.x, hp.x, 22, frameDt);
     this.focus.z = damp(this.focus.z, hp.z, 22, frameDt);
     this.focus.y = damp(this.focus.y, hp.y + 1.7, 9, frameDt);
-    const cp = Math.cos(this.camPitch);
-    const cx = this.focus.x + Math.sin(this.camYaw) * cp * this.camDist;
-    const cz = this.focus.z + Math.cos(this.camYaw) * cp * this.camDist;
-    let cy = this.focus.y + Math.sin(this.camPitch) * this.camDist;
+    // Pull the camera back while a boss is alive so the whole fight stays in frame.
+    const bi = world.bossIdx;
+    const bossR = bi >= 0 && world.enemies.alive[bi] ? (world.enemies.radius[bi] as number) : 0;
+    this.distExtra = damp(this.distExtra, bossR > 2 ? 6 : bossR > 0 ? 2.5 : 0, 2, frameDt);
+    const dist = this.camDist + this.distExtra;
+    const pitch = this.camPitch + this.distExtra * 0.012;
+    const cp = Math.cos(pitch);
+    const cx = this.focus.x + Math.sin(this.camYaw) * cp * dist;
+    const cz = this.focus.z + Math.cos(this.camYaw) * cp * dist;
+    let cy = this.focus.y + Math.sin(pitch) * dist;
     const minY = this.map.heightAt(cx, cz) + 0.8;
     if (cy < minY) cy = minY;
     this.camera.position.set(cx, cy, cz);
@@ -148,6 +156,9 @@ export class Gfx {
       this.camera.rotation.z += (Math.random() - 0.5) * s * 0.04;
       this.shake = damp(this.shake, 0, 9, frameDt);
     }
+
+    propUniforms.uCam.value.copy(this.camera.position);
+    propUniforms.uHero.value.set(hp.x, hp.y + 1.2, hp.z);
 
     this.sky.setTime(world.dayTime(), this.clock);
     this.sky.follow(this.camera.position, Math.round(hp.x / 2) * 2, 0, Math.round(hp.z / 2) * 2);

@@ -136,7 +136,7 @@ kbd {
 
 .boss {
   position: absolute;
-  top: 82px;
+  top: 90px;
   left: 50%;
   width: min(40vw, 560px);
   transform: translateX(-50%);
@@ -1010,6 +1010,11 @@ h4 {
   50% {
     box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.8), 0 10px 26px rgba(0, 0, 0, 0.6), 0 0 44px var(--rc);
   }
+}
+
+.card.bless {
+  width: 222px;
+  min-height: 250px;
 }
 
 .card-key {

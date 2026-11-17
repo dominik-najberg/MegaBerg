@@ -1,0 +1,37 @@
+import { launch, URL, sleep, hold, shot, report } from '../lib/browser.mjs';
+const { browser, page, errors } = await launch();
+const ev = (fn, arg) => page.evaluate(fn, arg);
+await page.goto(`${URL}?autostart=1`);
+await sleep(1200);
+await ev(() => { const g = window.__mb; const d = g.debug; d.spawner(false); d.god(); const c = g.world.chests[0]; d.gold(100); d.teleport(c.x + 1.2, c.z + 0.5); });
+await sleep(400);
+await shot(page, '04-skrzynia-prompt.png');
+await hold(page, 'KeyE', 800);
+console.log('chest', await ev(() => { const w = window.__mb.world; return { state: window.__mb.state, choice: w.choice?.type, card: w.choice?.cards?.[0]?.name, gold: Math.floor(w.gold) }; }));
+await shot(page, '04-skrzynia.png');
+await page.keyboard.press('Enter');
+await sleep(300);
+console.log('after chest', await ev(() => ({ state: window.__mb.state, w: window.__mb.world.weapons.map((x) => x.def.id + x.level + ' +' + x.bonus.toFixed(2)) })));
+await ev(() => { const g = window.__mb; const s = g.world.shrines[0]; g.debug.teleport(s.x + 1.8, s.z + 1.2); });
+await sleep(300);
+await hold(page, 'KeyE', 1300);
+console.log('shrine', await ev(() => ({ state: window.__mb.state, choice: window.__mb.world.choice?.type })));
+await shot(page, '04-kapliczka.png');
+await page.keyboard.press('Digit1');
+await sleep(300);
+console.log('blessing', await ev(() => { const w = window.__mb.world; return { blessings: w.blessings.map((b) => b.id), used: w.shrines[0].used, dmg: w.stats.damage }; }));
+// food + coin pickups
+await ev(() => { const w = window.__mb.world; const p = w.player; w.stats.maxHp = 100; p.hp = 40; w.pickups.spawn(1, p.x + 1, p.y, p.z, 25); w.pickups.spawn(0, p.x - 1, p.y, p.z, 3); w.pickups.spawn(2, p.x, p.y, p.z + 1.5, 60); });
+await sleep(900);
+console.log('pickups', await ev(() => { const w = window.__mb.world; return { hp: Math.round(w.player.hp), gold: Math.floor(w.gold) }; }));
+// evolution through a chest: maxed sickles + the belt passive
+await ev(() => { const g = window.__mb; const w = g.world; g.debug.give('sierpy'); w.passives.push({ def: { id: 'pas', name: 'Pas siłacza', desc: '', icon: 'belt', color: 0xd0503a, maxLevel: 5, stat: 'damage', perLevel: 0.1, fmt: () => '' }, level: 1, power: 1 }); const p = w.player; w.spawnChest(p.x + 1.5, p.z, true); });
+await sleep(700);
+console.log('evo chest', await ev(() => { const w = window.__mb.world; return { choice: w.choice?.type, card: w.choice?.cards?.[0]?.name, kind: w.choice?.cards?.[0]?.kind }; }));
+await shot(page, '04-ewolucja.png');
+await page.keyboard.press('Enter');
+await sleep(1500);
+console.log('evolved', await ev(() => window.__mb.world.weapons.map((x) => x.def.id)));
+await shot(page, '04-zniwa-mokoszy.png');
+report(errors);
+await browser.close();
