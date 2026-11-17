@@ -1,0 +1,32 @@
+import { launch, URL, sleep, hold, shot, report } from '../lib/browser.mjs';
+
+const { browser, page, errors } = await launch();
+await page.goto(URL);
+await sleep(1500);
+const state = () => page.evaluate(() => {
+  const p = window.__mb.world.player;
+  return { x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), onGround: p.onGround, dashCd: +p.dashCd.toFixed(2) };
+});
+console.log('start', await state());
+await shot(page, '01-szkielet-start.png');
+await hold(page, 'KeyW', 1200);
+console.log('after W', await state());
+await page.keyboard.down('KeyW');
+await page.keyboard.press('Space');
+await sleep(250);
+console.log('mid-jump', await state());
+await shot(page, '01-szkielet-skok.png');
+await sleep(700);
+await page.keyboard.press('ShiftLeft');
+await sleep(120);
+console.log('dash', await state());
+await sleep(600);
+await page.keyboard.up('KeyW');
+await hold(page, 'ArrowLeft', 700);
+await hold(page, 'KeyD', 900);
+console.log('end', await state());
+await shot(page, '01-szkielet-ruch.png');
+const fps = await page.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 > 2000) res(n / 2); else requestAnimationFrame(f); }; requestAnimationFrame(f); }));
+console.log('fps', fps);
+report(errors);
+await browser.close();
