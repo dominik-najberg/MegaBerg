@@ -176,14 +176,14 @@ export class EnemiesView {
           break;
       }
       const flash = e.flash[i] as number;
-      if (flash > 0) {
+      if (flash > 0.06) {
         s *= 1.07;
         sy *= 0.95;
       }
       writeMatrix(v.mesh.instanceMatrix.array, idx, x, y, z, e.yaw[i] as number, s, sy, s, tilt);
       const fa = v.fx.array as Float32Array;
       const o = idx * 4;
-      fa[o] = flash > 0 ? Math.min(1, flash / 0.08) : 0;
+      fa[o] = flash > 0 ? Math.min(1, flash / 0.1) : 0;
       fa[o + 1] = elite;
       fa[o + 2] = i * 1.618;
       fa[o + 3] = (e.slowT[i] as number) > 0 ? Math.min(1, (e.slowK[i] as number) * 1.6) : 0;

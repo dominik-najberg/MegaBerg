@@ -34,6 +34,8 @@ export class Game {
   private endT = 0;
   private runSaved = false;
   private character: CharacterDef;
+  /** When set, every frame waits for the GPU (gl.finish) so frame times include GPU work. Perf test only. */
+  perfFinish = false;
   /** Performance counters (see docs/PERF.md). */
   readonly perf = { frames: 0, simMs: 0, renderMs: 0, steps: 0, since: 0, worst: 0 };
 
@@ -354,6 +356,7 @@ export class Game {
     const frozen = this.state === 'paused' || this.state === 'choice' || this.state === 'end';
     this.gfx.render(this.world, frozen ? 1 : alpha, frozen ? Math.min(frameDt, 0.001) : frameDt);
     if (this.state === 'playing' || this.state === 'ending') this.ui.updateHud(this.world, frameDt);
+    if (this.perfFinish) this.gfx.renderer.getContext().finish();
     const ms = performance.now() - t0;
     this.perf.renderMs += ms;
     this.perf.frames++;

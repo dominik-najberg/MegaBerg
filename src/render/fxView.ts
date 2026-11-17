@@ -319,9 +319,10 @@ export class FxView {
       g.add(mesh);
       this.bolts.push({ mesh, t: 0, span: 0.16, r: 1 });
     }
-    const boomGeo = new THREE.IcosahedronGeometry(1, 1);
+    // Shockwave: a flat ring that expands along the ground.
+    const boomGeo = arcGeometry(0.72, 1, 0, TAU, 36, false);
     for (let i = 0; i < 20; i++) {
-      const mesh = new THREE.Mesh(boomGeo, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+      const mesh = new THREE.Mesh(boomGeo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
       mesh.visible = false;
       mesh.renderOrder = 4;
       g.add(mesh);
@@ -565,7 +566,7 @@ void main() {
       if (b.t > best.t) best = b;
     }
     best.mesh.visible = true;
-    best.mesh.position.set(x, y, z);
+    best.mesh.position.set(x, Math.max(y - 0.6, this.map.heightAt(x, z) + 0.25), z);
     best.t = 0;
     best.span = span;
     best.r = r;
@@ -964,9 +965,9 @@ void main() {
         b.mesh.visible = false;
         continue;
       }
-      const s = b.r * (0.35 + 0.65 * (1 - (1 - k) * (1 - k)));
-      b.mesh.scale.setScalar(s);
-      (b.mesh.material as THREE.MeshBasicMaterial).opacity = 0.55 * (1 - k);
+      const s = b.r * (0.3 + 0.7 * (1 - (1 - k) * (1 - k)));
+      b.mesh.scale.set(s, 1, s);
+      (b.mesh.material as THREE.MeshBasicMaterial).opacity = 0.8 * (1 - k);
     }
     for (const w of this.warns) {
       if (!w.mesh.visible) continue;

@@ -20,6 +20,7 @@ for (const n of counts) {
     w.refreshStats = () => {};
     for (const id of ['ogien', 'grom', 'wianek', 'proca', 'ciupaga']) w.addWeapon(id);
     w.time = 240;
+    window.__mb.perfFinish = true;
   });
   await sleep(6000);
   await page.evaluate(() => window.__mb.resetPerf());

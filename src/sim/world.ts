@@ -322,7 +322,9 @@ export class World {
       this.burnDealt += dmg;
     }
     e.hp[i] = (e.hp[i] as number) - dmg;
-    e.flash[i] = 0.12;
+    // Flash strength follows how much the hit matters, so aura ticks do not white out the whole crowd.
+    const fl = 0.035 + 0.085 * Math.min(1, dmg / ((e.maxHp[i] as number) * 0.2));
+    if (fl > (e.flash[i] as number)) e.flash[i] = fl;
     if (kb > 0) {
       const k = kb * (1 - def.weight);
       e.vx[i] = (e.vx[i] as number) + kx * k;
