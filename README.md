@@ -12,23 +12,24 @@ Stack: **Three.js + TypeScript (strict) + Vite**, testy w **Vitest**.
 ## Uruchomienie
 
 ```bash
-npm install
+make run
 ```
+
+To wszystko: `make run` doinstaluje zależności (przy pierwszym uruchomieniu i po zmianie
+`package.json`), wystartuje serwer deweloperski i otworzy grę w przeglądarce pod adresem
+`http://localhost:5173`. Zatrzymanie: `Ctrl+C`. Wersja produkcyjna:
 
 ```bash
-npm run dev
+make preview
 ```
 
-Gra otworzy się pod adresem `http://localhost:5173`. Wersja produkcyjna:
-
-```bash
-npm run build && npm run preview
-```
+Bez `make` to samo robią `npm install`, `npm run dev` oraz `npm run build && npm run preview`.
 
 Pozostałe komendy:
 
 | Komenda | Co robi |
 |---|---|
+| `make help` | lista skrótów z Makefile (`run`, `build`, `preview`, `test`) |
 | `npm test` | testy logiki (Vitest) |
 | `npm run typecheck` | sprawdzenie typów bez budowania |
 | `npm run sim -- runs=10 skill=good shop=2` | rozgrywa całe runy botem bez przeglądarki (strojenie balansu) |
