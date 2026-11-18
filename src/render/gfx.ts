@@ -6,6 +6,7 @@ import { EnemiesView } from './enemiesView';
 import { FxView } from './fxView';
 import { HeroView } from './hero';
 import { Overlay } from './overlay';
+import { Post } from './post';
 import { propUniforms } from './geo';
 import { makeGlowTexture, PropsView } from './props';
 import { Sky } from './sky';
@@ -40,6 +41,8 @@ export class Gfx {
   private clock = 0;
   private distExtra = 0;
   private ghostAcc = 0;
+  /** Bloom + grade pipeline; null on low quality (plain forward rendering). */
+  private post: Post | null = null;
   quality: Quality;
 
   constructor(
@@ -49,7 +52,8 @@ export class Gfx {
     quality: Quality,
   ) {
     this.quality = quality;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: quality > 0, powerPreference: 'high-performance' });
+    // Anti-aliasing comes from the multisampled HDR target of the post pipeline, not from the canvas.
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.3;
@@ -88,6 +92,8 @@ export class Gfx {
     this.enemies.setShadows(q > 0);
     this.props.setQuality(q);
     this.fx.setDensity(q === 0 ? 0.5 : q === 1 ? 0.8 : 1);
+    this.post?.dispose();
+    this.post = q > 0 ? new Post(this.renderer, this.scene, this.camera, q === 2 ? 4 : 2) : null;
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;
       if (m) m.needsUpdate = true;
@@ -99,6 +105,7 @@ export class Gfx {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
     this.renderer.setSize(w, h, false);
+    this.post?.setSize(w, h, this.renderer.getPixelRatio());
     this.camera.aspect = w / Math.max(1, h);
     this.camera.updateProjectionMatrix();
     this.fx.setViewport(h, this.camera.fov);
@@ -182,7 +189,8 @@ export class Gfx {
     }
     this.fx.update(world, alpha, frameDt, this.sky.night);
 
-    this.renderer.render(this.scene, this.camera);
+    if (this.post) this.post.render(frameDt, this.clock, this.sky.night, this.renderer.toneMappingExposure);
+    else this.renderer.render(this.scene, this.camera);
     this.overlay.draw(this.camera, frameDt);
   }
 }

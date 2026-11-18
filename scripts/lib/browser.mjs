@@ -40,5 +40,10 @@ export async function shot(page, name) {
 
 export function report(errors) {
   if (errors.length === 0) console.log('console: 0 errors/warnings');
-  else console.log('console issues:\n' + errors.join('\n'));
+  else {
+    // Collapse repeats: one broken shader floods the console with the same warning every frame.
+    const counts = new Map();
+    for (const e of errors) counts.set(e, (counts.get(e) ?? 0) + 1);
+    console.log('console issues:\n' + [...counts].map(([e, n]) => (n > 1 ? `${e}  (x${n})` : e)).join('\n'));
+  }
 }

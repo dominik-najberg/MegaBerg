@@ -56,6 +56,7 @@ void main() {
   col += (vec3(0.95, 0.95, 0.85) * moon + vec3(0.35, 0.42, 0.6) * pow(md, 40.0) * 0.5) * uNight;
 
   gl_FragColor = vec4(col, 1.0);
+  #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
 
@@ -109,7 +110,6 @@ export class Sky {
       depthWrite: false,
       depthTest: true,
       fog: false,
-      toneMapped: false,
       uniforms: {
         uTop: { value: new THREE.Color() },
         uMid: { value: new THREE.Color() },
