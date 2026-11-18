@@ -830,6 +830,7 @@ void main() {
       let aura = false;
       let cone = false;
       for (const w of world.weapons) {
+        if (world.dead) break;
         const kind = w.def.kind;
         if (kind === 'orbit' && w.active > 0) {
           const fade = w.stats.cooldown <= 0 ? 1 : Math.min(1, w.active * 4, (w.stats.duration - w.active) * 5 + 0.2);

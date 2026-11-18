@@ -80,6 +80,15 @@ export class Game {
       if (document.hidden && this.state === 'playing' && !this.bot) this.pause();
     });
     this.input.onKey = (code) => this.onKey(code);
+    canvas.addEventListener('webglcontextlost', (ev) => {
+      ev.preventDefault();
+      // 'ending' is the short death/victory animation: the run is over but not banked yet.
+      if (this.state === 'playing' || this.state === 'paused' || this.state === 'choice' || this.state === 'ending') this.bankRun();
+      this.state = 'end';
+      this.loop.stop();
+      this.input.exitLock();
+      this.ui.showContextLost();
+    });
     this.toMenu();
   }
 
@@ -165,13 +174,6 @@ export class Game {
   private continueEndless(): void {
     // The win was already banked; further gold and kills of the endless part are banked as a second entry.
     this.world.startEndless();
-    this.world.gold = 0;
-    this.world.goldCollected = 0;
-    this.world.kills = 0;
-    this.world.killsByType.fill(0);
-    this.world.evolved = 0;
-    this.world.shrinesUsed = 0;
-    this.world.won = false;
     this.runSaved = false;
     this.ui.close();
     this.ui.setHud(true);

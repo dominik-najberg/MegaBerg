@@ -116,6 +116,8 @@ export interface RunSummary {
 }
 
 const PICKUP_BASE = 2.6;
+/** Gold for defeating the boss (before the gold-gain multiplier). */
+export const BOSS_GOLD = 150;
 
 /** The whole simulation state of one run. Pure logic: no rendering, no DOM. */
 export class World {
@@ -371,13 +373,23 @@ export class World {
     const xp = def.xp * (elite ? 6 : 1);
     if (xp > 0) this.gems.spawn(x + rng.range(-0.3, 0.3), gy, z + rng.range(-0.3, 0.3), xp);
 
-    if (i === this.bossIdx) this.bossIdx = -1;
     if (def.rank === 'boss') {
-      for (let k = 0; k < 30; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-6, 6), gy, z + rng.range(-6, 6), 5);
       this.hitstop = 0.35;
       if (!this.endless && !this.won) {
+        // The run freezes on victory, so the reward is credited directly instead of dropped,
+        // and coins still lying on the clearing are swept up.
+        this.addGold(BOSS_GOLD);
+        const k = this.pickups;
+        for (let c = 0; c < k.n; c++) {
+          if (k.alive[c] && k.kind[c] === PickupKind.Coin) {
+            this.addGold(k.val[c] as number);
+            k.free(c);
+          }
+        }
         this.won = true;
         this.events.emit(Ev.Win, x, gy, z);
+      } else {
+        for (let k = 0; k < 30; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-6, 6), gy, z + rng.range(-6, 6), BOSS_GOLD / 30);
       }
     } else if (def.rank === 'mini') {
       for (let k = 0; k < 10; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-2.5, 2.5), gy, z + rng.range(-2.5, 2.5), 3);
@@ -393,12 +405,34 @@ export class World {
       } else if (rng.next() < 0.0012) this.pickups.spawn(PickupKind.Vacuum, x, gy, z, 0);
     }
     e.free(i);
+    if (def.rank) this.trackBoss();
   }
 
   /** Removes an enemy without drops or kill credit. */
   despawn(i: number): void {
-    if (i === this.bossIdx) this.bossIdx = -1;
     this.enemies.free(i);
+    if (i === this.bossIdx) this.trackBoss();
+  }
+
+  /**
+   * Points bossIdx (health bar, camera, music) at a living ranked enemy:
+   * the boss if one is alive, otherwise the toughest mini-boss, otherwise -1.
+   */
+  private trackBoss(): void {
+    const e = this.enemies;
+    let best = -1;
+    let bestBoss = false;
+    for (let i = 0; i < e.n; i++) {
+      if (!e.alive[i]) continue;
+      const rank = (ENEMIES[e.type[i] as number] as EnemyDef).rank;
+      if (!rank) continue;
+      const isBoss = rank === 'boss';
+      if (best < 0 || (isBoss && !bestBoss) || (isBoss === bestBoss && (e.maxHp[i] as number) >= (e.maxHp[best] as number))) {
+        best = i;
+        bestBoss = isBoss;
+      }
+    }
+    this.bossIdx = best;
   }
 
   hurtPlayer(damage: number): void {
@@ -479,11 +513,11 @@ export class World {
     e.t3[i] = 4 + this.rng.next() * 3;
     e.ax[i] = this.rng.next() < 0.5 ? -1 : 1;
     e.oy[i] = def.flying ? 1.3 : 0;
-    if (def.rank) this.bossIdx = i;
     if (def.rank === 'boss') {
       this.bossPhase = 1;
       e.spawnT[i] = 1.6;
     }
+    if (def.rank) this.trackBoss();
     return i;
   }
 
@@ -849,9 +883,17 @@ export class World {
     return true;
   }
 
-  /** Continue after defeating the boss. */
+  /**
+   * Continue after defeating the boss. The victory has already been banked, so the counters that add up
+   * across runs (gold, kills) restart from zero; shrine and evolution progress belong to the same run and stay.
+   */
   startEndless(): void {
     this.endless = true;
+    this.won = false;
+    this.gold = 0;
+    this.goldCollected = 0;
+    this.kills = 0;
+    this.killsByType.fill(0);
   }
 
   summary(): RunSummary {

@@ -1,0 +1,22 @@
+import { launch, URL, sleep, shot, report } from '../lib/browser.mjs';
+const { browser, page, errors } = await launch();
+const ev = (fn, arg) => page.evaluate(fn, arg);
+await page.goto(`${URL}?autostart=1&bot=good&speed=6`);
+await sleep(7000);
+await ev(() => { const g = window.__mb; g.loop.timeScale = 1; });
+await sleep(500);
+await ev(() => { const w = window.__mb.world; w.player.invuln = 0; w.revivesLeft = 0; w.hurtPlayer(9999); });
+await sleep(700);
+await shot(page, '07-smierc.png');
+await sleep(1500);
+await shot(page, '07-koniec-porazka.png');
+// Space right after death must not skip the summary; Enter after a moment restarts.
+await page.keyboard.press('Space');
+await sleep(200);
+console.log('after Space:', await ev(() => window.__mb.state));
+await sleep(800);
+await page.keyboard.press('Enter');
+await sleep(500);
+console.log('after Enter:', await ev(() => window.__mb.state));
+report(errors);
+await browser.close();

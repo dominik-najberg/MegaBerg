@@ -116,6 +116,7 @@ export class UI {
   }
 
   private lastHover: Element | null = null;
+  private openedAt = 0;
 
   // ------------------------------------------------------------ events
 
@@ -271,7 +272,8 @@ export class UI {
         this.run('start', '');
         return true;
       }
-      if (this.screen === 'end') {
+      // Only Enter, and not right away: a player still mashing jump must not skip the summary.
+      if (this.screen === 'end' && code === 'Enter' && performance.now() - this.openedAt > 700) {
         this.actions.restart();
         return true;
       }
@@ -293,6 +295,7 @@ export class UI {
   // ------------------------------------------------------------ panels
 
   private open(screen: Screen, html: string, cls = ''): void {
+    if (screen !== this.screen) this.openedAt = performance.now();
     this.screen = screen;
     this.panel.className = `panel ${cls}`;
     this.panel.innerHTML = html;
@@ -560,8 +563,10 @@ export class UI {
     );
   }
 
-  showNoWebGL(): void {
-    this.open('none', `<div class="sheet narrow"><h2>Brak WebGL</h2><p class="lead">Ta przeglądarka nie udostępnia WebGL, więc gra 3D nie może się uruchomić. Otwórz grę w aktualnym Chrome, Firefoksie lub Edge z włączoną akceleracją sprzętową.</p></div>`, 'dim');
+  /** Shown when the GPU drops the WebGL context (driver reset, GPU sleep). Progress is already saved. */
+  showContextLost(): void {
+    this.setHud(false);
+    this.open('none', `<div class="sheet narrow"><h2>Utracono kontekst grafiki</h2><p class="lead">Karta graficzna przerwała połączenie z grą. Postęp z Chaty jest zapisany. Odśwież stronę (F5), aby grać dalej.</p></div>`, 'dim');
   }
 
   // ------------------------------------------------------------ HUD

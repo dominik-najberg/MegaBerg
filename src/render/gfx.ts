@@ -86,6 +86,7 @@ export class Gfx {
     this.sky.sun.shadow.map?.dispose();
     this.sky.sun.shadow.map = null;
     this.enemies.setShadows(q > 0);
+    this.props.setQuality(q);
     this.fx.setDensity(q === 0 ? 0.5 : q === 1 ? 0.8 : 1);
     this.scene.traverse((o) => {
       const m = (o as THREE.Mesh).material as THREE.Material | undefined;

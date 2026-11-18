@@ -42,6 +42,8 @@ export class Enemies {
   readonly type = new Uint8Array(MAX_ENEMIES);
   readonly elite = new Uint8Array(MAX_ENEMIES);
   readonly state = new Uint8Array(MAX_ENEMIES);
+  /** Boss health phase (1..3), tracked per enemy so several bosses can coexist. */
+  readonly phase = new Uint8Array(MAX_ENEMIES);
   readonly x = new Float32Array(MAX_ENEMIES);
   readonly y = new Float32Array(MAX_ENEMIES);
   readonly z = new Float32Array(MAX_ENEMIES);
@@ -92,6 +94,7 @@ export class Enemies {
     this.alive[i] = 1;
     this.elite[i] = 0;
     this.state[i] = 0;
+    this.phase[i] = 1;
     this.vx[i] = 0;
     this.vz[i] = 0;
     this.yaw[i] = 0;

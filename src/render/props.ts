@@ -208,6 +208,7 @@ export class PropsView {
   private readonly sources: LightSource[] = [];
   private readonly lights: THREE.PointLight[] = [];
   private readonly order: number[] = [];
+  private readonly undergrowth: Array<{ mesh: THREE.InstancedMesh; placed: number }> = [];
 
   constructor(map: GameMap, quality: number) {
     this.glowTex = makeGlowTexture();
@@ -266,9 +267,8 @@ export class PropsView {
 
   private buildUndergrowth(map: GameMap, quality: number): void {
     const rng = new Rng(999);
-    const mul = quality <= 0 ? 0.35 : quality === 1 ? 0.7 : 1;
     const scatter = (geo: THREE.BufferGeometry, count: number, minS: number, maxS: number, pick: (x: number, z: number) => number): void => {
-      const n = Math.floor(count * mul);
+      const n = count;
       const mesh = new THREE.InstancedMesh(geo, propMaterial, n);
       let placed = 0;
       let guard = 0;
@@ -288,6 +288,7 @@ export class PropsView {
       mesh.receiveShadow = true;
       mesh.frustumCulled = false;
       this.group.add(mesh);
+      this.undergrowth.push({ mesh, placed });
     };
     const nearObstacle = (x: number, z: number): number => (map.isFree(x, z, 2.2) ? 0.12 : map.isFree(x, z, 0.3) ? 1 : 0);
     const grassy = (x: number, z: number): number => (fbm(x / 9 + 5.5, z / 9 + 1.5, 3) < 0.55 && map.isFree(x, z, 0.2) ? 1 : 0.08);
@@ -296,6 +297,13 @@ export class PropsView {
     scatter(lilyGeo(), 420, 0.9, 1.5, (x, z) => (fbm(x / 6 + 40, z / 6 + 13, 2) > 0.6 && map.isFree(x, z, 0.2) ? 1 : 0.02));
     scatter(mushroomGeo(), 160, 0.8, 1.6, nearObstacle);
     scatter(pebbleGeo(), 300, 0.6, 1.8, (x, z) => (map.isFree(x, z, 0.3) ? 0.6 : 0));
+    this.setQuality(quality);
+  }
+
+  /** Undergrowth density follows the quality setting (instances are placed randomly, so any prefix works). */
+  setQuality(quality: number): void {
+    const mul = quality <= 0 ? 0.35 : quality === 1 ? 0.7 : 1;
+    for (const u of this.undergrowth) u.mesh.count = Math.floor(u.placed * mul);
   }
 
   private makeFlame(scale: number): FlameSet {

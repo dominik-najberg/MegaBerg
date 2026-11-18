@@ -6,7 +6,7 @@ import { Bot } from '../src/debug/bot';
 import { emptyInput, MOVE, MoveFx, Player, stepPlayer } from '../src/sim/player';
 import { BASE_STATS } from '../src/data/types';
 import { GameMap, PLAY_RADIUS } from '../src/sim/terrain';
-import { World } from '../src/sim/world';
+import { BOSS_GOLD, World } from '../src/sim/world';
 
 const map = new GameMap();
 const DT = 1 / 60;
@@ -227,6 +227,78 @@ describe('symulacja runu', () => {
     expect(w.paused).toBe(true);
     w.startEndless();
     expect(w.paused).toBe(false);
+  });
+
+  it('zwycięstwo od razu wypłaca nagrodę za bossa i zbiera leżące monety', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.pickups.spawn(0, 40, 0, 40, 7);
+    const i = w.spawnEnemy(ENEMY_INDEX.leszy as number, 20, 0);
+    w.damageEnemy(i, 1e9, -1, 0, 0, 0, null);
+    expect(w.won).toBe(true);
+    expect(w.gold).toBe(BOSS_GOLD + 7);
+    expect(w.summary().gold).toBe(BOSS_GOLD + 7);
+    expect(w.pickups.list.count).toBe(0);
+  });
+
+  it('tryb nieskończony zeruje liczniki sumowane między runami, ale nie postęp kapliczek', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.shrinesUsed = 2;
+    w.evolved = 1;
+    w.kills = 500;
+    const i = w.spawnEnemy(ENEMY_INDEX.leszy as number, 20, 0);
+    w.damageEnemy(i, 1e9, -1, 0, 0, 0, null);
+    w.startEndless();
+    expect(w.won).toBe(false);
+    expect(w.endless).toBe(true);
+    expect(w.gold).toBe(0);
+    expect(w.kills).toBe(0);
+    expect(w.shrinesUsed).toBe(2);
+    expect(w.evolved).toBe(1);
+    expect(w.summary().endless).toBe(true);
+    // kolejny Leszy w trybie nieskończonym zostawia monety zamiast kończyć run
+    const j = w.spawnEnemy(ENEMY_INDEX.leszy as number, 20, 0);
+    w.damageEnemy(j, 1e9, -1, 0, 0, 0, null);
+    expect(w.won).toBe(false);
+    expect(w.pickups.list.count).toBe(30);
+  });
+
+  it('pasek bossa wraca do żyjącego bossa, gdy ginie inny', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    const leszy = w.spawnEnemy(ENEMY_INDEX.leszy as number, 20, 0);
+    expect(w.bossIdx).toBe(leszy);
+    const jaga = w.spawnEnemy(ENEMY_INDEX.jaga as number, -20, 0);
+    // mini-boss nie przejmuje paska, gdy żyje Leszy
+    expect(w.bossIdx).toBe(leszy);
+    w.damageEnemy(jaga, 1e9, -1, 0, 0, 0, null);
+    expect(w.bossIdx).toBe(leszy);
+    const a = w.spawnEnemy(ENEMY_INDEX.jaga as number, -20, 0);
+    const b = w.spawnEnemy(ENEMY_INDEX.poludnica as number, -25, 5);
+    w.endless = true;
+    w.damageEnemy(leszy, 1e9, -1, 0, 0, 0, null);
+    expect([a, b]).toContain(w.bossIdx);
+    w.damageEnemy(w.bossIdx, 1e9, -1, 0, 0, 0, null);
+    expect([a, b]).toContain(w.bossIdx);
+    w.damageEnemy(w.bossIdx, 1e9, -1, 0, 0, 0, null);
+    expect(w.bossIdx).toBe(-1);
+  });
+
+  it('dwa Leszy w różnych fazach nie wywołują przejścia fazy co krok', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.stats.maxHp = 1e9;
+    w.player.hp = 1e9;
+    const a = w.spawnEnemy(ENEMY_INDEX.leszy as number, 40, 0);
+    const b = w.spawnEnemy(ENEMY_INDEX.leszy as number, -40, 0);
+    w.enemies.hp[a] = (w.enemies.maxHp[a] as number) * 0.5;
+    const inp = emptyInput();
+    for (let i = 0; i < 120; i++) w.step(DT, inp);
+    // jedno przejście do fazy 2 = jedno przywołanie 6 pomocników, nie lawina
+    expect(w.enemies.phase[a]).toBe(2);
+    expect(w.enemies.phase[b]).toBe(1);
+    expect(w.enemies.count).toBeLessThanOrEqual(2 + 6);
   });
 
   it('każdy bóg błogosławi najwyżej dwa razy', () => {

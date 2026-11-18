@@ -420,7 +420,8 @@ export function updateEnemies(w: World, dt: number): void {
         // Leszy: slow giant with telegraphed area attacks; three phases by health.
         const frac = (e.hp[i] as number) / (e.maxHp[i] as number);
         const phase = frac > 0.66 ? 1 : frac > 0.33 ? 2 : 3;
-        if (phase !== w.bossPhase) {
+        if (phase > (e.phase[i] as number)) {
+          e.phase[i] = phase;
           w.bossPhase = phase;
           w.hitstop = 0.25;
           w.events.emit(Ev.BossPhase, x, e.y[i] as number, z, phase);
@@ -531,7 +532,8 @@ export function updateEnemies(w: World, dt: number): void {
       }
     }
 
-    if (!def.flying && oy < 0.5) {
+    // The boss is a giant: it walks straight through trees and rocks instead of getting stuck.
+    if (!def.flying && oy < 0.5 && def.rank !== 'boss') {
       if (map.resolveCircle(x, z, ri * 0.8)) {
         x = map.outX;
         z = map.outZ;
