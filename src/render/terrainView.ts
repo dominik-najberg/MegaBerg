@@ -216,7 +216,7 @@ float mbEdge(float w, float n, float soft) {
   vec3 moss = mix(texture2D(uMoss, uvA * 0.8).rgb, texture2D(uMoss, uvB).rgb, mixAB * 0.5) * vec3(0.92, 0.82, 0.7);
   vec3 forest = mix(texture2D(uForest, uvA * 0.9).rgb, texture2D(uForest, uvB * 1.3).rgb, mixAB * 0.5) * 0.9;
   vec3 dirt = texture2D(uDirt, gp / 6.5).rgb;
-  dirt = mix(vec3(dot(dirt, vec3(0.3, 0.5, 0.2))), dirt, 0.5) * vec3(0.6, 0.57, 0.54);
+  dirt = mix(vec3(dot(dirt, vec3(0.3, 0.5, 0.2))), dirt, 0.32) * vec3(0.56, 0.56, 0.52);
   vec3 mud = texture2D(uMud, gp / 6.0).rgb * 0.85;
   vec3 rock = texture2D(uRock, gp / 8.0).rgb * 0.8;
   vec3 col = mix(grass, moss, mbEdge(vMoss, nz2.r, 0.22));

@@ -1,46 +1,9 @@
 import * as THREE from 'three';
-import { fbm, TAU } from '../core/math';
+import { fbm, hash2, TAU } from '../core/math';
 import { Rng } from '../core/rng';
-import { PLAY_RADIUS, type GameMap, type Obstacle } from '../sim/terrain';
-import { GeoBuilder, propMaterial, writeMatrix } from './geo';
-
-function pineGeo(seed: number): THREE.BufferGeometry {
-  const b = new GeoBuilder(seed);
-  b.cyl(0.28, 0.46, 3.4, 6, 0x4a3324, { y: 1.7 });
-  const greens = [0x1f3d2b, 0x25482f, 0x2c5434, 0x1b3628];
-  let y = 2.4;
-  let r = 2.5;
-  for (let i = 0; i < 4; i++) {
-    const hgt = 3.3 - i * 0.35;
-    b.cone(r, hgt, 7, greens[i % greens.length] as number, { y: y + hgt / 2, ry: i * 0.7, jitter: 0.12 });
-    y += hgt * 0.52;
-    r *= 0.74;
-  }
-  return b.build();
-}
-
-function oakGeo(seed: number): THREE.BufferGeometry {
-  const b = new GeoBuilder(seed);
-  b.cyl(0.5, 0.78, 4.2, 7, 0x3c2b22, { y: 2.1 });
-  b.cyl(0.2, 0.34, 2.4, 5, 0x3c2b22, { x: 0.9, y: 4.4, rz: -0.8 });
-  b.cyl(0.18, 0.3, 2.2, 5, 0x3c2b22, { x: -0.8, y: 4.6, rz: 0.9, ry: 0.5 });
-  b.ico(2.6, 1, 0x2d4a2a, { y: 6.3, sy: 0.8, jitter: 0.14 });
-  b.ico(1.9, 1, 0x36562c, { x: 1.8, y: 5.4, z: 0.4, sy: 0.8, jitter: 0.14 });
-  b.ico(1.8, 1, 0x284326, { x: -1.7, y: 5.6, z: -0.5, sy: 0.8, jitter: 0.14 });
-  b.ico(1.5, 0, 0x3e5e2e, { x: 0.2, y: 7.6, z: -0.6, jitter: 0.14 });
-  // Moss skirt at the foot of the trunk.
-  b.cone(1.0, 0.7, 7, 0x44642f, { y: 0.3 });
-  return b.build();
-}
-
-function rockGeo(seed: number): THREE.BufferGeometry {
-  const b = new GeoBuilder(seed);
-  b.ico(1, 1, 0x5d5a6c, { y: 0.45, sy: 0.72, jitter: 0.1 });
-  b.ico(0.55, 0, 0x54516a, { x: 0.75, y: 0.2, z: 0.3, sy: 0.7 });
-  b.crumple(0.16 + (seed % 3) * 0.04);
-  b.tintUpFaces(0x4f6e33, 0.62, 0.9);
-  return b.build();
-}
+import { PLAY_RADIUS, type GameMap } from '../sim/terrain';
+import { model, tex, type ModelName } from './assets';
+import { GeoBuilder, normalsUp, propMaterial, propUniforms, windByHeight, writeMatrix } from './geo';
 
 const WHITE = 0xe9e2d0;
 const RED = 0xb3261e;
@@ -199,7 +162,38 @@ const LIGHT_POOL = 4;
 const flameMatOuter = new THREE.MeshBasicMaterial({ color: 0xff6a1a, transparent: true, opacity: 0.9, fog: false, toneMapped: false });
 const flameMatInner = new THREE.MeshBasicMaterial({ color: 0xffd45a, transparent: true, opacity: 0.95, fog: false, toneMapped: false });
 
-/** All static scenery: instanced trees/rocks/undergrowth, shrines and animated bonfires. */
+/** Side of a scenery chunk in metres. Chunks are culled by the frustum and by distance (fog hides the rest). */
+const CHUNK = 44;
+/** Up to this distance a chunk shows full models and casts shadows; further away the low-detail ones. */
+const NEAR = 92;
+/** Beyond this the fog has swallowed everything. */
+const FAR = 235;
+/** Small plants are only drawn close to the hero. */
+const PLANTS = 78;
+
+interface Inst {
+  x: number;
+  y: number;
+  z: number;
+  rot: number;
+  s: number;
+}
+
+interface Chunk {
+  x: number;
+  z: number;
+  near: THREE.InstancedMesh[];
+  far: THREE.InstancedMesh[];
+  plants: Array<{ mesh: THREE.InstancedMesh; placed: number }>;
+}
+
+type Layer = 'near' | 'far' | 'plants';
+
+/**
+ * All static scenery: trees, rocks and landmarks (models built in Blender, see tools/blender),
+ * undergrowth, shrines and animated fires. Instances are grouped into square chunks, one InstancedMesh
+ * per model and chunk, so the frustum and the fog distance cull most of the forest every frame.
+ */
 export class PropsView {
   readonly group = new THREE.Group();
   private readonly flames: FlameSet[] = [];
@@ -208,102 +202,193 @@ export class PropsView {
   private readonly sources: LightSource[] = [];
   private readonly lights: THREE.PointLight[] = [];
   private readonly order: number[] = [];
-  private readonly undergrowth: Array<{ mesh: THREE.InstancedMesh; placed: number }> = [];
+  private readonly chunks = new Map<number, Chunk>();
+  private readonly pending = new Map<string, { geo: THREE.BufferGeometry; layer: Layer; chunk: Chunk; list: Inst[] }>();
+  private readonly geos = new Map<string, THREE.BufferGeometry>();
+  private plantMul = 1;
+  private shadows = true;
 
   constructor(map: GameMap, quality: number) {
     this.glowTex = makeGlowTexture();
+    propUniforms.uDetail.value = tex('detail');
     // A small pool of real lights is moved to the nearest fires each frame: constant shader cost.
     for (let i = 0; i < LIGHT_POOL; i++) {
       const l = new THREE.PointLight(0xff8838, 0, 30, 1.6);
       this.lights.push(l);
       this.group.add(l);
     }
-    const obs = map.obstacles;
-    this.addInstanced(pineGeo(11), obs.filter((o) => o.kind === 'pine'), map, 1, true);
-    this.addInstanced(oakGeo(12), obs.filter((o) => o.kind === 'oak'), map, 1, true);
-    const rocks = obs.filter((o) => o.kind === 'rock');
-    this.addInstanced(rockGeo(21), rocks.filter((_, i) => i % 2 === 0), map, 1, true);
-    this.addInstanced(rockGeo(23), rocks.filter((_, i) => i % 2 === 1), map, 1, true);
-    this.addInstanced(shrineGeo(), obs.filter((o) => o.kind === 'shrine'), map, 1, true);
-    this.addInstanced(bonfireGeo(), obs.filter((o) => o.kind === 'bonfire'), map, 1, false);
+    this.geos.set('shrine', shrineGeo());
+    this.geos.set('bonfire', bonfireGeo());
+    this.geos.set('fern', normalsUp(windByHeight(fernGeo(), 0.45, 0.5)));
+    this.geos.set('grass', normalsUp(windByHeight(grassGeo(), 0.5, 0.55)));
+    this.geos.set('lily', normalsUp(windByHeight(lilyGeo(), 0.6, 0.4), 0.5));
+    this.geos.set('mushroom', mushroomGeo());
+    this.geos.set('pebble', pebbleGeo());
+
+    this.placeObstacles(map);
     this.buildBorderForest(map);
-    this.buildUndergrowth(map, quality);
+    this.buildUndergrowth(map);
+    this.flush();
+    this.setQuality(quality);
     this.buildFlames(map);
   }
 
-  private addInstanced(geo: THREE.BufferGeometry, list: Obstacle[], map: GameMap, scaleMul: number, shadow: boolean): void {
-    if (list.length === 0) return;
-    const mesh = new THREE.InstancedMesh(geo, propMaterial, list.length);
-    list.forEach((o, i) => {
-      const s = o.scale * scaleMul;
-      const y = map.heightAt(o.x, o.z) - 0.08;
-      writeMatrix(mesh.instanceMatrix.array, i, o.x, y, o.z, o.rot, s, s, s);
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-    mesh.castShadow = shadow;
-    mesh.receiveShadow = true;
-    mesh.frustumCulled = false;
-    this.group.add(mesh);
+  private geo(name: string): THREE.BufferGeometry {
+    return this.geos.get(name) ?? model(name as ModelName);
   }
 
-  /** Dense, tall forest ring that hides the edge of the map. */
+  private chunkAt(x: number, z: number): Chunk {
+    const cx = Math.floor(x / CHUNK);
+    const cz = Math.floor(z / CHUNK);
+    const key = (cx + 512) * 1024 + (cz + 512);
+    let c = this.chunks.get(key);
+    if (!c) {
+      c = { x: (cx + 0.5) * CHUNK, z: (cz + 0.5) * CHUNK, near: [], far: [], plants: [] };
+      this.chunks.set(key, c);
+    }
+    return c;
+  }
+
+  /** Queues one instance; meshes are created in flush(). `sink` buries the base a little so slopes show no gap. */
+  private put(name: string, layer: Layer, map: GameMap, x: number, z: number, rot: number, s: number, sink = 0.08): void {
+    const chunk = this.chunkAt(x, z);
+    const key = `${name}|${layer}|${chunk.x}|${chunk.z}`;
+    let p = this.pending.get(key);
+    if (!p) {
+      p = { geo: this.geo(name), layer, chunk, list: [] };
+      this.pending.set(key, p);
+    }
+    p.list.push({ x, y: map.heightAt(x, z) - sink, z, rot, s });
+  }
+
+  private flush(): void {
+    for (const p of this.pending.values()) {
+      const mesh = new THREE.InstancedMesh(p.geo, propMaterial, p.list.length);
+      p.list.forEach((o, i) => writeMatrix(mesh.instanceMatrix.array, i, o.x, o.y, o.z, o.rot, o.s, o.s, o.s));
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+      mesh.receiveShadow = true;
+      mesh.castShadow = p.layer === 'near';
+      mesh.matrixAutoUpdate = false;
+      mesh.visible = false;
+      this.group.add(mesh);
+      if (p.layer === 'plants') p.chunk.plants.push({ mesh, placed: p.list.length });
+      else p.chunk[p.layer].push(mesh);
+    }
+    this.pending.clear();
+  }
+
+  private placeObstacles(map: GameMap): void {
+    map.obstacles.forEach((o, i) => {
+      const pick = hash2(i * 31 + 7, 91);
+      switch (o.kind) {
+        case 'pine': {
+          // Spruces and tall Scots pines share the "pine" slot of the map.
+          const scots = pick < 0.38;
+          const s = o.scale * (scots ? 0.9 : 0.86);
+          this.put(scots ? (pick < 0.19 ? 'pine0' : 'pine1') : pick < 0.6 ? 'fir0' : pick < 0.8 ? 'fir1' : 'fir2', 'near', map, o.x, o.z, o.rot, s);
+          this.put(scots ? 'pine_lod' : 'fir_lod', 'far', map, o.x, o.z, o.rot, s);
+          break;
+        }
+        case 'oak':
+          this.put(pick < 0.5 ? 'oak0' : 'oak1', 'near', map, o.x, o.z, o.rot, o.scale * 0.9);
+          this.put('oak_lod', 'far', map, o.x, o.z, o.rot, o.scale * 0.9);
+          break;
+        case 'birch':
+          this.put(pick < 0.5 ? 'birch0' : 'birch1', 'near', map, o.x, o.z, o.rot, o.scale);
+          this.put('birch_lod', 'far', map, o.x, o.z, o.rot, o.scale);
+          break;
+        case 'rock': {
+          const name = pick < 0.34 ? 'rock0' : pick < 0.67 ? 'rock1' : 'rock2';
+          this.put(name, 'near', map, o.x, o.z, o.rot, o.scale, 0.12);
+          this.put(name, 'far', map, o.x, o.z, o.rot, o.scale, 0.12);
+          break;
+        }
+        case 'menhir': {
+          const name = pick < 0.5 ? 'menhir0' : 'menhir1';
+          this.put(name, 'near', map, o.x, o.z, o.rot, o.scale, 0.1);
+          this.put(name, 'far', map, o.x, o.z, o.rot, o.scale, 0.1);
+          break;
+        }
+        case 'ancientOak':
+          this.put('ancient_oak', 'near', map, o.x, o.z, o.rot, o.scale, 0.15);
+          this.put('ancient_oak', 'far', map, o.x, o.z, o.rot, o.scale, 0.15);
+          break;
+        case 'hut':
+          this.put('hut', 'near', map, o.x, o.z, o.rot, o.scale, 0.05);
+          this.put('hut', 'far', map, o.x, o.z, o.rot, o.scale, 0.05);
+          break;
+        case 'idol':
+          this.put('idol', 'near', map, o.x, o.z, o.rot, o.scale, 0.1);
+          this.put('idol', 'far', map, o.x, o.z, o.rot, o.scale, 0.1);
+          break;
+        case 'shrine':
+          this.put('shrine', 'near', map, o.x, o.z, o.rot, 1);
+          this.put('shrine', 'far', map, o.x, o.z, o.rot, 1);
+          break;
+        case 'bonfire':
+          this.put('bonfire', 'near', map, o.x, o.z, 0, 1);
+          this.put('bonfire', 'far', map, o.x, o.z, 0, 1);
+          break;
+      }
+    });
+  }
+
+  /** Dense, tall forest ring that hides the edge of the map (low-detail models only: nobody gets close). */
   private buildBorderForest(map: GameMap): void {
     const rng = new Rng(4242);
-    const list: Obstacle[] = [];
-    for (let i = 0; i < 620; i++) {
+    for (let i = 0; i < 1500; i++) {
       const a = rng.range(0, TAU);
       const d = PLAY_RADIUS + 3 + Math.pow(rng.next(), 1.4) * 30;
-      list.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 0, kind: 'pine', scale: rng.range(1.5, 3.1), rot: rng.range(0, TAU) });
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d;
+      const roll = rng.next();
+      const name = roll < 0.62 ? 'fir_lod' : roll < 0.9 ? 'pine_lod' : 'oak_lod';
+      const s = name === 'oak_lod' ? rng.range(1.5, 2.3) : rng.range(1.3, 2.4);
+      const rot = rng.range(0, TAU);
+      this.put(name, 'near', map, x, z, rot, s);
+      this.put(name, 'far', map, x, z, rot, s);
     }
-    this.addInstanced(pineGeo(13), list, map, 1, false);
-    const oaks: Obstacle[] = [];
-    for (let i = 0; i < 60; i++) {
-      const a = rng.range(0, TAU);
-      const d = PLAY_RADIUS + 2 + rng.next() * 10;
-      oaks.push({ x: Math.cos(a) * d, z: Math.sin(a) * d, r: 0, kind: 'oak', scale: rng.range(1.8, 2.8), rot: rng.range(0, TAU) });
-    }
-    this.addInstanced(oakGeo(14), oaks, map, 1, false);
   }
 
-  private buildUndergrowth(map: GameMap, quality: number): void {
+  private buildUndergrowth(map: GameMap): void {
     const rng = new Rng(999);
-    const scatter = (geo: THREE.BufferGeometry, count: number, minS: number, maxS: number, pick: (x: number, z: number) => number): void => {
-      const n = count;
-      const mesh = new THREE.InstancedMesh(geo, propMaterial, n);
+    const scatter = (name: string, count: number, minS: number, maxS: number, pick: (x: number, z: number) => number, layer: Layer = 'plants'): void => {
       let placed = 0;
       let guard = 0;
-      while (placed < n && guard++ < n * 30) {
+      while (placed < count && guard++ < count * 30) {
         const a = rng.range(0, TAU);
         const d = Math.sqrt(rng.next()) * (PLAY_RADIUS + 6);
         const x = Math.cos(a) * d;
         const z = Math.sin(a) * d;
         if (map.inPuddle(x, z)) continue;
         if (rng.next() > pick(x, z)) continue;
-        const s = rng.range(minS, maxS);
-        writeMatrix(mesh.instanceMatrix.array, placed, x, map.heightAt(x, z) - 0.02, z, rng.range(0, TAU), s, s, s);
+        this.put(name, layer, map, x, z, rng.range(0, TAU), rng.range(minS, maxS), 0.02);
         placed++;
       }
-      mesh.count = placed;
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.receiveShadow = true;
-      mesh.frustumCulled = false;
-      this.group.add(mesh);
-      this.undergrowth.push({ mesh, placed });
     };
     const nearObstacle = (x: number, z: number): number => (map.isFree(x, z, 2.2) ? 0.12 : map.isFree(x, z, 0.3) ? 1 : 0);
-    const grassy = (x: number, z: number): number => (fbm(x / 9 + 5.5, z / 9 + 1.5, 3) < 0.55 && map.isFree(x, z, 0.2) ? 1 : 0.08);
-    scatter(fernGeo(), 900, 0.8, 1.7, nearObstacle);
-    scatter(grassGeo(), 2600, 0.8, 1.6, grassy);
-    scatter(lilyGeo(), 420, 0.9, 1.5, (x, z) => (fbm(x / 6 + 40, z / 6 + 13, 2) > 0.6 && map.isFree(x, z, 0.2) ? 1 : 0.02));
-    scatter(mushroomGeo(), 160, 0.8, 1.6, nearObstacle);
-    scatter(pebbleGeo(), 300, 0.6, 1.8, (x, z) => (map.isFree(x, z, 0.3) ? 0.6 : 0));
-    this.setQuality(quality);
+    const offPath = (x: number, z: number): number => 1 - Math.min(1, map.pathAt(x, z) * 3);
+    const grassy = (x: number, z: number): number => (fbm(x / 9 + 5.5, z / 9 + 1.5, 3) < 0.6 && map.isFree(x, z, 0.2) ? 1 : 0.08) * offPath(x, z);
+    scatter('fern', 3400, 0.8, 1.7, (x, z) => nearObstacle(x, z) * offPath(x, z));
+    scatter('grass', 20000, 0.8, 1.7, grassy);
+    scatter('lily', 1600, 0.9, 1.5, (x, z) => (fbm(x / 6 + 40, z / 6 + 13, 2) > 0.6 && map.isFree(x, z, 0.2) ? 1 : 0.02) * offPath(x, z));
+    scatter('mushroom', 640, 0.8, 1.6, nearObstacle);
+    scatter('pebble', 1200, 0.6, 1.8, (x, z) => (map.isFree(x, z, 0.3) ? 0.6 : 0));
+    // Bushes fill the space between trunks; they do not block movement.
+    const bushy = (x: number, z: number): number => (map.isFree(x, z, 0.6) && !map.isFree(x, z, 3.2) ? 1 : 0.03) * offPath(x, z);
+    scatter('bush0', 420, 0.8, 1.5, bushy, 'near');
+    scatter('bush1', 520, 0.9, 1.7, bushy, 'near');
   }
 
-  /** Undergrowth density follows the quality setting (instances are placed randomly, so any prefix works). */
+  /** Undergrowth density and shadow casting follow the quality setting. */
   setQuality(quality: number): void {
-    const mul = quality <= 0 ? 0.35 : quality === 1 ? 0.7 : 1;
-    for (const u of this.undergrowth) u.mesh.count = Math.floor(u.placed * mul);
+    this.plantMul = quality <= 0 ? 0.35 : quality === 1 ? 0.7 : 1;
+    this.shadows = quality > 0;
+    for (const c of this.chunks.values()) {
+      for (const u of c.plants) u.mesh.count = Math.max(1, Math.floor(u.placed * this.plantMul));
+      for (const m of c.near) m.castShadow = this.shadows;
+    }
   }
 
   private makeFlame(scale: number): FlameSet {
@@ -332,6 +417,23 @@ export class PropsView {
   }
 
   private buildFlames(map: GameMap): void {
+    // The lit window of the hut on the chicken leg glows and throws light on the yard.
+    for (const o of map.obstacles) {
+      if (o.kind !== 'hut') continue;
+      const c = Math.cos(o.rot);
+      const sn = Math.sin(o.rot);
+      const at = (lx: number, lz: number): [number, number] => [o.x + lx * c + lz * sn, o.z - lx * sn + lz * c];
+      const y = map.heightAt(o.x, o.z) - 0.05;
+      const [wx, wz] = at(0.95, 1.75);
+      const glow = new THREE.Sprite(
+        new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffb050, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.75, fog: false }),
+      );
+      glow.scale.setScalar(3.2);
+      glow.position.set(wx, y + 4.45, wz);
+      this.group.add(glow);
+      const [lx, lz] = at(0.6, 3.4);
+      this.sources.push({ x: lx, y: y + 3.4, z: lz, intensity: 42, range: 18, phase: 2.1, on: true });
+    }
     for (const b of map.bonfires) {
       const f = this.makeFlame(1.45);
       const y = map.heightAt(b.x, b.z);
@@ -373,6 +475,19 @@ export class PropsView {
   }
 
   update(time: number, px: number, pz: number): void {
+    propUniforms.uTime.value = time;
+    // Chunk visibility: full models near the hero, low-detail further out, nothing beyond the fog.
+    for (const c of this.chunks.values()) {
+      const dx = c.x - px;
+      const dz = c.z - pz;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      const near = d < NEAR;
+      const far = !near && d < FAR;
+      const plants = d < PLANTS;
+      for (let i = 0; i < c.near.length; i++) (c.near[i] as THREE.InstancedMesh).visible = near;
+      for (let i = 0; i < c.far.length; i++) (c.far[i] as THREE.InstancedMesh).visible = far;
+      for (let i = 0; i < c.plants.length; i++) (c.plants[i] as { mesh: THREE.InstancedMesh }).mesh.visible = plants;
+    }
     // Assign pooled lights to the nearest active fires.
     const src = this.sources;
     const order = this.order;

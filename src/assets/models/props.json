@@ -1,0 +1,94 @@
+{
+ "fir0": {
+  "offset": 0,
+  "verts": 1338
+ },
+ "fir1": {
+  "offset": 21408,
+  "verts": 1338
+ },
+ "fir2": {
+  "offset": 42816,
+  "verts": 1338
+ },
+ "fir_lod": {
+  "offset": 64224,
+  "verts": 450
+ },
+ "pine0": {
+  "offset": 71424,
+  "verts": 2196
+ },
+ "pine1": {
+  "offset": 106560,
+  "verts": 2196
+ },
+ "pine_lod": {
+  "offset": 141696,
+  "verts": 615
+ },
+ "oak0": {
+  "offset": 151536,
+  "verts": 2718
+ },
+ "oak1": {
+  "offset": 195024,
+  "verts": 2718
+ },
+ "oak_lod": {
+  "offset": 238512,
+  "verts": 762
+ },
+ "birch0": {
+  "offset": 250704,
+  "verts": 1338
+ },
+ "birch1": {
+  "offset": 272112,
+  "verts": 1338
+ },
+ "birch_lod": {
+  "offset": 293520,
+  "verts": 615
+ },
+ "rock0": {
+  "offset": 303360,
+  "verts": 192
+ },
+ "rock1": {
+  "offset": 306432,
+  "verts": 132
+ },
+ "rock2": {
+  "offset": 308544,
+  "verts": 198
+ },
+ "menhir0": {
+  "offset": 311712,
+  "verts": 228
+ },
+ "menhir1": {
+  "offset": 315360,
+  "verts": 204
+ },
+ "bush0": {
+  "offset": 318624,
+  "verts": 1440
+ },
+ "bush1": {
+  "offset": 341664,
+  "verts": 240
+ },
+ "ancient_oak": {
+  "offset": 345504,
+  "verts": 13458
+ },
+ "hut": {
+  "offset": 560832,
+  "verts": 3912
+ },
+ "idol": {
+  "offset": 623424,
+  "verts": 2322
+ }
+}

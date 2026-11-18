@@ -156,23 +156,69 @@ export class GeoBuilder {
   }
 }
 
-/** Camera and hero positions for the see-through effect of the prop material. */
+/** Camera and hero positions for the see-through effect of the prop material, plus wind and detail texture. */
 export const propUniforms = {
   uCam: { value: new THREE.Vector3() },
   uHero: { value: new THREE.Vector3() },
+  uTime: { value: 0 },
+  uDetail: { value: null as THREE.Texture | null },
 };
+
+/** Adds an `aWind` attribute that grows with height (for grass, ferns and other code-built plants). */
+export function windByHeight(geo: THREE.BufferGeometry, top: number, strength = 1): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position');
+  const w = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) w[i] = Math.min(1, Math.max(0, pos.getY(i) / top)) * strength;
+  geo.setAttribute('aWind', new THREE.BufferAttribute(w, 1));
+  return geo;
+}
+
+/**
+ * Points every normal mostly upwards. Thin blades and leaves are then lit like the ground they grow from,
+ * instead of going black whenever a face happens to look away from the low sun.
+ */
+export function normalsUp(geo: THREE.BufferGeometry, keep = 0.25): THREE.BufferGeometry {
+  const n = geo.getAttribute('normal');
+  const v = new THREE.Vector3();
+  for (let i = 0; i < n.count; i++) {
+    v.fromBufferAttribute(n, i).multiplyScalar(keep);
+    v.y = 1;
+    v.normalize();
+    n.setXYZ(i, v.x, v.y, v.z);
+  }
+  n.needsUpdate = true;
+  return geo;
+}
 
 /**
  * Shared flat-shaded vertex-colour material for scenery (trees, rocks, shrines, undergrowth).
- * Anything standing between the camera and the hero is dissolved with a dither pattern,
- * so trees never hide the fight.
+ * - Anything standing between the camera and the hero is dissolved with a dither pattern,
+ *   so trees never hide the fight.
+ * - Vertices with an `aWind` weight sway in the wind (weights come from the Blender build or windByHeight).
+ * - A faint painterly detail texture breaks up the flat faces.
  */
 export const propMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
 propMaterial.onBeforeCompile = (shader) => {
   shader.uniforms.uCam = propUniforms.uCam;
   shader.uniforms.uHero = propUniforms.uHero;
+  shader.uniforms.uTime = propUniforms.uTime;
+  shader.uniforms.uDetail = propUniforms.uDetail;
   shader.vertexShader = shader.vertexShader
-    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;')
+    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;\nattribute float aWind;\nuniform float uTime;')
+    .replace(
+      '#include <begin_vertex>',
+      `#include <begin_vertex>
+#ifdef USE_INSTANCING
+{
+  // Every instance sways with its own phase; higher and thinner parts move more (aWind).
+  vec3 mbO = vec3(instanceMatrix[3]);
+  float mbP = mbO.x * 0.31 + mbO.z * 0.27;
+  float mbS = sin(uTime * 1.15 + mbP + transformed.y * 0.22) * 0.16 + sin(uTime * 2.9 + mbP * 1.7 + transformed.y * 0.9 + transformed.x) * 0.045;
+  transformed.x += mbS * aWind;
+  transformed.z += mbS * 0.6 * aWind;
+}
+#endif`,
+    )
     .replace(
       '#include <project_vertex>',
       `#include <project_vertex>
@@ -183,7 +229,7 @@ mbWorld = instanceMatrix * mbWorld;
 vMbWorld = (modelMatrix * mbWorld).xyz;`,
     );
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;\nuniform vec3 uCam;\nuniform vec3 uHero;')
+    .replace('#include <common>', '#include <common>\nvarying vec3 vMbWorld;\nuniform vec3 uCam;\nuniform vec3 uHero;\nuniform sampler2D uDetail;')
     .replace(
       '#include <clipping_planes_fragment>',
       `#include <clipping_planes_fragment>
@@ -199,9 +245,19 @@ vMbWorld = (modelMatrix * mbWorld).xyz;`,
     if (mbA < mbN) discard;
   }
 }`,
+    )
+    .replace(
+      '#include <color_fragment>',
+      `#include <color_fragment>
+{
+  // Brush-stroke detail projected along a skewed axis so it shows on walls and tops alike.
+  vec2 mbUv = vMbWorld.xz * 0.37 + vMbWorld.y * vec2(0.23, 0.31);
+  float mbDt = texture2D(uDetail, mbUv).r;
+  diffuseColor.rgb *= 0.62 + mbDt * 0.76;
+}`,
     );
 };
-propMaterial.customProgramCacheKey = () => 'mb-prop';
+propMaterial.customProgramCacheKey = () => 'mb-prop2';
 
 /** Writes a TRS (yaw-only rotation) matrix straight into an instanceMatrix array. */
 export function writeMatrix(
