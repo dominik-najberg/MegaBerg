@@ -14,6 +14,7 @@ import { MoveFx, Player, stepPlayer, type InputState } from './player';
 import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, Zones } from './pools';
 import { Spawner } from './spawner';
 import { computeStats, critChance, damageAfterArmor, type PassiveInst } from './stats';
+import { Explored } from './fog';
 import { GameMap, MAP_HALF } from './terrain';
 import { updateProjectiles, updateWeapons, updateZones } from './weapons';
 
@@ -134,6 +135,10 @@ export class World {
   readonly hazards = new Hazards();
   readonly shots = new Shots();
   readonly spawner = new Spawner();
+  /** Fog of war of the map screen (what the hero has seen in this run). */
+  readonly fog = new Explored();
+  /** Per landmark of the map: has the hero found it yet. */
+  readonly landmarksFound: boolean[];
   readonly chests: Chest[] = [];
   readonly shrines: Shrine[] = [];
   readonly weapons: WeaponInst[] = [];
@@ -202,6 +207,8 @@ export class World {
       this.chests.push({ x: c.x, y: map.heightAt(c.x, c.z), z: c.z, rot: c.rot, free: false, opened: false, progress: 0 });
     }
     for (const s of map.shrines) this.shrines.push({ x: s.x, y: map.heightAt(s.x, s.z), z: s.z, used: false, progress: 0 });
+    this.landmarksFound = map.landmarks.map(() => false);
+    this.fog.reveal(p.x, p.z);
   }
 
   /** 0 (dusk) .. 1 (night) for the renderer. */
@@ -243,8 +250,28 @@ export class World {
     this.updateShots(dt);
     this.updatePickups(dt);
     this.updateInteract(dt, input.interact);
+    this.explore();
 
     if (!this.dead && this.pendingLevels > 0 && this.choice === null) this.openLevelUp();
+  }
+
+  /** Uncovers the map around the hero and announces newly found landmarks. */
+  private explore(): void {
+    const p = this.player;
+    this.fog.reveal(p.x, p.z);
+    const lm = this.map.landmarks;
+    for (let i = 0; i < lm.length; i++) {
+      if (this.landmarksFound[i]) continue;
+      const l = lm[i] as (typeof lm)[number];
+      const r = l.r + 12;
+      const dx = l.x - p.x;
+      const dz = l.z - p.z;
+      if (dx * dx + dz * dz < r * r) {
+        this.landmarksFound[i] = true;
+        this.announce.push(`Odkryto: ${l.name}`);
+        this.events.emit(Ev.Discover, l.x, this.map.heightAt(l.x, l.z), l.z, i);
+      }
+    }
   }
 
   // ------------------------------------------------------------------ queries
