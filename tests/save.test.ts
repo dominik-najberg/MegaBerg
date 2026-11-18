@@ -41,6 +41,7 @@ const run = (over: Partial<RunSummary> = {}): RunSummary => ({
   gold: 40,
   goldCollected: 55,
   won: false,
+  endless: false,
   evolved: 0,
   shrines: 0,
   damageTaken: 100,
@@ -134,6 +135,15 @@ describe('meta-progresja', () => {
     applyRun(save, run({ time: 60, level: 3 }));
     expect(save.stats.bestTime).toBe(120);
     expect(save.stats.runs).toBe(2);
+  });
+
+  it('kontynuacja w trybie nieskończonym nie liczy się jako nowy run', () => {
+    const save = defaultSave();
+    applyRun(save, run({ won: true }));
+    applyRun(save, run({ endless: true, gold: 70 }));
+    expect(save.stats.runs).toBe(1);
+    expect(save.stats.wins).toBe(1);
+    expect(save.gold).toBe(40 + 500 + 70 + 150 * 0);
   });
 
   it('odblokowuje osiągnięcia tylko raz i wypłaca nagrody w złocie', () => {

@@ -537,8 +537,8 @@ export class UI {
     this.open(
       'end',
       `<div class="sheet end ${run.won ? 'won' : 'lost'}">
-        <h2>${run.won ? 'Zwycięstwo!' : 'Poległeś w borze'}</h2>
-        <p class="lead">${run.won ? 'Leszy pada. Bór znów jest spokojny.' : 'Złe moce zwyciężyły tym razem. Chata czeka na twoje złoto.'}</p>
+        <h2>${run.won ? 'Zwycięstwo!' : run.endless ? 'Bór cię pochłonął' : 'Poległeś w borze'}</h2>
+        <p class="lead">${run.won ? 'Leszy pada. Bór znów jest spokojny.' : run.endless ? 'Tryb nieskończony dobiegł końca. Leszy i tak już pokonany.' : 'Złe moce zwyciężyły tym razem. Chata czeka na twoje złoto.'}</p>
         <div class="end-stats">
           <div><span>Czas</span><b>${fmtTime(run.time)}</b></div>
           <div><span>Zabójstwa</span><b>${run.kills}</b></div>

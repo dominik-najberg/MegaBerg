@@ -78,7 +78,7 @@ const KEYS: Key[] = [
   // twilight
   { top: 0x201c4e, mid: 0x54376f, horizon: 0xa8506a, fog: 0x45386a, hemiSky: 0x7a70c8, hemiGround: 0x4a3a40, hemiInt: 1.0, sun: 0xd08a9a, sunInt: 1.2, fogDensity: 0.0155 },
   // night
-  { top: 0x080c22, mid: 0x131c40, horizon: 0x243056, fog: 0x1a2142, hemiSky: 0x5870c0, hemiGround: 0x2a2a44, hemiInt: 0.85, sun: 0x8fb0ff, sunInt: 0.95, fogDensity: 0.017 },
+  { top: 0x080c22, mid: 0x131c40, horizon: 0x243056, fog: 0x1a2142, hemiSky: 0x6880d0, hemiGround: 0x34344e, hemiInt: 1.1, sun: 0x9fbcff, sunInt: 1.25, fogDensity: 0.016 },
 ];
 
 const _a = new THREE.Color();

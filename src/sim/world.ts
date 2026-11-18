@@ -105,6 +105,8 @@ export interface RunSummary {
   gold: number;
   goldCollected: number;
   won: boolean;
+  /** True for the part of a run played in endless mode after the boss. */
+  endless: boolean;
   evolved: number;
   shrines: number;
   damageTaken: number;
@@ -866,6 +868,7 @@ export class World {
       gold: Math.floor(this.gold),
       goldCollected: Math.floor(this.goldCollected),
       won: this.won,
+      endless: this.endless,
       evolved: this.evolved,
       shrines: this.shrinesUsed,
       damageTaken: Math.round(this.damageTaken),

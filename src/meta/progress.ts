@@ -61,7 +61,8 @@ export interface RunResult {
  * Mutates `save` and returns what changed (for the end screen).
  */
 export function applyRun(save: SaveData, run: RunSummary): RunResult {
-  save.stats.runs++;
+  // The endless continuation of a won run is banked separately but is still the same run.
+  if (!run.endless) save.stats.runs++;
   if (run.won) save.stats.wins++;
   save.stats.kills += run.kills;
   save.stats.gold += run.goldCollected;

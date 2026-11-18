@@ -159,7 +159,6 @@ export class Game {
     this.ui.setHud(false);
     this.ui.save = this.store.data;
     this.ui.showEnd(summary, res, this.world.won && !this.world.dead);
-    for (const a of res.unlocked) this.ui.toast(`Osiągnięcie: ${a.name}`);
     this.audio.intensity = 0.15;
   }
 

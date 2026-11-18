@@ -1,0 +1,24 @@
+import { launch, URL, sleep, shot, report } from '../lib/browser.mjs';
+const { browser, page, errors } = await launch({ width: 1600, height: 900 });
+const ev = (fn, arg) => page.evaluate(fn, arg);
+await page.goto(`${URL}?autostart=1`);
+await sleep(1000);
+await ev(() => { const g = window.__mb; g.debug.spawner(false); g.debug.only('zniwa', 'slonce', 'gniew', 'topor', 'kwiat'); g.debug.time(598); g.debug.spawner(true); g.setBot('good'); g.world.stats.maxHp = 400; g.world.player.hp = 400; });
+await sleep(4000);
+await shot(page, '07-leszy-nadchodzi.png');
+await ev(() => { const w = window.__mb.world; w.enemies.hp[w.bossIdx] = 10; });
+for (let i = 0; i < 30; i++) { await sleep(300); if (await ev(() => window.__mb.state) === 'end') break; }
+console.log('after kill', await ev(() => ({ state: window.__mb.state, won: window.__mb.world.won, saveWins: window.__mb.store.data.stats.wins, gold: window.__mb.store.data.gold })));
+await page.click('[data-act="endless"]');
+await sleep(500);
+await ev(() => { window.__mb.loop.timeScale = 6; });
+await sleep(9000);
+await ev(() => { window.__mb.loop.timeScale = 1; });
+await sleep(800);
+console.log('endless', await ev(() => { const g = window.__mb; const w = g.world; return { state: g.state, endless: w.endless, t: Math.round(w.time), alive: w.enemies.count, boss: w.bossIdx, kills: w.kills }; }));
+await shot(page, '07-tryb-nieskonczony.png');
+await ev(() => { const w = window.__mb.world; w.stats.maxHp = 1; w.player.hp = 1; w.player.invuln = 0; w.revivesLeft = 0; w.hurtPlayer(99); });
+await sleep(2200);
+console.log('end of endless', await ev(() => ({ state: window.__mb.state, runs: window.__mb.store.data.stats.runs, wins: window.__mb.store.data.stats.wins, canContinue: !!document.querySelector('[data-act="endless"]'), title: document.querySelector('.end h2')?.textContent })));
+report(errors);
+await browser.close();

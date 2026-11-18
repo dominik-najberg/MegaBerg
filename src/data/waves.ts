@@ -18,6 +18,12 @@ export const WAVES: WavePhase[] = [
   { from: RUN_LENGTH, alive: [150, 170], rate: 6, mix: { chochlik: 3, utopiec: 2, kruk: 2, strzyga: 2, wilkolak: 1.5, ognik: 1 } },
 ];
 
+/** Endless mode (after the boss): the densest mix, forever, while enemy health keeps scaling with time. */
+export const ENDLESS_PHASE: WavePhase = { from: RUN_LENGTH, alive: [280, 340], rate: 14, mix: { chochlik: 3, utopiec: 3.5, kruk: 2.5, ognik: 2, strzyga: 3, wilkolak: 2.5, bies: 2, licho: 2 } };
+/** Endless mode: seconds between mini-bosses, and between returns of the boss. */
+export const ENDLESS_MINI_EVERY = 75;
+export const ENDLESS_BOSS_EVERY = 300;
+
 export const WAVE_EVENTS: WaveEvent[] = [
   { at: 60, kind: 'swarm', enemy: 'chochlik', count: 16, text: 'Chochliki wyłażą z kniei!' },
   { at: 150, kind: 'mini', enemy: 'jaga', text: 'Baba Jaga nadlatuje w moździerzu!' },

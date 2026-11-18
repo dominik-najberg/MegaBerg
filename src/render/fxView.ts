@@ -294,7 +294,8 @@ export class FxView {
     g.add(this.blades, this.trails);
 
     // --- projectiles
-    this.fire = instanced(new THREE.IcosahedronGeometry(0.34, 0), new THREE.MeshBasicMaterial({ toneMapped: false }), MAX_PROJ, true);
+    this.fire = instanced(new THREE.IcosahedronGeometry(0.2, 1), new THREE.MeshBasicMaterial({ toneMapped: false, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false }), MAX_PROJ, true);
+    this.fire.renderOrder = 4;
     this.stones = instanced(new THREE.IcosahedronGeometry(0.17, 0), new THREE.MeshLambertMaterial({ flatShading: true, emissive: 0x222222 }), MAX_PROJ, true);
     this.spears = instanced(spearGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x554422 }), MAX_PROJ);
     this.pots = instanced(potGeo(), new THREE.MeshLambertMaterial({ vertexColors: true }), 64);
@@ -935,7 +936,7 @@ void main() {
         } else {
           const s = ((pr.radius[i] as number) / 0.55) * (1 + Math.sin(time * 30 + i) * 0.1);
           writeMatrix(this.fire.instanceMatrix.array, nf, x, y, z, time * 8 + i, s, s, s);
-          setColor(this.fire, nf, w.def.color, 1.4);
+          setColor(this.fire, nf, w.def.color, 1.2);
           nf++;
           sp.emit(x + (Math.random() - 0.5) * 0.3, y + (Math.random() - 0.5) * 0.3, z + (Math.random() - 0.5) * 0.3, 0, 1.2, 0, 0.35, 0.5, Math.random() < 0.5 ? 0xff5a1a : 0xffc040, -2, 1);
         }
@@ -1086,7 +1087,7 @@ void main() {
     }
     if (this.flashT > 0) {
       this.flashT -= dt;
-      this.flash.intensity = this.flashT > 0 ? 260 * (this.flashT / 0.14) : 0;
+      this.flash.intensity = this.flashT > 0 ? 90 * (this.flashT / 0.14) : 0;
     }
 
     sp.update(dt);

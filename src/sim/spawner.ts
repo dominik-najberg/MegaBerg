@@ -1,7 +1,7 @@
 import { TAU } from '../core/math';
 import { ENEMY_INDEX } from '../data/enemies';
 import type { WaveEvent } from '../data/types';
-import { ELITE_FIRST, ELITE_INTERVAL, phaseAt, WAVE_EVENTS } from '../data/waves';
+import { ELITE_FIRST, ELITE_INTERVAL, ENDLESS_BOSS_EVERY, ENDLESS_MINI_EVERY, ENDLESS_PHASE, phaseAt, WAVE_EVENTS } from '../data/waves';
 import { Ev } from './events';
 import { MAX_ENEMIES } from './pools';
 import { PLAY_RADIUS } from './terrain';
@@ -15,6 +15,8 @@ export class Spawner {
   private acc = 0;
   private eventIdx = 0;
   private nextElite = ELITE_FIRST;
+  private nextMini = 0;
+  private nextBoss = 0;
   /** Result of pickSpot. */
   private sx = 0;
   private sz = 0;
@@ -133,7 +135,25 @@ export class Spawner {
       this.fire(w, WAVE_EVENTS[this.eventIdx] as WaveEvent);
       this.eventIdx++;
     }
-    const { phase, progress } = phaseAt(w.time);
+    let { phase, progress } = phaseAt(w.time);
+    if (w.endless) {
+      // After the boss the forest never rests: dense mixed hordes, recurring mini-bosses, Leszy returns.
+      phase = ENDLESS_PHASE;
+      progress = Math.min(1, (w.time - phase.from) / 240);
+      if (this.nextMini === 0) {
+        this.nextMini = w.time + 30;
+        this.nextBoss = w.time + ENDLESS_BOSS_EVERY;
+      }
+      if (w.time >= this.nextMini) {
+        this.nextMini += ENDLESS_MINI_EVERY;
+        const jaga = w.rng.chance(0.5);
+        this.fire(w, { at: w.time, kind: 'mini', enemy: jaga ? 'jaga' : 'poludnica', text: jaga ? 'Baba Jaga znów krąży nad polaną!' : 'Południca wraca z żarem!' });
+      }
+      if (w.time >= this.nextBoss) {
+        this.nextBoss += ENDLESS_BOSS_EVERY;
+        this.fire(w, { at: w.time, kind: 'boss', enemy: 'leszy', text: 'Kolejny Leszy wychodzi z kniei!' });
+      }
+    }
     const target = phase.alive[0] + (phase.alive[1] - phase.alive[0]) * progress;
     const alive = e.count;
     if (alive < target && alive < MAX_ENEMIES - 40) {
