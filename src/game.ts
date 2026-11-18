@@ -12,6 +12,7 @@ import { Gfx, type Quality } from './render/gfx';
 import { emptyInput } from './sim/player';
 import { GameMap } from './sim/terrain';
 import { World } from './sim/world';
+import { MapScreen } from './ui/mapScreen';
 import { UI } from './ui/ui';
 
 type State = 'menu' | 'playing' | 'paused' | 'choice' | 'ending' | 'end';
@@ -25,6 +26,7 @@ export class Game {
   readonly audio = new AudioSys();
   readonly store = new SaveStore(browserStorage());
   readonly ui: UI;
+  readonly mapScreen: MapScreen;
   world: World;
   state: State = 'menu';
   bot: Bot | null = null;
@@ -38,6 +40,8 @@ export class Game {
   private character: CharacterDef;
   /** When set, every frame waits for the GPU (gl.finish) so frame times include GPU work. Perf test only. */
   perfFinish = false;
+  /** Keeps the map open without the key (automated screenshots). */
+  mapHeld = false;
   /** Performance counters (see docs/PERF.md). */
   readonly perf = { frames: 0, simMs: 0, renderMs: 0, steps: 0, since: 0, worst: 0 };
 
@@ -66,6 +70,7 @@ export class Game {
       },
       this.store.data,
     );
+    this.mapScreen = new MapScreen(uiRoot, this.map);
     this.applyOptions();
     this.loop = new Loop({ step: (dt) => this.step(dt), render: (a, dt) => this.render(a, dt) });
 
@@ -360,6 +365,9 @@ export class Game {
     const frozen = this.state === 'paused' || this.state === 'choice' || this.state === 'end';
     this.gfx.render(this.world, frozen ? 1 : alpha, frozen ? Math.min(frameDt, 0.001) : frameDt);
     if (this.state === 'playing' || this.state === 'ending') this.ui.updateHud(this.world, frameDt);
+    // The map is a held key, not a screen: the fight goes on underneath it.
+    this.mapScreen.setVisible(this.state === 'playing' && (inp.down('Tab') || this.mapHeld));
+    if (this.mapScreen.visible) this.mapScreen.draw(this.world, this.gfx.camYaw, frameDt);
     if (this.perfFinish) this.gfx.renderer.getContext().finish();
     const ms = performance.now() - t0;
     this.perf.renderMs += ms;

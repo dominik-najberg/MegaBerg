@@ -49,6 +49,8 @@ export const Ev = {
   /** a = radius */
   Zone: 31,
   Pickup: 32,
+  /** A landmark of the map was found: a = landmark index */
+  Discover: 33,
 } as const;
 
 export interface GameEvent {

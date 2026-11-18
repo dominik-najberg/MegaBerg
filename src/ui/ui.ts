@@ -99,7 +99,7 @@ export class UI {
     this.prompt = el('div', 'prompt hidden', this.hud);
     this.banner = el('div', 'banner hidden', this.hud);
     this.hint = el('div', 'hint hidden', this.hud);
-    this.hint.textContent = 'Kliknij, aby obracać kamerę myszą  •  strzałki ← → też działają';
+    this.hint.textContent = 'Kliknij, aby obracać kamerę myszą  •  strzałki ← → też działają  •  Tab: mapa';
     this.hurt = el('div', 'hurt', root);
     this.toasts = el('div', 'toasts', root);
     this.panel = el('div', 'panel hidden', root);
