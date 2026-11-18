@@ -101,6 +101,10 @@ export class Sky {
   private readonly sunDir = new THREE.Vector3();
   /** 0 at dusk, 1 at deep night. */
   night = 0;
+  /** Unit vector towards the light that currently lights the scene (low sun, later the moon). */
+  readonly lightDir = new THREE.Vector3(0, 1, 0);
+  /** Colour of the sky a little above the horizon: what still water reflects. */
+  readonly reflect = new THREE.Color();
 
   constructor(scene: THREE.Scene) {
     this.mat = new THREE.ShaderMaterial({
@@ -192,6 +196,8 @@ export class Sky {
     const ly = THREE.MathUtils.lerp(0.42, moon.y + 0.2, k);
     const lz = THREE.MathUtils.lerp(-0.8, moon.z, k);
     const l = Math.hypot(lx, ly, lz);
+    this.lightDir.set(lx / l, ly / l, lz / l);
+    this.reflect.copy(u.uMid!.value as THREE.Color).lerp(u.uHorizon!.value as THREE.Color, 0.45);
     this.sun.position.set(px + (lx / l) * 90, py + (ly / l) * 90, pz + (lz / l) * 90);
     this.sun.target.position.set(px, py, pz);
   }

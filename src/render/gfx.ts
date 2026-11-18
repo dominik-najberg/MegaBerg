@@ -171,7 +171,7 @@ export class Gfx {
 
     this.sky.setTime(world.dayTime(), this.clock);
     this.sky.follow(this.camera.position, Math.round(hp.x / 2) * 2, 0, Math.round(hp.z / 2) * 2);
-    this.terrain.setNight(this.sky.night);
+    this.terrain.update(this.clock, this.sky.night, this.sky.reflect, this.sky.lightDir, this.sky.sun.color);
     this.props.update(this.clock, hp.x, hp.z);
     this.heroLight.position.set(hp.x, hp.y + 2.6, hp.z);
     this.heroLight.intensity = 5 + this.sky.night * 9;
