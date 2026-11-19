@@ -1270,27 +1270,27 @@ h4 {
   vertical-align: -1px;
 }
 
-.mk.hero {
+.mk.mk-hero {
   background: #c8281e;
   border-color: #fff3d6;
   clip-path: polygon(100% 50%, 0 100%, 22% 50%, 0 0);
   border: none;
 }
 
-.mk.shrine {
+.mk.mk-shrine {
   background: #f4d98a;
 }
 
-.mk.chest {
+.mk.mk-chest {
   background: #b9772f;
 }
 
-.mk.fire {
+.mk.mk-fire {
   background: #e8792a;
   border-radius: 50% 50% 50% 50% / 70% 70% 40% 40%;
 }
 
-.mk.boss {
+.mk.mk-boss {
   background: #b3261e;
   border-radius: 50%;
 }

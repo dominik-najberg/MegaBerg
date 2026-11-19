@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { clamp } from '../core/math';
+import { tex } from './assets';
 
 const VERT = /* glsl */ `
 varying vec3 vDir;
@@ -18,6 +19,7 @@ uniform vec3 uSunCol;
 uniform vec3 uMoonDir;
 uniform float uNight;
 uniform float uTime;
+uniform sampler2D uMoonTex;
 varying vec3 vDir;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -47,13 +49,18 @@ void main() {
   vec2 suv = vec2(atan(d.z, d.x) * 40.0, h * 70.0);
   vec2 g = floor(suv);
   float r = hash(g);
-  float star = step(0.975, r) * smoothstep(0.42, 0.0, length(fract(suv) - 0.5));
+  float star = step(0.972, r) * smoothstep(0.2, 0.0, length((fract(suv) - 0.5) * vec2(1.0, 0.6)));
   col += vec3(0.9, 0.92, 1.0) * star * uNight * (0.55 + 0.45 * sin(uTime * 2.0 + r * 90.0)) * smoothstep(0.06, 0.3, h) * (1.0 - cloud);
 
-  // Moon.
+  // Moon: a painted disc with a soft halo, rising as the night deepens.
   float md = max(dot(d, uMoonDir), 0.0);
-  float moon = smoothstep(0.9988, 0.9992, md);
-  col += (vec3(0.95, 0.95, 0.85) * moon + vec3(0.35, 0.42, 0.6) * pow(md, 40.0) * 0.5) * uNight;
+  vec3 mr = normalize(cross(vec3(0.0, 1.0, 0.0), uMoonDir));
+  vec3 mu = cross(uMoonDir, mr);
+  vec2 muv = vec2(dot(d, mr), dot(d, mu)) / 0.075;
+  float disc = (1.0 - smoothstep(0.92, 1.0, length(muv))) * step(0.0, dot(d, uMoonDir));
+  vec3 moonCol = texture2D(uMoonTex, muv * 0.4 + 0.5).rgb;
+  col = mix(col, moonCol * 1.25, disc * uNight * (1.0 - cloud * 0.7));
+  col += vec3(0.32, 0.4, 0.62) * (pow(md, 60.0) * 0.5 + pow(md, 600.0) * 0.5) * uNight * (1.0 - disc);
 
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
@@ -120,9 +127,11 @@ export class Sky {
         uHorizon: { value: new THREE.Color() },
         uSunDir: { value: new THREE.Vector3(0, 0.1, -1) },
         uSunCol: { value: new THREE.Color() },
-        uMoonDir: { value: new THREE.Vector3(0.5, 0.55, 0.6).normalize() },
+        // Low over the treetops, where the third-person camera actually sees it.
+        uMoonDir: { value: new THREE.Vector3(0.5, 0.26, 0.6).normalize() },
         uNight: { value: 0 },
         uTime: { value: 0 },
+        uMoonTex: { value: tex('moon') },
       },
     });
     this.mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), this.mat);
@@ -195,7 +204,8 @@ export class Sky {
     // Light direction: low sun early, high moon late.
     const k = this.night;
     const lx = THREE.MathUtils.lerp(-0.55, moon.x, k);
-    const ly = THREE.MathUtils.lerp(0.42, moon.y + 0.2, k);
+    // The light itself comes from higher up than the painted moon: long shadows would hide the fight.
+    const ly = THREE.MathUtils.lerp(0.42, moon.y + 0.45, k);
     const lz = THREE.MathUtils.lerp(-0.8, moon.z, k);
     const l = Math.hypot(lx, ly, lz);
     this.lightDir.set(lx / l, ly / l, lz / l);

@@ -578,7 +578,7 @@ export class MapScreen {
     const text = `Odkryto ${pct}% boru  •  miejsca: ${found}/${map.landmarks.length}`;
     if (this.info.dataset.t !== text) {
       this.info.dataset.t = text;
-      this.info.innerHTML = `<span><i class="mk hero"></i>ty</span><span><i class="mk shrine"></i>kapliczka</span><span><i class="mk chest"></i>skrzynia</span><span><i class="mk fire"></i>ognisko</span><span><i class="mk boss"></i>boss</span><b>${text}</b>`;
+      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><b>${text}</b>`;
     }
   }
 }
