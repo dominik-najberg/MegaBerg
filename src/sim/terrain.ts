@@ -57,6 +57,12 @@ const LANDMARK_DEFS: Array<[LandmarkKind, string, number, number, number]> = [
 const LAKE_R = 12.5;
 const BARROW_H = 3.4;
 
+/** Chests near the starting clearing (see placeNearChests). */
+export const NEAR_CHESTS = 3;
+export const NEAR_CHEST_MIN = 18;
+export const NEAR_CHEST_MAX = 25;
+const NEAR_CHEST_SEED = 771;
+
 const OB_CELL = 8;
 const OB_DIM = Math.ceil((MAP_HALF * 2) / OB_CELL);
 
@@ -459,6 +465,27 @@ export class GameMap {
       if (!this.free(x, z, r, 2.2)) continue;
       this.obstacles.push({ x, z, r, kind, scale: s, rot: rng.range(0, TAU) });
       trees++;
+    }
+    this.placeNearChests();
+  }
+
+  /**
+   * Chests within a short walk of the starting clearing, one per third of the compass, so the first
+   * coins of a run have something to buy. Placed last and with its own generator: the rest of the
+   * map stays exactly as it was.
+   */
+  private placeNearChests(): void {
+    const rng = new Rng(NEAR_CHEST_SEED);
+    for (let k = 0; k < NEAR_CHESTS; k++) {
+      for (let tries = 0; tries < 200; tries++) {
+        const a = ((k + rng.range(0.15, 0.85)) / NEAR_CHESTS) * TAU;
+        const d = rng.range(NEAR_CHEST_MIN, NEAR_CHEST_MAX);
+        const x = Math.cos(a) * d;
+        const z = Math.sin(a) * d;
+        if (this.inClearing(x, z) || this.pathAt(x, z) > 0.3 || !this.free(x, z, 1, 1.2)) continue;
+        this.chestSpots.push({ x, z, rot: Math.atan2(-x, -z) });
+        break;
+      }
     }
   }
 

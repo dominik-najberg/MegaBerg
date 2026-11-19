@@ -37,6 +37,8 @@ Pozostałe komendy:
 | `npm test` | testy logiki (Vitest) |
 | `npm run typecheck` | sprawdzenie typów bez budowania |
 | `npm run sim -- runs=10 skill=good shop=2` | rozgrywa całe runy botem bez przeglądarki (strojenie balansu) |
+| `npm run sim -- career=12 skill=novice` | „kariera”: kolejne runy na jednym zapisie z zakupami w Chacie (tempo rozwoju gracza) |
+| `npm run refpack` | paczka czystych zrzutów do prac nad grafiką w `concepts/zrzuty/`: wrogowie i bohaterowie na neutralnym tle, scenerie o trzech porach, walka; `npm run refpack -- wrogowie` robi jedną grupę |
 
 Wymagana przeglądarka z WebGL 2 (aktualny Chrome, Firefox, Edge).
 
@@ -63,8 +65,12 @@ Wymagana przeglądarka z WebGL 2 (aktualny Chrome, Firefox, Edge).
   lepsza rzadkość to silniejszy bonus. Maksymalnie 6 broni i 6 pasywek.
 - **Ewolucje:** broń na 5. poziomie plus odpowiednia pasywka zamienia się w potężniejszą formę
   (przez skrzynię albo legendarną kartę przy awansie).
-- **Skrzynie** na mapie otwiera się za złote monety (każda kolejna jest droższa). Elitarni wrogowie
-  (świecą na złoto) i mini-bossy zostawiają darmową skrzynię.
+- **Skrzynie** na mapie otwiera się za złote monety. Pierwsza kosztuje 10 złota, każda kolejna jest
+  wyraźnie droższa (10, 18, 31, 54, 94…). **Trzy skrzynie stoją 20–25 m od startu** i widać je na mapie
+  od pierwszej sekundy. Elitarni wrogowie (świecą na złoto) i mini-bossy zostawiają darmową skrzynię
+  i sakiewkę monet.
+- **Monety** wypadają z wrogów: na początku runu z mniej więcej co czwartego, po 3,5 minuty z co
+  szesnastego. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
 - **Kapliczki:** podejdź, przytrzymaj `E` i wybierz błogosławieństwo Peruna (obrażenia), Swaroga (ogień),
   Welesa (szczęście i złoto) albo Mokoszy (leczenie). Każdy bóg błogosławi najwyżej dwa razy na run.
 - **Leczenie:** z wrogów rzadko wypada chleb ze smalcem albo dzban miodu. Jedzenie czeka na ziemi,
@@ -132,7 +138,8 @@ src/
   debug/     bot-autopilot i narzędzia testera (window.__mb.debug)
   game.ts    maszyna stanów: menu → gra → pauza / wybór → koniec
 tests/       testy Vitest (obrażenia, skalowanie, karty, ewolucje, zapis, ruch, symulacja)
-scripts/     symulacja balansu (simulate.ts) i playtesty w bezgłowym Chrome (verify/*.mjs)
+scripts/     symulacja balansu (simulate.ts), playtesty w bezgłowym Chrome (verify/*.mjs),
+             paczka zrzutów referencyjnych (refpack.mjs)
 tools/       blender/build_props.py: generator modeli scenografii
 docs/        PLAN.md, DECISIONS.md, PERF.md, REPORT.md, screenshots/
 ```

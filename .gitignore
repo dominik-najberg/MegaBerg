@@ -1,3 +1,5 @@
 node_modules/
 .vite/
 *.log
+# paczka zrzutów referencyjnych: odtwarzalna przez `npm run refpack`
+concepts/zrzuty/

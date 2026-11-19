@@ -6,7 +6,8 @@ import { Bot } from '../src/debug/bot';
 import { emptyInput, MOVE, MoveFx, Player, stepPlayer } from '../src/sim/player';
 import { BASE_STATS } from '../src/data/types';
 import { GameMap, PLAY_RADIUS } from '../src/sim/terrain';
-import { BOSS_GOLD, World } from '../src/sim/world';
+import { PickupKind } from '../src/sim/pools';
+import { BOSS_GOLD, CHEST_COST, COIN_CHANCE, COIN_EARLY_BONUS, COIN_EARLY_TIME, coinChance, World } from '../src/sim/world';
 
 const map = new GameMap();
 const DT = 1 / 60;
@@ -320,6 +321,75 @@ describe('symulacja runu', () => {
     expect(w.shrinesUsed).toBe(w.shrines.length);
     const perun = picked.filter((id) => id === 'perun').length;
     expect(perun).toBe(2);
+  });
+
+  it('na początku runu monety wypadają częściej, potem szansa wraca do bazowej', () => {
+    expect(coinChance(0)).toBeCloseTo(COIN_CHANCE + COIN_EARLY_BONUS);
+    expect(coinChance(COIN_EARLY_TIME / 2)).toBeCloseTo(COIN_CHANCE + COIN_EARLY_BONUS / 2);
+    expect(coinChance(COIN_EARLY_TIME)).toBeCloseTo(COIN_CHANCE);
+    expect(coinChance(COIN_EARLY_TIME * 3)).toBeCloseTo(COIN_CHANCE);
+  });
+
+  it('pierwsza minuta gry daje dość złota na pierwszą skrzynię i początkujący ją kupuje', () => {
+    // prawdziwa minuta runu: fale ze spawnera, początkujący bot zbiera monety i podchodzi do skrzyń
+    let bought = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const w = new World(map, { seed });
+      const bot = new Bot('novice');
+      while (w.time < 60 && !w.dead) {
+        if (w.choice) {
+          w.choose(bot.choose(w));
+          continue;
+        }
+        w.step(DT, bot.update(w, DT));
+        w.events.clear();
+      }
+      expect(w.dead).toBe(false);
+      expect(w.goldCollected).toBeGreaterThanOrEqual(CHEST_COST);
+      if (w.paidChests > 0) bought++;
+    }
+    expect(bought).toBeGreaterThanOrEqual(6);
+  });
+
+  it('elita zawsze zostawia darmową skrzynię i sakiewkę monet', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.time = COIN_EARLY_TIME * 2;
+    const chests = w.chests.length;
+    const i = w.spawnEnemy(ENEMY_INDEX.utopiec as number, 30, 0, true);
+    w.damageEnemy(i, 1e9, -1, 0, 0, 0, null);
+    expect(w.chests.length).toBe(chests + 1);
+    expect(w.chests[chests]!.free).toBe(true);
+    const k = w.pickups;
+    let coins = 0;
+    for (let c = 0; c < k.n; c++) if (k.alive[c] && k.kind[c] === PickupKind.Coin) coins += k.val[c] as number;
+    expect(coins).toBeGreaterThanOrEqual(10);
+  });
+
+  it('podpowiedź o skrzyni pojawia się raz, gdy starcza złota na pierwszą', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    const hints = (): number => w.announce.filter((t) => t.includes('skrzyni')).length;
+    w.addGold(CHEST_COST - 1);
+    expect(hints()).toBe(0);
+    w.addGold(1);
+    expect(hints()).toBe(1);
+    w.addGold(50);
+    expect(hints()).toBe(1);
+  });
+
+  it('pierwsze skrzynie są tanie, a cena rośnie z każdą kupioną', () => {
+    const w = new World(map, { seed: 4 });
+    expect(w.chestCost()).toBe(CHEST_COST);
+    const costs: number[] = [];
+    for (let k = 0; k < 6; k++) {
+      costs.push(w.chestCost());
+      w.paidChests++;
+    }
+    // trzy skrzynie przy starcie kosztują razem mniej niż najtańsze ulepszenia w Chacie na dwa runy
+    expect((costs[0] as number) + (costs[1] as number) + (costs[2] as number)).toBeLessThanOrEqual(60);
+    for (let k = 1; k < costs.length; k++) expect(costs[k] as number).toBeGreaterThan(costs[k - 1] as number);
+    expect(costs[5] as number).toBeGreaterThan(150);
   });
 
   it('płatna skrzynia pobiera złoto, a kolejna jest droższa', () => {

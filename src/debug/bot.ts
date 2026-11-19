@@ -138,19 +138,23 @@ export class Bot {
       ax += (dx / d) * wgt;
       az += (dz / d) * wgt;
     }
-    if (good) {
+    {
+      // Everybody walks to a chest they can afford; a first-time player only notices the close ones.
       const cost = w.chestCost();
+      const sight = good ? 45 : 28;
       for (const c of w.chests) {
         if (c.opened || (!c.free && w.gold < cost)) continue;
         const dx = c.x - p.x;
         const dz = c.z - p.z;
         const d = Math.hypot(dx, dz);
         if (d < 2.4) inp.interact = true;
-        if (d > 45 || d < 0.01) continue;
-        const wgt = (c.free ? 2.2 : 1.2) / (d * 0.08 + 1);
+        if (d > sight || d < 0.01) continue;
+        const wgt = (c.free ? 2.2 : 1.2) * (good ? 1 : 0.7) / (d * 0.08 + 1);
         ax += (dx / d) * wgt;
         az += (dz / d) * wgt;
       }
+    }
+    if (good) {
       if (threat < 0.25) {
         for (const s of w.shrines) {
           if (s.used) continue;

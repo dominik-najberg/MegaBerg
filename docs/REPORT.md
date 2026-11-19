@@ -76,6 +76,7 @@ sterowany `playwright-core`: prawdziwe klawisze, prawdziwy WebGL na zintegrowany
 | `m7.mjs`, `endless.mjs`, `death.mjs` | pełne runy botem do Leszego, tryb nieskończony, śmierć i ekran końca |
 | `ctxlost.mjs` | utrata kontekstu WebGL: komunikat i zapis złota (także w trakcie animacji końca) |
 | `dist.mjs` | build produkcyjny serwowany przez `npm run preview` (port 4173) |
+| `economy.mjs` | wczesna ekonomia: skrzynie przy starcie na mapie, podpowiedź o skrzyni, pierwszy zakup botem |
 
 Pełne runy w przeglądarce: 5 rozegranych botem z przyspieszeniem ×8, 3 zakończone zwycięstwem nad Leszym
 (Chata na poziomach 3, 4 i 5), 2 porażki (bez Chaty i z poziomem 4).

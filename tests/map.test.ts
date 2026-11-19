@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BLESSINGS } from '../src/data/blessings';
 import { Explored, FOG_CELL, SIGHT } from '../src/sim/fog';
 import { emptyInput } from '../src/sim/player';
-import { GameMap, MAP_HALF, PLAY_RADIUS } from '../src/sim/terrain';
+import { GameMap, MAP_HALF, NEAR_CHEST_MAX, NEAR_CHEST_MIN, NEAR_CHESTS, PLAY_RADIUS } from '../src/sim/terrain';
 import { World } from '../src/sim/world';
 
 const DT = 1 / 60;
@@ -52,6 +52,21 @@ describe('duża mapa', () => {
       const h = map.heightAt(lake.x + Math.cos(a) * lake.r * 0.6, lake.z + Math.sin(a) * lake.r * 0.6);
       expect(h).toBeLessThan(lake.y);
     }
+  });
+
+  it('w zasięgu krótkiego spaceru od startu stoją skrzynie, każda w innej stronie świata', () => {
+    const near = map.chestSpots.filter((c) => Math.hypot(c.x, c.z) <= NEAR_CHEST_MAX);
+    expect(near.length).toBe(NEAR_CHESTS);
+    const sectors = new Set<number>();
+    for (const c of near) {
+      expect(Math.hypot(c.x, c.z)).toBeGreaterThanOrEqual(NEAR_CHEST_MIN);
+      // widać je na mapie od pierwszej sekundy runu
+      expect(Math.hypot(c.x, c.z)).toBeLessThan(SIGHT);
+      expect(map.isFree(c.x, c.z, 1)).toBe(true);
+      const a = (Math.atan2(c.z, c.x) + Math.PI * 2) % (Math.PI * 2);
+      sectors.add(Math.floor((a / (Math.PI * 2)) * NEAR_CHESTS));
+    }
+    expect(sectors.size).toBe(NEAR_CHESTS);
   });
 
   it('przy starcie pali się ognisko', () => {

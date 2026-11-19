@@ -145,3 +145,76 @@ rozstrzygnąłem sam.
 
 Drugi przebieg (`codex exec review --uncommitted`, na samych poprawkach): bez uwag, 80 testów przechodzi.
 Po poprawce ogniska balans bez zmian (dobry bot bez Chaty 5/16).
+
+## Wczesna ekonomia (zgłoszenie: „za trudno zdobywa się pieniądze”)
+
+Zgłoszenie użytkownika: złoto zdobywa się za trudno i przez to trudno opędzić się od wrogów, zanim bohater
+dostanie poziomy i przedmioty. Pomiar przed zmianą (`npm run sim`, tryb `career` dopisany przy tej okazji)
+potwierdził trzy przyczyny:
+
+- moneta wypadała z 6% wrogów, więc po pierwszej minucie (ok. 100 zabójstw) gracz miał 6–8 złota,
+  a pierwsza skrzynia kosztowała 12;
+- po powiększeniu mapy do 180 m **najbliższa skrzynia stała 51 m od startu** (wcześniej, na polanie 92 m,
+  kilka było w zasięgu krótkiego spaceru); dobry bot kupował pierwszą płatną skrzynię średnio w 3:23,
+  początkujący nigdy;
+- początkujący kończył run z ok. 20–50 złota przy cenach Chaty od 30 w górę: po 12 runach miał 10 poziomów
+  ulepszeń z 57 i nadal ginął w okolicach 3. minuty.
+
+Zmiany:
+
+- **Szansa na monetę maleje w czasie runu**: 26% na starcie, liniowo do bazowych 6% w 3:30
+  (`coinChance` w `src/sim/world.ts`). Powód: złota brakowało na początku, nie na końcu. Pierwsza wersja
+  (stałe 13% i droższe monety z silniejszych wrogów) dawała dobremu botowi 1700–5000 złota na run
+  i całą Chatę w 4 runy, więc późny dochód został przy starej stawce.
+- **Elita zawsze zostawia sakiewkę** (5 monet po 2 złota) obok darmowej skrzyni; dawniej miała 6% szans
+  na jedną monetę za 5. Mini-boss: 10 monet po 4 (było po 3).
+- **Trzy skrzynie 18–25 m od startu**, po jednej w każdej tercji róży wiatrów, widoczne na mapie od razu
+  (zasięg wzroku to 30 m). Stawiane na końcu generowania mapy własnym generatorem liczb, więc reszta boru
+  (drzewa, głazy, ścieżki) jest co do metra taka jak była.
+- **Skrzynie: pierwsza tańsza, kolejne drożeją szybciej** (10 × 1,75ⁿ zamiast 12 × 1,45ⁿ, czyli
+  10, 18, 31, 54, 94, 164). Trzy skrzynie przy starcie kosztują razem 59 złota. Powód stromego wzrostu:
+  bliskie skrzynie przy starej krzywej cen podnosiły wygrane dobrego bota bez Chaty z ok. 30% do ok. 50%
+  (a z poziomem 2 do 94%); stroma krzywa zostawia łatwiejszy początek, a końcówkę na dawnym poziomie.
+- **Podpowiedź na banerze**, gdy pierwszy raz starcza złota na skrzynię („Stać cię na skrzynię!
+  Najbliższe widać na mapie [Tab].”). Raz na run.
+- **Zasada „do Chaty trafia to, co zostało w sakiewce” zostaje**: wybór między siłą teraz a ulepszeniem
+  na stałe ma sens dopiero wtedy, gdy na jedno i drugie w ogóle starcza.
+- **Ceny w Chacie i siła wrogów bez zmian.** Zgłoszenie wskazuje na pieniądze jako przyczynę, więc
+  poprawiony jest dochód, a nie fale.
+- **Bot „novice” też podchodzi do skrzyni, na którą go stać**, ale widzi ją z 28 m (dobry bot z 45 m).
+  Wcześniej ignorował skrzynie całkowicie, czego nie robi nawet początkujący człowiek.
+
+Wyniki (Wojmir, po 32 runy na konfigurację; rozrzut między przebiegami to ok. ±10 punktów):
+
+| | przed | po |
+|---|---|---|
+| pierwsza płatna skrzynia, dobry bot | 3:23 | ok. 1:00 |
+| pierwsza płatna skrzynia, początkujący | nigdy | 0:39 |
+| początkujący bez Chaty, średni czas runu | 2:20–2:34 | 2:42–3:06 |
+| początkujący z poziomem 3 ulepszeń | ok. 5:30 | 7:21–8:14 |
+| kariera początkującego po 12 runach: poziomy ulepszeń / czas runu | 10,5 / 2:38 | 28–38 / 5:09–8:16 |
+| kariera dobrego bota: pierwsza wygrana | run 5,3 | run 2,3 |
+| dobry bot bez Chaty, wygrane | ok. 30% | 31–44% |
+| dobry bot z poziomem 2 ulepszeń | 55–69% | 63–78% |
+| dobry bot z poziomem 4 | 94% | 100% |
+
+Wniosek: początek runu i pierwsze kilkanaście runów są wyraźnie łatwiejsze, a walka z Leszym bez ulepszeń
+pozostaje wyzwaniem. Uwaga do pomiaru: bot trzyma się do 60 m od środka mapy, więc dalszych skrzyń
+praktycznie nie używa; człowiek, który wędruje po borze, skorzysta z większego dochodu bardziej niż bot.
+
+Sprawdzone w grze (`scripts/verify/economy.mjs`, bezgłowy Chrome): trzy skrzynie widać na mapie w 1. sekundzie,
+podpowiedź pojawia się ok. 0:35, bot kupuje pierwszą skrzynię za 10 złota, konsola bez błędów.
+
+
+### Review Codexem (wczesna ekonomia)
+
+W katalogu roboczym były równolegle cudze, niezatwierdzone zmiany (`src/render/gfx.ts`, `package.json`,
+`scripts/refpack.mjs`), więc zamiast `codex exec review --uncommitted` poszedł `codex exec` z samym diffem
+plików ekonomii na wejściu. Codex nie znalazł błędów logiki ani exploitów i porównaniem z wyłączonym
+`placeNearChests()` potwierdził na pięciu ziarnach, że teren, przeszkody, ścieżki i dotychczasowe skrzynie
+są identyczne. Dwie uwagi do weryfikacji, **obie przyjęte**:
+
+| # | Uwaga Codexa | Decyzja | Poprawka |
+|---|---|---|---|
+| 1 | [P2] Test „pierwszej minuty” zabijał 100 wrogów w czasie 0 i liczył upuszczone monety, a nie zebrane złoto; skrócenie premii do 1 s nadal by go przechodziło | przyjęta | test rozgrywa prawdziwą minutę początkującym botem na 8 ziarnach: każde zbiera co najmniej cenę skrzyni, co najmniej 6 ją kupuje |
+| 2 | [P3] `scripts/verify/economy.mjs` kończył się sukcesem także bez skrzyń, podpowiedzi czy zakupu | przyjęta | sześć asercji (widoczność skrzyń, cena 10, podpowiedź do 60 s, bot żyje, zakup za pierwszą cenę, czysta konsola) i kod wyjścia 1 przy błędzie |

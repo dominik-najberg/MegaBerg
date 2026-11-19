@@ -119,6 +119,22 @@ export interface RunSummary {
 const PICKUP_BASE = 2.6;
 /** Gold for defeating the boss (before the gold-gain multiplier). */
 export const BOSS_GOLD = 150;
+/** Chance that a regular enemy drops a coin (before luck). */
+export const COIN_CHANCE = 0.06;
+/**
+ * Extra coin chance at the very start of a run, fading to zero at COIN_EARLY_TIME seconds:
+ * the first chests have to be affordable while the hero still has one weapon.
+ */
+export const COIN_EARLY_BONUS = 0.2;
+export const COIN_EARLY_TIME = 210;
+/** Cost of the first paid chest and its growth per chest bought. */
+export const CHEST_COST = 10;
+export const CHEST_COST_MUL = 1.75;
+
+/** Coin drop chance of a regular enemy at run time t (seconds), before luck. */
+export function coinChance(t: number): number {
+  return COIN_CHANCE + COIN_EARLY_BONUS * Math.max(0, 1 - t / COIN_EARLY_TIME);
+}
 
 /** The whole simulation state of one run. Pure logic: no rendering, no DOM. */
 export class World {
@@ -163,6 +179,7 @@ export class World {
   gold = 0;
   goldCollected = 0;
   paidChests = 0;
+  private chestHinted = false;
   rerollsLeft = 0;
   revivesLeft = 0;
   pendingLevels = 0;
@@ -419,13 +436,17 @@ export class World {
         for (let k = 0; k < 30; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-6, 6), gy, z + rng.range(-6, 6), BOSS_GOLD / 30);
       }
     } else if (def.rank === 'mini') {
-      for (let k = 0; k < 10; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-2.5, 2.5), gy, z + rng.range(-2.5, 2.5), 3);
+      for (let k = 0; k < 10; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-2.5, 2.5), gy, z + rng.range(-2.5, 2.5), 4);
       this.spawnChest(x, z, true);
       this.pickups.spawn(PickupKind.Bread, x + 1, gy, z + 1, 30);
       this.hitstop = 0.18;
     } else {
-      if (elite) this.spawnChest(x, z, true);
-      if (rng.next() < 0.06 * (1 + luck * 0.6)) this.pickups.spawn(PickupKind.Coin, x, gy, z, elite ? 5 : 1);
+      if (elite) {
+        // Elites always pay: a small purse next to the free chest.
+        this.spawnChest(x, z, true);
+        for (let k = 0; k < 5; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-1.5, 1.5), gy, z + rng.range(-1.5, 1.5), 2);
+      }
+      if (rng.next() < coinChance(this.time) * (1 + luck * 0.6)) this.pickups.spawn(PickupKind.Coin, x, gy, z, 1);
       else if (rng.next() < 0.007 * (1 + luck * 0.5)) {
         if (rng.next() < 0.25) this.pickups.spawn(PickupKind.Honey, x, gy, z, 60);
         else this.pickups.spawn(PickupKind.Bread, x, gy, z, 25);
@@ -510,6 +531,11 @@ export class World {
     const v = value * this.stats.goldGain;
     this.gold += v;
     this.goldCollected += v;
+    // Tell a new player once what the coins are for, the moment the first chest becomes affordable.
+    if (!this.chestHinted && this.paidChests === 0 && this.gold >= this.chestCost()) {
+      this.chestHinted = true;
+      this.announce.push('Stać cię na skrzynię! Najbliższe widać na mapie [Tab].');
+    }
   }
 
   // ------------------------------------------------------------------ spawning
@@ -731,7 +757,7 @@ export class World {
   }
 
   chestCost(): number {
-    return Math.round(12 * Math.pow(1.45, this.paidChests));
+    return Math.round(CHEST_COST * Math.pow(CHEST_COST_MUL, this.paidChests));
   }
 
   private updateInteract(dt: number, interact: boolean): void {

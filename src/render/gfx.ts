@@ -31,6 +31,11 @@ export class Gfx {
   shakeEnabled = true;
   /** Extra slow orbit used behind the menus. */
   menuOrbit = false;
+  /**
+   * Photo mode for reference screenshots (scripts/refpack.mjs): the orbit camera aims at this point
+   * instead of the hero, at exactly camDist/camPitch, optionally with the hero hidden.
+   */
+  photo: { x: number; y: number; z: number; hideHero?: boolean } | null = null;
   private readonly heroLight: THREE.PointLight;
   private readonly focus = new THREE.Vector3();
   private focusInit = false;
@@ -133,7 +138,8 @@ export class Gfx {
     this.clock += frameDt;
     const p = world.player;
     if (this.menuOrbit) this.camYaw += frameDt * 0.06;
-    this.hero.group.visible = !world.dead;
+    const photo = this.photo;
+    this.hero.group.visible = !world.dead && !photo?.hideHero;
     this.hero.update(p, alpha, frameDt, this.clock);
     const hp = this.hero.group.position;
     this.hero.setGround(this.map.heightAt(hp.x, hp.z));
@@ -150,8 +156,10 @@ export class Gfx {
     const bi = world.bossIdx;
     const bossR = bi >= 0 && world.enemies.alive[bi] ? (world.enemies.radius[bi] as number) : 0;
     this.distExtra = damp(this.distExtra, bossR > 2 ? 6 : bossR > 0 ? 2.5 : 0, 2, frameDt);
-    const dist = this.camDist + this.distExtra;
-    const pitch = this.camPitch + this.distExtra * 0.012;
+    if (photo) this.focus.set(photo.x, photo.y, photo.z);
+    const distExtra = photo ? 0 : this.distExtra;
+    const dist = this.camDist + distExtra;
+    const pitch = this.camPitch + distExtra * 0.012;
     const cp = Math.cos(pitch);
     const cx = this.focus.x + Math.sin(this.camYaw) * cp * dist;
     const cz = this.focus.z + Math.cos(this.camYaw) * cp * dist;
@@ -159,7 +167,7 @@ export class Gfx {
     const minY = this.map.heightAt(cx, cz) + 0.8;
     if (cy < minY) cy = minY;
     this.camera.position.set(cx, cy, cz);
-    this.camera.lookAt(this.focus.x, this.focus.y + 0.6, this.focus.z);
+    this.camera.lookAt(this.focus.x, this.focus.y + (photo ? 0 : 0.6), this.focus.z);
     if (this.fx.shake > this.shake) this.shake = this.fx.shake;
     this.fx.shake = 0;
     if (!this.shakeEnabled) this.shake = 0;
