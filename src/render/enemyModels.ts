@@ -172,27 +172,81 @@ function wilkolak(): THREE.BufferGeometry {
   return b.build();
 }
 
-/** Bies: horned forest devil that hurls cursed fire. */
+/**
+ * Bies: horned forest devil that hurls cursed fire.
+ * Follows the starred concept: shaggy arms, bark on the shoulders and brow,
+ * a torn embroidered tunic under a studded belt, bracers and boots.
+ */
 function bies(): THREE.BufferGeometry {
   const b = builder(107);
-  const hide = 0x6a2c2a;
-  const dark = 0x3a1818;
+  const hide = 0x692624;
+  const cloth = 0x762e28;
+  const dark = 0x3a1414;
+  const fur = 0x4e1a1a;
   const horn = 0xd8c8a0;
-  b.box(0.7, 0.85, 0.46, hide, { y: 1.22 });
-  b.box(0.52, 0.34, 0.4, dark, { y: 0.7 });
-  b.box(0.42, 0.42, 0.4, hide, { y: 1.84, z: 0.06 });
-  b.box(0.2, 0.2, 0.1, dark, { y: 1.72, z: 0.28 });
-  b.box(0.09, 0.06, 0.04, 0xff9a30, { x: 0.11, y: 1.9, z: 0.27, jitter: 0 });
-  b.box(0.09, 0.06, 0.04, 0xff9a30, { x: -0.11, y: 1.9, z: 0.27, jitter: 0 });
+  const bark = 0x6a563a;
+  const moss = 0x5a6a34;
+  const leather = 0x3a2a20;
+  const iron = 0x8a7c60;
+  const thread = 0x9a5c2c;
+  // tunic: chest, skirt below the belt, ragged hem
+  b.box(0.7, 0.85, 0.46, cloth, { y: 1.22 });
+  b.box(0.72, 0.42, 0.48, cloth, { y: 0.78 });
+  for (let i = 0; i < 5; i++) {
+    const x = -0.28 + i * 0.14;
+    b.cone(0.1, 0.16 + (i % 2) * 0.08, 4, cloth, { x, y: 0.5, z: 0.19, rx: Math.PI, sz: 0.4 });
+    b.cone(0.1, 0.2 - (i % 2) * 0.08, 4, cloth, { x, y: 0.5, z: -0.19, rx: Math.PI, sz: 0.4 });
+  }
+  // embroidered bands down the front
   for (const s of [-1, 1]) {
-    b.cone(0.09, 0.36, 4, horn, { x: s * 0.26, y: 2.12, z: 0.02, rz: -s * 0.9 });
-    b.cone(0.06, 0.3, 4, horn, { x: s * 0.44, y: 2.32, z: 0.02, rz: -s * 0.15 });
-    b.box(0.18, 0.7, 0.18, hide, { x: s * 0.46, y: 1.2, swing: -s * 0.7, pivot: 1.6 });
-    b.box(0.2, 0.62, 0.22, dark, { x: s * 0.17, y: 0.31, swing: s * 0.9, pivot: 0.62 });
-    b.box(0.22, 0.1, 0.26, 0x1a1210, { x: s * 0.17, y: 0.05, z: 0.03, swing: s * 0.9, pivot: 0.62 });
+    b.box(0.065, 0.6, 0.02, thread, { x: s * 0.2, y: 1.33, z: 0.235 });
+    b.box(0.065, 0.34, 0.02, thread, { x: s * 0.2, y: 0.76, z: 0.245 });
+    for (let i = 0; i < 5; i++) {
+      b.box(0.035, 0.035, 0.03, 0x5a201c, { x: s * 0.2, y: (i < 4 ? 1.12 + i * 0.14 : 0.76), z: i < 4 ? 0.237 : 0.247, rz: Math.PI / 4 });
+    }
+  }
+  // studded belt with a buckle
+  b.box(0.74, 0.1, 0.5, leather, { y: 0.98 });
+  b.box(0.17, 0.14, 0.03, iron, { y: 0.98, z: 0.26 });
+  b.box(0.08, 0.06, 0.035, dark, { y: 0.98, z: 0.262 });
+  for (const x of [-0.3, -0.18, 0.18, 0.3]) b.box(0.03, 0.03, 0.03, iron, { x, y: 0.98, z: 0.255 });
+  // head: glowing eyes in dark sockets, gaping mouth
+  b.box(0.42, 0.42, 0.4, hide, { y: 1.84, z: 0.06 });
+  b.box(0.2, 0.26, 0.1, 0x1a0a0a, { y: 1.74, z: 0.22 });
+  for (const s of [-1, 1]) {
+    b.box(0.14, 0.09, 0.03, dark, { x: s * 0.11, y: 1.92, z: 0.262 });
+    b.box(0.1, 0.06, 0.04, 0xffa030, { x: s * 0.11, y: 1.92, z: 0.268, jitter: 0 });
+    // horns sweep outwards, then spike up; bark grows around their roots
+    b.cyl(0.065, 0.1, 0.36, 4, horn, { x: s * 0.33, y: 2.11, z: 0.04, rz: -s * 1.1 });
+    b.cone(0.08, 0.52, 4, horn, { x: s * 0.52, y: 2.41, z: 0.04, rz: -s * 0.12 });
+    for (let i = 0; i < 3; i++) {
+      b.box(0.2, 0.06, 0.11, i === 1 ? moss : bark, { x: s * 0.19, y: 2.075, z: -0.06 + i * 0.11, rz: s * (0.25 + i * 0.12) });
+    }
+    // bark shingles on the shoulders
+    for (let i = 0; i < 3; i++) {
+      b.box(0.17, 0.07, 0.48 - i * 0.07, i === 2 ? moss : bark, { x: s * (0.3 + i * 0.13), y: 1.69 - i * 0.03, rz: -s * (0.1 + i * 0.14) });
+    }
+    // shaggy arm, bracer, fist
+    const arm = { swing: -s * 0.7, pivot: 1.6 };
+    b.box(0.22, 0.58, 0.22, hide, { x: s * 0.47, y: 1.3, ...arm });
+    for (let i = 0; i < 4; i++) {
+      const y = 1.5 - i * 0.14;
+      b.cone(0.09, 0.24, 4, fur, { x: s * 0.57, y, rz: -s * 2.6, ...arm });
+      b.cone(0.08, 0.22, 4, i % 2 ? fur : hide, { x: s * 0.47, y: y - 0.04, z: 0.11, rx: 2.6, ...arm });
+      b.cone(0.08, 0.22, 4, i % 2 ? hide : fur, { x: s * 0.47, y: y - 0.04, z: -0.11, rx: -2.6, ...arm });
+    }
+    b.box(0.25, 0.1, 0.25, leather, { x: s * 0.47, y: 0.99, ...arm });
+    b.box(0.03, 0.03, 0.03, iron, { x: s * 0.47, y: 0.99, z: 0.13, ...arm });
+    b.box(0.03, 0.03, 0.03, iron, { x: s * 0.6, y: 0.99, ...arm });
+    b.box(0.2, 0.16, 0.2, hide, { x: s * 0.47, y: 0.87, ...arm });
+    // legs and boots
+    const leg = { swing: s * 0.9, pivot: 0.62 };
+    b.box(0.2, 0.62, 0.22, 0x5a1c1c, { x: s * 0.17, y: 0.31, ...leg });
+    b.box(0.23, 0.14, 0.28, 0x2a1c16, { x: s * 0.17, y: 0.09, z: 0.03, ...leg });
+    b.box(0.25, 0.04, 0.31, 0x15100e, { x: s * 0.17, y: 0.02, z: 0.03, ...leg });
   }
   // cursed orb in the right hand
-  b.ico(0.17, 0, 0xc070ff, { x: 0.5, y: 0.82, z: 0.16, jitter: 0.03, swing: -0.7, pivot: 1.6 });
+  b.ico(0.19, 0, 0xc070ff, { x: 0.5, y: 0.78, z: 0.17, jitter: 0.03, swing: -0.7, pivot: 1.6 });
   b.cone(0.08, 0.5, 4, dark, { y: 0.8, z: -0.3, rx: -2.2 });
   return b.build();
 }

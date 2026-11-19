@@ -8,6 +8,16 @@ type Look = CharacterDef['look'];
 
 const RED = 0xb3261e;
 const LEATHER = 0x5a3a24;
+const LINEN = 0xe6dfcc;
+/** Bogumił, after the starred concept: oxblood apron, dark fur collar, forged buckles, amber. */
+const APRON = 0x6e3420;
+const STITCH = 0x84532e;
+const FUR = 0x3b2a20;
+const FUR_TIP = 0x54402e;
+const IRON = 0x9a9080;
+const AMBER = 0xf0a030;
+const GOLD = 0xd9a441;
+const EMBROIDERY = 0xa02c22;
 
 /**
  * Articulated low-poly hero built from boxes. All animation is procedural:
@@ -94,6 +104,12 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
       b.box(0.18, 0.035, 0.19, LEATHER, { y: -0.55, rz: 0.35 * side });
       b.box(0.18, 0.035, 0.19, LEATHER, { y: -0.68, rz: -0.35 * side });
       b.box(0.19, 0.1, 0.31, 0x4a2f1e, { y: -0.81, z: 0.05 });
+      if (look.style === 'bogumil') {
+        // heavy smith's boots: cuff, toe cap and a thick sole
+        b.box(0.2, 0.05, 0.2, LEATHER, { y: -0.745 });
+        b.box(0.21, 0.08, 0.12, LEATHER, { y: -0.8, z: 0.16 });
+        b.box(0.22, 0.035, 0.35, 0x2a1a12, { y: -0.845, z: 0.05 });
+      }
       this.part(leg, b);
     }
 
@@ -103,12 +119,16 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
     t.box(0.58 * wide, 0.2, 0.34, look.shirt, { y: -0.02 });
     t.box(0.585 * wide, 0.045, 0.345, look.trim, { y: -0.1 });
     t.box(0.56 * wide, 0.09, 0.33, RED, { y: 0.1 });
-    t.box(0.06, 0.34, 0.05, RED, { x: 0.15, y: -0.1, z: 0.175, rz: 0.08 });
-    t.box(0.09, 0.07, 0.06, 0xd9a441, { x: 0.15, y: -0.28, z: 0.175 });
+    if (look.style !== 'bogumil') {
+      t.box(0.06, 0.34, 0.05, RED, { x: 0.15, y: -0.1, z: 0.175, rz: 0.08 });
+      t.box(0.09, 0.07, 0.06, GOLD, { x: 0.15, y: -0.28, z: 0.175 });
+    }
     t.box(0.24, 0.05, 0.31, look.trim, { y: 0.65 });
     t.box(0.09, 0.3, 0.31, look.trim, { y: 0.5 });
-    t.box(0.04, 0.04, 0.315, 0xe6dfcc, { y: 0.52, rz: Math.PI / 4 });
-    t.box(0.04, 0.04, 0.315, 0xe6dfcc, { y: 0.42, rz: Math.PI / 4 });
+    if (look.style !== 'bogumil') {
+      t.box(0.04, 0.04, 0.315, LINEN, { y: 0.52, rz: Math.PI / 4 });
+      t.box(0.04, 0.04, 0.315, LINEN, { y: 0.42, rz: Math.PI / 4 });
+    }
     // neck + head
     t.box(0.14, 0.1, 0.14, look.skin, { y: 0.71 });
     t.box(0.31, 0.32, 0.3, look.skin, { y: 0.9 });
@@ -141,15 +161,44 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
       t.box(0.3, 0.05, 0.045, RED, { y: -0.5, z: 0.445, rx: -0.26 });
       t.box(0.94, 0.045, 0.045, RED, { y: -0.66, z: 0 });
     } else if (look.style === 'bogumil') {
-      t.box(0.33, 0.07, 0.32, look.hair, { y: 1.08 });
-      // beard + brows
-      t.box(0.3, 0.2, 0.12, look.hair, { y: 0.78, z: 0.13 });
+      // flat cap of hair with a brim, heavy brows, square beard
+      t.box(0.35, 0.09, 0.34, look.hair, { y: 1.09 });
+      t.box(0.32, 0.2, 0.14, look.hair, { y: 0.78, z: 0.13 });
       t.box(0.33, 0.1, 0.1, look.hair, { y: 0.84, z: 0.06 });
-      t.box(0.24, 0.04, 0.03, look.hair, { y: 0.98, z: 0.155 });
-      // leather apron
-      t.box(0.5, 0.7, 0.04, LEATHER, { y: 0.14, z: 0.18 });
-      t.box(0.05, 0.4, 0.04, LEATHER, { x: 0.2, y: 0.52, z: 0.17, rz: 0.3 });
-      t.box(0.05, 0.4, 0.04, LEATHER, { x: -0.2, y: 0.52, z: 0.17, rz: -0.3 });
+      t.box(0.12, 0.05, 0.04, look.hair, { x: 0.085, y: 0.985, z: 0.16, rz: 0.16 });
+      t.box(0.12, 0.05, 0.04, look.hair, { x: -0.085, y: 0.985, z: 0.16, rz: -0.16 });
+      // fur collar: a band over the shoulders with tufts at the sides and back
+      t.box(0.68, 0.1, 0.39, FUR, { y: 0.68 });
+      t.box(0.33, 0.22, 0.06, look.hair, { y: 0.97, z: -0.14 });
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * TAU;
+        if (Math.sin(a) > 0.55) continue; // the front stays clear for the beard and straps
+        t.cone(0.09, 0.22, 4, i % 2 ? FUR : FUR_TIP, { x: Math.cos(a) * 0.33, y: 0.68, z: Math.sin(a) * 0.19, rz: -Math.cos(a) * 2.0, rx: Math.sin(a) * 2.0 });
+      }
+      // embroidered neckline and shirt hem, amber amulet
+      t.box(0.03, 0.15, 0.02, EMBROIDERY, { x: 0.05, y: 0.6, z: 0.155, rz: -0.38 });
+      t.box(0.03, 0.15, 0.02, EMBROIDERY, { x: -0.05, y: 0.6, z: 0.155, rz: 0.38 });
+      t.box(0.075, 0.075, 0.035, AMBER, { y: 0.555, z: 0.17, rz: Math.PI / 4, jitter: 0 });
+      t.box(0.69, 0.035, 0.35, EMBROIDERY, { y: -0.04 });
+      // leather apron: stitched bib, wide straps with iron buckles, straps down the back
+      t.box(0.46, 0.76, 0.04, APRON, { y: 0.12, z: 0.185 });
+      t.box(0.02, 0.76, 0.045, STITCH, { x: 0.225, y: 0.12, z: 0.186 });
+      t.box(0.02, 0.76, 0.045, STITCH, { x: -0.225, y: 0.12, z: 0.186 });
+      t.box(0.46, 0.02, 0.045, STITCH, { y: -0.25, z: 0.186 });
+      t.box(0.46, 0.025, 0.045, LEATHER, { y: 0.49, z: 0.187 });
+      for (const s of [-1, 1]) {
+        t.box(0.09, 0.3, 0.04, LEATHER, { x: s * 0.18, y: 0.6, z: 0.17, rz: s * 0.1 });
+        t.box(0.12, 0.085, 0.03, IRON, { x: s * 0.175, y: 0.53, z: 0.2 });
+        t.box(0.06, 0.035, 0.035, 0x2a1c14, { x: s * 0.175, y: 0.53, z: 0.2 });
+        t.box(0.09, 0.56, 0.03, LEATHER, { x: s * 0.17, y: 0.38, z: -0.16 });
+      }
+      t.box(0.44, 0.07, 0.03, LEATHER, { y: 0.1, z: -0.175 });
+      // sash end: wrapped red cord with a gold block
+      t.box(0.07, 0.3, 0.05, RED, { x: 0.13, y: -0.06, z: 0.23 });
+      t.box(0.075, 0.03, 0.055, 0x7e1a14, { x: 0.13, y: 0.02, z: 0.23 });
+      t.box(0.075, 0.03, 0.055, 0x7e1a14, { x: 0.13, y: -0.07, z: 0.23 });
+      t.box(0.075, 0.03, 0.055, 0x7e1a14, { x: 0.13, y: -0.16, z: 0.23 });
+      t.box(0.1, 0.09, 0.075, GOLD, { x: 0.13, y: -0.25, z: 0.23 });
     } else {
       // jagna: hood and shawl
       t.box(0.38, 0.3, 0.36, look.hair, { y: 1.02, z: -0.03 });
@@ -166,9 +215,15 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
     ] as Array<[THREE.Group, number]>) {
       const b = new GeoBuilder(51 + side);
       if (look.style === 'bogumil') {
-        b.box(0.2, 0.2, 0.22, look.shirt, { y: -0.08 });
-        b.box(0.17, 0.42, 0.18, look.skin, { y: -0.38 });
-        b.box(0.18, 0.08, 0.19, LEATHER, { y: -0.5 });
+        // short wide sleeve with an embroidered hem, bare arm, studded bracer, fist
+        b.box(0.24, 0.22, 0.25, look.shirt, { y: -0.07 });
+        b.box(0.245, 0.04, 0.255, EMBROIDERY, { y: -0.15 });
+        b.box(0.2, 0.2, 0.21, look.skin, { y: -0.28 });
+        b.box(0.17, 0.3, 0.18, look.skin, { y: -0.45 });
+        b.box(0.2, 0.14, 0.21, 0x4a2c1c, { y: -0.46 });
+        b.box(0.03, 0.04, 0.04, IRON, { x: side * 0.105, y: -0.46 });
+        b.box(0.04, 0.04, 0.03, IRON, { y: -0.46, z: 0.11 });
+        b.box(0.19, 0.12, 0.2, look.skin, { y: -0.6 });
       } else {
         b.box(0.18, 0.38, 0.2, look.shirt, { y: -0.17 });
         b.box(0.19, 0.045, 0.21, look.trim, { y: -0.36 });
