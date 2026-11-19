@@ -75,11 +75,11 @@ interface Key {
 
 const KEYS: Key[] = [
   // dusk
-  { top: 0x3a2a6e, mid: 0x9a4a7c, horizon: 0xf2874a, fog: 0x6b5686, hemiSky: 0x9f8ad6, hemiGround: 0x6a4a36, hemiInt: 1.25, sun: 0xffa868, sunInt: 2.3, fogDensity: 0.013 },
+  { top: 0x3a2a6e, mid: 0x9a4a7c, horizon: 0xf2874a, fog: 0x6b5686, hemiSky: 0x9f8ad6, hemiGround: 0x6a4a36, hemiInt: 1.55, sun: 0xffa868, sunInt: 2.3, fogDensity: 0.013 },
   // twilight
-  { top: 0x201c4e, mid: 0x54376f, horizon: 0xa8506a, fog: 0x45386a, hemiSky: 0x7a70c8, hemiGround: 0x4a3a40, hemiInt: 1.0, sun: 0xd08a9a, sunInt: 1.2, fogDensity: 0.0155 },
+  { top: 0x201c4e, mid: 0x54376f, horizon: 0xa8506a, fog: 0x45386a, hemiSky: 0x7a70c8, hemiGround: 0x4a3a40, hemiInt: 1.45, sun: 0xd08a9a, sunInt: 1.2, fogDensity: 0.0155 },
   // night
-  { top: 0x080c22, mid: 0x131c40, horizon: 0x243056, fog: 0x1a2142, hemiSky: 0x6880d0, hemiGround: 0x34344e, hemiInt: 1.1, sun: 0x9fbcff, sunInt: 1.25, fogDensity: 0.016 },
+  { top: 0x080c22, mid: 0x131c40, horizon: 0x243056, fog: 0x1a2142, hemiSky: 0x6880d0, hemiGround: 0x34344e, hemiInt: 1.6, sun: 0x9fbcff, sunInt: 1.5, fogDensity: 0.016 },
 ];
 
 const _a = new THREE.Color();
@@ -146,6 +146,8 @@ export class Sky {
     sc.far = 220;
     this.sun.shadow.bias = -0.0006;
     this.sun.shadow.normalBias = 0.06;
+    // Shadows under the canopy stay readable: the fight must be visible in the thickest woods.
+    this.sun.shadow.intensity = 0.72;
     scene.add(this.sun);
     scene.add(this.sun.target);
 

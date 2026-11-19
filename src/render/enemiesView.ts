@@ -55,18 +55,22 @@ uniform float uTime;`,
         '#include <color_fragment>',
         `#include <color_fragment>
 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55, 0.85, 1.0), vFx.w * 0.6);
-diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), vFx.x);`,
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(1.0), vFx.x * 0.8);`,
       )
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
 // A little self-illumination keeps silhouettes readable in the dark forest.
 totalEmissiveRadiance += diffuseColor.rgb * 0.22;
-totalEmissiveRadiance += vec3(1.0) * vFx.x * 0.85;
+// The hit flash stays below the bloom threshold: a white pop, not a flare over half the screen.
+totalEmissiveRadiance += vec3(1.0) * vFx.x * 0.4;
+// Cool rim light from the sky outlines every creature against the dark ground.
+float mbRim = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0), 3.0);
+totalEmissiveRadiance += vec3(0.42, 0.4, 0.75) * mbRim * 0.4;
 totalEmissiveRadiance += vec3(1.0, 0.7, 0.15) * vFx.y * (0.3 + 0.2 * sin(uTime * 6.0));`,
       );
   };
-  mat.customProgramCacheKey = () => 'mb-creature';
+  mat.customProgramCacheKey = () => 'mb-creature2';
   return mat;
 }
 

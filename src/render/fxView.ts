@@ -853,7 +853,7 @@ void main() {
           this.aura.rotation.y = time * 0.5;
           this.aura.scale.setScalar(w.fxArea);
           this.auraMat.color.set(w.def.color);
-          this.auraMat.opacity = 0.17 + Math.sin(time * 4) * 0.04;
+          this.auraMat.opacity = 0.085 + Math.sin(time * 4) * 0.02;
           if (emit) {
             const a = Math.random() * TAU;
             const r = w.fxArea * (0.5 + Math.random() * 0.5);

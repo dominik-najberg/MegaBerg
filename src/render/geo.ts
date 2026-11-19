@@ -255,9 +255,15 @@ vMbWorld = (modelMatrix * mbWorld).xyz;`,
   float mbDt = texture2D(uDetail, mbUv).r;
   diffuseColor.rgb *= 0.62 + mbDt * 0.76;
 }`,
+    )
+    .replace(
+      '#include <emissivemap_fragment>',
+      `#include <emissivemap_fragment>
+// A trace of self-illumination: trunks and stones never sink into pure black at night.
+totalEmissiveRadiance += diffuseColor.rgb * 0.1;`,
     );
 };
-propMaterial.customProgramCacheKey = () => 'mb-prop2';
+propMaterial.customProgramCacheKey = () => 'mb-prop3';
 
 /** Writes a TRS (yaw-only rotation) matrix straight into an instanceMatrix array. */
 export function writeMatrix(
