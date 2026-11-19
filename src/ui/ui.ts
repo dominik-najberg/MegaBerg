@@ -329,6 +329,7 @@ export class UI {
           <span><kbd>Spacja</kbd> skok</span>
           <span><kbd>Shift</kbd> zryw</span>
           <span><kbd>E</kbd> skrzynie i kapliczki</span>
+          <span><kbd>Tab</kbd> mapa (przytrzymaj)</span>
           <span><kbd>Esc</kbd> pauza</span>
         </div>
       </div>`,
