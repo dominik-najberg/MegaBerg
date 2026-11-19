@@ -54,6 +54,12 @@ describe('duża mapa', () => {
     }
   });
 
+  it('przy starcie pali się ognisko', () => {
+    const nearest = Math.min(...map.bonfires.map((b) => Math.hypot(b.x, b.z)));
+    expect(nearest).toBeLessThan(12);
+    expect(nearest).toBeGreaterThan(6);
+  });
+
   it('obiekty kolizyjne nie blokują punktu startu', () => {
     for (const o of map.obstacles) expect(Math.hypot(o.x, o.z)).toBeGreaterThan(o.r + 2);
   });

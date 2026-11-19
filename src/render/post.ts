@@ -113,6 +113,9 @@ export class Post {
   }
 
   dispose(): void {
+    // The composer only frees its own buffers; passes own render targets and materials of their own.
+    this.bloom.dispose();
+    this.final.dispose();
     this.composer.dispose();
     this.target.dispose();
   }

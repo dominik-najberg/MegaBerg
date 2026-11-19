@@ -372,7 +372,11 @@ export class GameMap {
     };
 
     // Bonfires: one at the start, one by every trail, the rest scattered.
-    addBonfire(Math.cos(0.6) * 9, Math.sin(0.6) * 9);
+    // The starting fire sits between two trails: try bearings around the clearing until one is free.
+    for (let k = 0; k < 16; k++) {
+      const a = 0.6 + k * 0.4;
+      if (addBonfire(Math.cos(a) * 9.5, Math.sin(a) * 9.5)) break;
+    }
     for (let i = 0; i < this.trails.length; i++) {
       for (const side of [-5.5, 5.5, -7, 7]) {
         const [x, z] = wayside(i, 0.72, side);

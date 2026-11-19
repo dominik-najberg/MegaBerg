@@ -117,7 +117,7 @@ rozstrzygnąłem sam.
   więc dziewiąta kapliczka nie miałaby czego dać (przy 10 pękał test limitu błogosławieństw).
 - **Ścieżki i nazwane miejsca** dają większej mapie cel wędrówki. Skrzynia przy każdym miejscu to nagroda
   za dojście. Kolizje nowych obiektów to nadal koła.
-- **Balans sprawdzony symulacją**: dobry bot bez Chaty 6/16 wygranych (przed zmianą 5/16), z poziomem 2
+- **Balans sprawdzony symulacją**: dobry bot bez Chaty 5/16 wygranych (przed zmianą też 5/16), z poziomem 2
   ulepszeń 11/16, nowicjusz 0/8. Mieści się w dotychczasowym rozrzucie, więc liczb wrogów nie ruszałem.
 - **Mapa pod `Tab` nie pauzuje gry** („przytrzymanie” to podgląd, nie ekran) i zasłania środek ekranu
   półprzezroczystym tłem. Mgła odkrywania jest w symulacji (`src/sim/fog.ts`, komórki 4 m, zasięg wzroku
@@ -133,3 +133,15 @@ rozstrzygnąłem sam.
   kąta, żeby długie cienie nie zasłaniały walki.
 - **Commity na gałęzi `grafika-mapa-minimapa`, bez wypychania**: praca nocna bez nadzoru powinna dać się
   przejrzeć i cofnąć etapami.
+
+### Review Codexem (sesja graficzna)
+
+`codex exec review --base main` na całej gałęzi. Typy i 79 testów przeszły; dwie uwagi, **obie przyjęte**:
+
+| # | Uwaga Codexa | Decyzja | Poprawka |
+|---|---|---|---|
+| 1 | [P2] Zmiana jakości grafiki nie zwalnia celów renderowania i materiałów bloomu oraz przebiegu końcowego (`EffectComposer.dispose()` zwalnia tylko własne bufory) | przyjęta | `Post.dispose()` zwalnia też `bloom` i `final` |
+| 2 | [P3] Ognisko przy starcie nigdy nie powstawało: wypadało na ścieżce (`pathAt` ≈ 0,27 przy progu 0,2), a wynik `addBonfire` był ignorowany; najbliższe ognisko było 47 m od startu | przyjęta | szukanie wolnego kierunku wokół polany; test „przy starcie pali się ognisko” |
+
+Drugi przebieg (`codex exec review --uncommitted`, na samych poprawkach): bez uwag, 80 testów przechodzi.
+Po poprawce ogniska balans bez zmian (dobry bot bez Chaty 5/16).
