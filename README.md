@@ -39,8 +39,26 @@ Pozostałe komendy:
 | `npm run sim -- runs=10 skill=good shop=2` | rozgrywa całe runy botem bez przeglądarki (strojenie balansu) |
 | `npm run sim -- career=12 skill=novice` | „kariera”: kolejne runy na jednym zapisie z zakupami w Chacie (tempo rozwoju gracza) |
 | `npm run refpack` | paczka czystych zrzutów do prac nad grafiką w `concepts/zrzuty/`: wrogowie i bohaterowie na neutralnym tle, scenerie o trzech porach, walka; `npm run refpack -- wrogowie` robi jedną grupę |
+| `npm run edytor` | wewnętrzny edytor konceptów pod `http://localhost:5173/edytor`: referencje z `concepts/`, propozycje obrazów z Codeksa (opis niżej) |
 
 Wymagana przeglądarka z WebGL 2 (aktualny Chrome, Firefox, Edge).
+
+## Edytor konceptów
+
+Narzędzie wewnętrzne do prac nad grafiką, dostępne tylko w serwerze deweloperskim (`npm run edytor` albo
+`/edytor` przy działającym `npm run dev`); do wersji produkcyjnej nie trafia.
+
+1. Z biblioteki (koncepty z `concepts/` i zrzuty z `concepts/zrzuty/`, które robi `npm run refpack`) wybierasz
+   do 4 referencji.
+2. Opisujesz, co ma powstać: wpisujesz własny opis, klikasz gotową podpowiedź dobraną do rodzaju referencji albo
+   „✦ Zaproponuj pomysły”, a Codex obejrzy referencje i podsunie pięć kierunków.
+3. „Generuj propozycje” uruchamia `codex exec` z wbudowanym generatorem obrazów, osobno dla każdej propozycji
+   (1–4 naraz, każda z innym nastawieniem: wierna, odważniejsza, inne detale, mocniej stylizowana).
+4. Wyniki trafiają do `concepts/propozycje/<seria>/` razem z `meta.json` (opis, referencje, notatka Codeksa).
+   Propozycję można powiększyć obok referencji, oznaczyć gwiazdką, usunąć albo wziąć jako referencję do
+   kolejnej iteracji.
+
+Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2 minuty. Kod: `tools/edytor/`.
 
 ## Sterowanie
 

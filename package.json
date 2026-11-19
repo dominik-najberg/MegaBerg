@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "sim": "tsx scripts/simulate.ts",
-    "refpack": "node scripts/refpack.mjs"
+    "refpack": "node scripts/refpack.mjs",
+    "edytor": "vite --open /edytor"
   },
   "dependencies": {
     "three": "^0.187.0"
