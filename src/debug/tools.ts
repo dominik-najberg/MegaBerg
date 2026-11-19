@@ -67,8 +67,20 @@ export class DebugTools {
     }
   }
 
+  /** Turns enemy waves and the timed bonuses (magnet, gift chest) on or off. */
   spawner(on: boolean): void {
     this.game.world.spawner.disabled = !on;
+    this.game.world.bonuses.disabled = !on;
+  }
+
+  /** Drops a magnet near the hero, as the timer would. */
+  magnet(): boolean {
+    return this.game.world.bonuses.dropMagnet(this.game.world);
+  }
+
+  /** Drops a gift chest near the hero, as the timer would. */
+  gift(): boolean {
+    return this.game.world.bonuses.dropGift(this.game.world);
   }
 
   time(seconds: number): void {

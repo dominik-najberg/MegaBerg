@@ -1,4 +1,5 @@
 import { emptyInput, type InputState } from '../sim/player';
+import { PickupKind } from '../sim/pools';
 import type { Card, World } from '../sim/world';
 
 export type BotSkill = 'novice' | 'good';
@@ -133,8 +134,10 @@ export class Bot {
       const dx = (k.x[i] as number) - p.x;
       const dz = (k.z[i] as number) - p.z;
       const d = Math.hypot(dx, dz);
-      if (d > 25 || d < 0.01) continue;
-      const wgt = 3 / (d + 2);
+      // A magnet is worth a detour (it was announced and shines from afar); other loot only when close.
+      const magnet = k.kind[i] === PickupKind.Magnet;
+      if (d > (magnet ? (good ? 45 : 28) : 25) || d < 0.01) continue;
+      const wgt = magnet ? (good ? 1.6 : 1.1) / (d * 0.08 + 1) : 3 / (d + 2);
       ax += (dx / d) * wgt;
       az += (dz / d) * wgt;
     }

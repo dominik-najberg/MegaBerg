@@ -955,6 +955,11 @@ h4 {
   width: min(1040px, 96vw);
 }
 
+.choice h2.gift {
+  color: #9ff5d8;
+  text-shadow: 0 0 26px rgba(63, 208, 168, 0.7), 0 3px 0 rgba(0, 0, 0, 0.6);
+}
+
 .cards {
   display: flex;
   flex-wrap: wrap;
@@ -1283,6 +1288,15 @@ h4 {
 
 .mk.mk-chest {
   background: #b9772f;
+}
+
+.mk.mk-gift {
+  background: #3fd0a8;
+}
+
+.mk.mk-magnet {
+  background: #d8262a;
+  border-radius: 0 0 50% 50%;
 }
 
 .mk.mk-fire {

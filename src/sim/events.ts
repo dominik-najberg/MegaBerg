@@ -25,6 +25,7 @@ export const Ev = {
   Coin: 14,
   /** a = amount */
   Heal: 15,
+  /** a = 1 for a gift chest */
   ChestOpen: 16,
   Shrine: 17,
   /** a = enemy type index */
@@ -42,7 +43,8 @@ export const Ev = {
   BossPhase: 26,
   /** xyz = origin, a = dir x, b = dir z, c = length */
   ChargeWarn: 27,
-  Vacuum: 28,
+  /** The magnet was picked up: every gem and coin flies to the hero. */
+  Magnet: 28,
   /** Boss stomp / heavy impact: a = strength */
   Quake: 29,
   Fuse: 30,
@@ -51,6 +53,8 @@ export const Ev = {
   Pickup: 32,
   /** A landmark of the map was found: a = landmark index */
   Discover: 33,
+  /** A timed bonus appeared near the hero: a = 0 magnet, 1 gift chest */
+  Bonus: 34,
 } as const;
 
 export interface GameEvent {

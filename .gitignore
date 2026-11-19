@@ -3,3 +3,5 @@ node_modules/
 *.log
 # paczka zrzutów referencyjnych: odtwarzalna przez `npm run refpack`
 concepts/zrzuty/
+# propozycje obrazów z edytora konceptów: duże pliki, lokalne
+concepts/propozycje/

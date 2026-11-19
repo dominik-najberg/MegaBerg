@@ -8,6 +8,7 @@ import type { BlessingDef, CharacterDef, EnemyDef, Rarity, Stats, WeaponDef, Wea
 import { ELITE_HP_MUL, enemyDamageMul, enemyHpMul, RUN_LENGTH, xpForLevel } from '../data/waves';
 import { WEAPON_BY_ID, WEAPONS, weaponStatsAt } from '../data/weapons';
 import { updateEnemies } from './ai';
+import { Bonuses } from './bonuses';
 import { applyCard, chestCards, levelUpCards, type Card } from './cards';
 import { Ev, EventQueue } from './events';
 import { MoveFx, Player, stepPlayer, type InputState } from './player';
@@ -65,6 +66,8 @@ export interface Chest {
   z: number;
   rot: number;
   free: boolean;
+  /** A gift of the forest (see Bonuses): free, and looks unlike the paid chests. */
+  gift: boolean;
   opened: boolean;
   progress: number;
 }
@@ -79,7 +82,7 @@ export interface Shrine {
 
 export type Choice =
   | { type: 'levelup'; cards: Card[] }
-  | { type: 'chest'; cards: Card[] }
+  | { type: 'chest'; cards: Card[]; gift: boolean }
   | { type: 'shrine'; index: number; options: BlessingDef[] };
 
 export interface Prompt {
@@ -151,6 +154,7 @@ export class World {
   readonly hazards = new Hazards();
   readonly shots = new Shots();
   readonly spawner = new Spawner();
+  readonly bonuses: Bonuses;
   /** Fog of war of the map screen (what the hero has seen in this run). */
   readonly fog = new Explored();
   /** Per landmark of the map: has the hero found it yet. */
@@ -206,6 +210,7 @@ export class World {
   constructor(map: GameMap, opts: WorldOptions = {}) {
     this.map = map;
     this.rng = new Rng(opts.seed ?? 1);
+    this.bonuses = new Bonuses(opts.seed ?? 1);
     this.character = opts.character ?? (CHARACTERS[0] as CharacterDef);
     this.shopLevels = opts.shop ?? {};
     this.weaponPool = new Set(opts.weaponPool ?? WEAPONS.filter((w) => !w.evolved && !w.unlock).map((w) => w.id));
@@ -221,7 +226,7 @@ export class World {
     this.revivesLeft = Math.floor(this.stats.revives);
     this.addWeapon(this.character.startWeapon);
     for (const c of map.chestSpots) {
-      this.chests.push({ x: c.x, y: map.heightAt(c.x, c.z), z: c.z, rot: c.rot, free: false, opened: false, progress: 0 });
+      this.chests.push({ x: c.x, y: map.heightAt(c.x, c.z), z: c.z, rot: c.rot, free: false, gift: false, opened: false, progress: 0 });
     }
     for (const s of map.shrines) this.shrines.push({ x: s.x, y: map.heightAt(s.x, s.z), z: s.z, used: false, progress: 0 });
     this.landmarksFound = map.landmarks.map(() => false);
@@ -259,6 +264,7 @@ export class World {
     const e = this.enemies;
     this.grid.build(e.n, e.alive, e.x, e.z);
     this.spawner.update(this, dt);
+    this.bonuses.update(this);
     updateEnemies(this, dt);
     updateWeapons(this, dt);
     updateProjectiles(this, dt);
@@ -450,7 +456,7 @@ export class World {
       else if (rng.next() < 0.007 * (1 + luck * 0.5)) {
         if (rng.next() < 0.25) this.pickups.spawn(PickupKind.Honey, x, gy, z, 60);
         else this.pickups.spawn(PickupKind.Bread, x, gy, z, 25);
-      } else if (rng.next() < 0.0012) this.pickups.spawn(PickupKind.Vacuum, x, gy, z, 0);
+      } else if (rng.next() < 0.0012) this.pickups.spawn(PickupKind.Magnet, x, gy, z, 0);
     }
     e.free(i);
     if (def.rank) this.trackBoss();
@@ -574,8 +580,11 @@ export class World {
     return i;
   }
 
-  spawnChest(x: number, z: number, free: boolean): void {
-    this.chests.push({ x, y: this.map.heightAt(x, z), z, rot: this.rng.range(0, 6.28), free, opened: false, progress: 0 });
+  /** Without `rot` the chest gets a random facing from the world's random stream. */
+  spawnChest(x: number, z: number, free: boolean, gift = false, rot = this.rng.range(0, 6.28)): Chest {
+    const c: Chest = { x, y: this.map.heightAt(x, z), z, rot, free, gift, opened: false, progress: 0 };
+    this.chests.push(c);
+    return c;
   }
 
   addHazard(x: number, z: number, r: number, delay: number, dmg: number, air = false): void {
@@ -719,7 +728,8 @@ export class World {
       if (k.mag[i]) {
         const dy = py - (k.y[i] as number);
         const d = Math.sqrt(d2 + dy * dy);
-        const sp = 16 * dt;
+        // Like gems, pulled loot speeds up, so coins called by a magnet cross the whole map in seconds.
+        const sp = (16 + (k.age[i] as number) * 12) * dt;
         if (d <= sp + 0.5) {
           this.collectPickup(kind, k.val[i] as number);
           k.free(i);
@@ -731,7 +741,10 @@ export class World {
       } else if (d2 < (kind === PickupKind.Coin ? r2 : 2.2 * 2.2)) {
         // Food stays on the ground while the hero is at full health.
         const food = kind === PickupKind.Bread || kind === PickupKind.Honey;
-        if (!food || p.hp < this.stats.maxHp - 0.5) k.mag[i] = 1;
+        if (!food || p.hp < this.stats.maxHp - 0.5) {
+          k.mag[i] = 1;
+          k.age[i] = 0;
+        }
       }
     }
   }
@@ -744,7 +757,8 @@ export class World {
     } else if (kind === PickupKind.Bread || kind === PickupKind.Honey) {
       this.heal(val);
       this.events.emit(Ev.Pickup, p.x, p.y, p.z, kind);
-    } else if (kind === PickupKind.Vacuum) {
+    } else if (kind === PickupKind.Magnet) {
+      // Every gem and coin of the map flies to the hero; food stays where it lies.
       const g = this.gems;
       for (let i = 0; i < g.n; i++) {
         if (g.alive[i] && !g.mag[i]) {
@@ -752,7 +766,14 @@ export class World {
           g.age[i] = 0;
         }
       }
-      this.events.emit(Ev.Vacuum, p.x, p.y, p.z);
+      const k = this.pickups;
+      for (let i = 0; i < k.n; i++) {
+        if (k.alive[i] && !k.mag[i] && k.kind[i] === PickupKind.Coin) {
+          k.mag[i] = 1;
+          k.age[i] = 0;
+        }
+      }
+      this.events.emit(Ev.Magnet, p.x, p.y, p.z);
     }
   }
 
@@ -829,8 +850,8 @@ export class World {
 
   private openChest(c: Chest): void {
     c.opened = true;
-    this.events.emit(Ev.ChestOpen, c.x, c.y, c.z);
-    this.choice = { type: 'chest', cards: chestCards(this) };
+    this.events.emit(Ev.ChestOpen, c.x, c.y, c.z, c.gift ? 1 : 0);
+    this.choice = { type: 'chest', cards: chestCards(this), gift: c.gift };
   }
 
   // ------------------------------------------------------------------ inventory & choices

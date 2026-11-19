@@ -218,3 +218,59 @@ są identyczne. Dwie uwagi do weryfikacji, **obie przyjęte**:
 |---|---|---|---|
 | 1 | [P2] Test „pierwszej minuty” zabijał 100 wrogów w czasie 0 i liczył upuszczone monety, a nie zebrane złoto; skrócenie premii do 1 s nadal by go przechodziło | przyjęta | test rozgrywa prawdziwą minutę początkującym botem na 8 ziarnach: każde zbiera co najmniej cenę skrzyni, co najmniej 6 ją kupuje |
 | 2 | [P3] `scripts/verify/economy.mjs` kończył się sukcesem także bez skrzyń, podpowiedzi czy zakupu | przyjęta | sześć asercji (widoczność skrzyń, cena 10, podpowiedź do 60 s, bot żyje, zakup za pierwszą cenę, czysta konsola) i kod wyjścia 1 przy błędzie |
+
+## Dary boru: magnes i darmowa skrzynia
+
+Prośba użytkownika: raz na jakiś czas ma się pojawiać magnes zbierający wszystkie kulki doświadczenia
+i monety z całej mapy, a czasami losowa darmowa skrzynia, która różni się od zwykłych płatnych.
+
+- **Magnes zastąpił dawny „kwiat”.** W grze był już rzadki łup z wrogów (0,12% na zabójstwo), który
+  ściągał same bursztyny. Teraz to czerwony magnes, ściąga **bursztyny i monety** z całej mapy (jedzenie
+  zostaje, bo leży na zapas do chwili, gdy bohater jest ranny) i poza rzadkim łupem **pojawia się
+  z minutnika**: pierwszy w 1:30–2:00, kolejne co 2:10–2:50, czyli ok. 4 na run.
+- **Dar boru** to osobny rodzaj skrzyni (`gift` w `Chest`): pierwszy w 2:30–3:30, kolejne co 3:20–4:40,
+  czyli ok. 2 na run. Otwiera się po dotknięciu jak inne darmowe skrzynie, nie kosztuje złota i nie
+  podnosi ceny płatnych. Zawartość jak w każdej skrzyni (ewolucja, jeśli gotowa, inaczej ulepszenie).
+- **Wygląd daru:** biała brzoza z zielonymi okuciami, zielony klejnot i dwa listki na wieku, zielona
+  poświata i słup światła; okno łupu ma tytuł „Dar boru”, a na mapie znacznik jest zielony. Płatna skrzynia
+  to ciemny dąb z mosiądzem. **Skrzynia po elicie i mini-bossie zostaje, jaka była** (dębowa, pulsuje
+  na złoto): prośba dotyczyła losowej darmowej skrzyni, a zmiana wyglądu łupu po elicie byłaby osobną decyzją.
+- **Oba dary pojawiają się 14–24 m od bohatera**, na wolnym miejscu (bez przeszkód, bagna, innych skrzyń
+  i kapliczek, 4 m od krawędzi boru), z banerem, dźwiękiem, słupem światła i znacznikiem na mapie.
+  Powód: to nagroda za krótki spacer, a nie za szukanie po całym borze.
+- **Nie kumulują się.** Dopóki poprzedni dar czeka w promieniu 60 m, następny tego rodzaju się nie pojawi
+  (ponowna próba co 10 s). Magnes porzucony dalej niż 60 m znika, gdy przy bohaterze pojawia się nowy.
+- **Własny generator liczb** (`Bonuses` w `src/sim/bonuses.ts`): fale wrogów dla danego ziarna są takie
+  same z darami i bez, dopóki gracz ich nie podniesie.
+- **Przyciągany łup przyspiesza** (monety tak jak bursztyny), więc łup z drugiego końca mapy dolatuje
+  w kilka sekund.
+
+Wpływ na balans (`npm run sim`, Wojmir, po 32 runy; rozrzut między przebiegami to ok. ±10 punktów):
+
+| | bez darów | pierwsza wersja (magnes co ~1:30, dar co ~2:30) | ostateczna |
+|---|---|---|---|
+| dobry bot bez Chaty, wygrane | 34% | 59% | 34–47% |
+| dobry bot z poziomem 2 ulepszeń | 75% | 88% | 84% |
+| początkujący bez Chaty, średni czas runu | 3:20 | 3:25 | 3:16–3:32 |
+
+Pierwsza wersja wyraźnie ułatwiała grę (sam magnes +10 punktów, sam dar +10, razem +25), więc oba dary
+są rzadsze. Wersja ostateczna mieści się w dotychczasowym celu dla gracza bez Chaty (31–44%) w granicach
+rozrzutu; z ulepszeniami gra jest o kilka punktów łatwiejsza. Dwie wartości w kolumnie „ostateczna”
+to dwa pomiary tych samych ustawień (przed poprawką generatora liczb i po niej). Częstotliwość ustawia się
+czterema stałymi na początku `src/sim/bonuses.ts`.
+
+Sprawdzone w grze (`scripts/verify/bonus.mjs`, bezgłowy Chrome, 15 asercji): baner, model i słup światła
+magnesu, znaczniki na mapie, zebranie całego łupu z mapy, wygląd daru inny niż płatnej skrzyni i skrzyni
+po elicie, otwarcie za darmo, oba dary przychodzą same w prawdziwym runie, konsola bez błędów.
+
+### Review Codexem (dary boru)
+
+`codex exec` z diffem zmian na wejściu. Pięć uwag, **wszystkie przyjęte**:
+
+| # | Uwaga Codexa | Decyzja | Poprawka |
+|---|---|---|---|
+| 1 | [P2] Dar zużywał główny generator liczb (losowy obrót skrzyni w `spawnChest`), więc nawet nietknięty zmieniał kolejne fale | przyjęta | `spawnChest` przyjmuje obrót; dar podaje własny |
+| 2 | [P2] Test determinizmu nic nie sprawdzał: bohater ginął w 58. sekundzie, przed pierwszym darem | przyjęta | bohater nietykalny, test wymaga, by run trwał do końca i oba dary się pojawiły; po cofnięciu poprawki nr 1 test pada |
+| 3 | [P2] Porzucone magnesy mogły się kumulować ponad limit rysowania (16), więc nowy bywałby niewidoczny | przyjęta | nowy magnes zabiera porzucone; test wędrówki po borze |
+| 4 | [P3] Skrypt w przeglądarce nie sprawdzał, czy bursztyny dały doświadczenie | przyjęta | asercja zdobytego doświadczenia |
+| 5 | [P3] Skrypt nie sprawdzał wyglądu ani znaczników na mapie | przyjęta | asercje modelu, materiału i słupa światła w rendererze oraz kolorów znaczników na płótnie mapy |

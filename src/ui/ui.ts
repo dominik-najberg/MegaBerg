@@ -504,7 +504,8 @@ export class UI {
       this.open('choice', `<div class="choice"><h2>Awans! Poziom ${world.level}</h2><p class="lead">Wybierz jedną kartę</p><div class="cards">${cards}</div><div class="row">${rr}</div></div>`, 'dim levelup');
     } else if (ch.type === 'chest') {
       const cards = ch.cards.map((c, i) => this.cardHtml(c, i, false)).join('');
-      this.open('choice', `<div class="choice"><h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p><div class="cards">${cards}</div><div class="row"><button class="btn primary" data-act="choose" data-arg="0">Weź <kbd>Enter</kbd></button></div></div>`, 'dim chest');
+      const head = ch.gift ? '<h2 class="gift">Dar boru</h2><p class="lead">Bór obdarza cię za darmo…</p>' : '<h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p>';
+      this.open('choice', `<div class="choice">${head}<div class="cards">${cards}</div><div class="row"><button class="btn primary" data-act="choose" data-arg="0">Weź <kbd>Enter</kbd></button></div></div>`, 'dim chest');
     } else {
       const opts = ch.options
         .map(
