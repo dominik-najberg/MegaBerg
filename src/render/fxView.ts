@@ -139,17 +139,34 @@ function potGeo(): THREE.BufferGeometry {
   return b.build();
 }
 
-function chestGeo(): { base: THREE.BufferGeometry; lid: THREE.BufferGeometry } {
-  const b = new GeoBuilder(304);
-  b.box(1.1, 0.55, 0.75, 0x6a4526, { y: 0.28 });
-  b.box(1.14, 0.1, 0.79, 0xd9a441, { y: 0.1 });
-  b.box(1.14, 0.08, 0.79, 0xd9a441, { y: 0.5 });
-  b.box(0.16, 0.24, 0.08, 0xf0c860, { y: 0.42, z: 0.4 });
-  const l = new GeoBuilder(305);
-  l.box(1.1, 0.2, 0.75, 0x7a5230, { y: 0.1, z: 0.375 });
-  l.box(0.9, 0.14, 0.6, 0x8a6238, { y: 0.26, z: 0.375 });
-  l.box(1.14, 0.08, 0.79, 0xd9a441, { y: 0.04, z: 0.375 });
-  l.box(0.14, 0.3, 0.8, 0xd9a441, { y: 0.16, z: 0.375 });
+/**
+ * Paid chests are dark oak with brass fittings. The gift chest must never be mistaken for one:
+ * white birch with emerald fittings, a green gem and two sprouting leaves on the lid.
+ */
+function chestGeo(gift: boolean): { base: THREE.BufferGeometry; lid: THREE.BufferGeometry } {
+  const wood = gift ? 0xe9e4d4 : 0x6a4526;
+  const band = gift ? 0x2fae8a : 0xd9a441;
+  const b = new GeoBuilder(gift ? 314 : 304);
+  b.box(1.1, 0.55, 0.75, wood, { y: 0.28 });
+  b.box(1.14, 0.1, 0.79, band, { y: 0.1 });
+  b.box(1.14, 0.08, 0.79, band, { y: 0.5 });
+  b.box(0.16, 0.24, 0.08, gift ? 0x9ff5d8 : 0xf0c860, { y: 0.42, z: 0.4 });
+  const l = new GeoBuilder(gift ? 315 : 305);
+  l.box(1.1, 0.2, 0.75, gift ? 0xf2eee0 : 0x7a5230, { y: 0.1, z: 0.375 });
+  l.box(0.9, 0.14, 0.6, gift ? 0xdcd6c2 : 0x8a6238, { y: 0.26, z: 0.375 });
+  l.box(1.14, 0.08, 0.79, band, { y: 0.04, z: 0.375 });
+  l.box(0.14, 0.3, 0.8, band, { y: 0.16, z: 0.375 });
+  if (gift) {
+    // Birch bark flecks on the front and the sides.
+    for (const [x, y, w] of [[-0.36, 0.3, 0.16], [0.3, 0.24, 0.2], [0.38, 0.38, 0.1], [-0.2, 0.36, 0.08]] as const) {
+      b.box(w, 0.035, 0.02, 0x3c3a36, { x, y, z: 0.376, jitter: 0 });
+    }
+    b.box(0.02, 0.035, 0.18, 0x3c3a36, { x: 0.551, y: 0.32, z: 0.1, jitter: 0 });
+    b.box(0.02, 0.035, 0.14, 0x3c3a36, { x: -0.551, y: 0.26, z: -0.12, jitter: 0 });
+    l.octa(0.15, 0x7dffd8, { y: 0.44, z: 0.375, sy: 1.25, jitter: 0.03 });
+    l.cone(0.08, 0.3, 4, 0x58c878, { x: -0.3, y: 0.42, z: 0.375, rz: 0.55 });
+    l.cone(0.08, 0.3, 4, 0x58c878, { x: 0.3, y: 0.42, z: 0.375, rz: -0.55 });
+  }
   return { base: b.build(), lid: l.build() };
 }
 
@@ -167,15 +184,46 @@ function honeyGeo(): THREE.BufferGeometry {
   return b.build();
 }
 
-function flowerGeo(): THREE.BufferGeometry {
+/** Horseshoe magnet standing on its bend: red body, bright steel poles pointing up. */
+function magnetGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(308);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU;
-    b.cone(0.1, 0.4, 4, 0xff6ad5, { x: Math.cos(a) * 0.18, y: 0.3, z: Math.sin(a) * 0.18, rz: -Math.cos(a) * 1.2, rx: Math.sin(a) * 1.2, jitter: 0.03 });
+  const r = 0.28;
+  b.add(new THREE.TorusGeometry(r, 0.095, 5, 8, Math.PI), 0xd8262a, { y: 0.375, rz: Math.PI, jitter: 0.04 });
+  for (const x of [-r, r]) {
+    b.box(0.19, 0.3, 0.19, 0xd8262a, { x, y: 0.52, jitter: 0.04 });
+    b.box(0.2, 0.17, 0.2, 0xeef3f8, { x, y: 0.75, jitter: 0.02 });
   }
-  b.ico(0.1, 0, 0xfff0a0, { y: 0.32, jitter: 0 });
   return b.build();
 }
+
+const BEAM_H = 16;
+
+/**
+ * Pillar of light over a bonus (drawn additively): dim at the ground so the object inside stays readable,
+ * brightest just above it, fading to nothing at the top.
+ */
+function beamGeo(): THREE.BufferGeometry {
+  const g = new THREE.CylinderGeometry(0.12, 0.46, BEAM_H, 10, 16, true);
+  g.translate(0, BEAM_H / 2, 0);
+  const pos = g.getAttribute('position');
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    const k = 1 - y / BEAM_H;
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = k * k * Math.min(1, 0.25 + y / 2.5);
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
+}
+
+function beamMaterial(color: number): THREE.MeshBasicMaterial {
+  // No scene fog: the pillar is a beacon and has to read from across the clearing at night.
+  return new THREE.MeshBasicMaterial({ vertexColors: true, color, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.27, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, fog: false });
+}
+
+const MAGNET_COLOR = 0xff5060;
+const GIFT_COLOR = 0x7dffd0;
+const MAX_MAGNETS = 16;
 
 interface Timed {
   mesh: THREE.Mesh;
@@ -203,7 +251,10 @@ export class FxView {
   private readonly coins: THREE.InstancedMesh;
   private readonly bread: THREE.InstancedMesh;
   private readonly honey: THREE.InstancedMesh;
-  private readonly flower: THREE.InstancedMesh;
+  private readonly magnets: THREE.InstancedMesh;
+  private readonly magnetBeams: THREE.InstancedMesh;
+  private readonly beamGeo = beamGeo();
+  private readonly giftBeamMat = beamMaterial(GIFT_COLOR);
   private readonly blades: THREE.InstancedMesh;
   private readonly trails: THREE.InstancedMesh;
   private readonly fire: THREE.InstancedMesh;
@@ -229,9 +280,12 @@ export class FxView {
   private readonly warns: Timed[] = [];
   private readonly flash: THREE.PointLight;
   private flashT = 0;
-  private readonly chestViews: Array<{ group: THREE.Group; lid: THREE.Mesh; glow: THREE.Sprite; openT: number }> = [];
-  private readonly chestParts = chestGeo();
+  private readonly chestViews: Array<{ group: THREE.Group; lid: THREE.Mesh; glow: THREE.Sprite; beam: THREE.Mesh | null; openT: number }> = [];
+  private readonly chestParts = chestGeo(false);
   private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  private readonly giftParts = chestGeo(true);
+  /** Slightly self-lit, so the white birch still reads as white deep in the night. */
+  private readonly giftMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x16382e });
   private readonly gemGlow: THREE.InstancedMesh;
   private readonly heroRing: THREE.Mesh;
   private readonly mist: THREE.InstancedMesh;
@@ -253,8 +307,10 @@ export class FxView {
     this.coins = instanced(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 8), new THREE.MeshLambertMaterial({ color: 0xffd040, emissive: 0x9a6a00, flatShading: true }), MAX_PICKUPS);
     this.bread = instanced(breadGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a1a08 }), 64);
     this.honey = instanced(honeyGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x3a2808 }), 64);
-    this.flower = instanced(flowerGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x802a60 }), 16);
-    g.add(this.gems, this.coins, this.bread, this.honey, this.flower);
+    this.magnets = instanced(magnetGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x5a1414 }), MAX_MAGNETS);
+    this.magnetBeams = instanced(this.beamGeo, beamMaterial(MAGNET_COLOR), MAX_MAGNETS);
+    this.magnetBeams.renderOrder = 3;
+    g.add(this.gems, this.coins, this.bread, this.honey, this.magnets, this.magnetBeams);
     // Soft additive glow on the ground under every gem (cheap: one instanced quad each).
     this.gemGlow = instanced(
       new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
@@ -529,10 +585,23 @@ void main() {
       case Ev.Heal:
         for (let k = 0; k < 10; k++) sp.emit(e.x + (Math.random() - 0.5) * 1.2, e.y + 0.3 + Math.random(), e.z + (Math.random() - 0.5) * 1.2, 0, 2.2, 0, 0.8, 0.3, 0x7dff7a, 0, 0.5);
         break;
-      case Ev.ChestOpen:
-        sp.burst(e.x, e.y + 0.8, e.z, 36, 8, 0.8, 0.4, 0xffd860, 6, 4);
-        this.boom(e.x, e.y + 0.8, e.z, 3.5, 0xffd860, 0.4);
+      case Ev.ChestOpen: {
+        const color = e.a ? GIFT_COLOR : 0xffd860;
+        sp.burst(e.x, e.y + 0.8, e.z, 36, 8, 0.8, 0.4, color, 6, 4);
+        this.boom(e.x, e.y + 0.8, e.z, 3.5, color, 0.4);
         break;
+      }
+      case Ev.Bonus: {
+        // The bonus drops out of thin air: a ring on the ground and sparks rising along the pillar.
+        const color = e.a ? GIFT_COLOR : MAGNET_COLOR;
+        this.boom(e.x, e.y + 0.8, e.z, 4.5, color, 0.6);
+        for (let k = 0; k < 36; k++) {
+          const a = Math.random() * TAU;
+          const r = Math.random() * 0.9;
+          sp.emit(e.x + Math.cos(a) * r, e.y + Math.random() * 5, e.z + Math.sin(a) * r, 0, 2 + Math.random() * 4, 0, 1.2, 0.36, k % 3 ? color : 0xffffff, 0, 0.4);
+        }
+        break;
+      }
       case Ev.Shrine:
         for (let k = 0; k < 30; k++) sp.emit(e.x + (Math.random() - 0.5) * 1.5, e.y + Math.random() * 4, e.z + (Math.random() - 0.5) * 1.5, 0, 3 + Math.random() * 3, 0, 1.1, 0.36, 0xffe6a0, 0, 0.4);
         break;
@@ -596,11 +665,12 @@ void main() {
       case Ev.Zone:
         sp.burst(e.x, e.y + 0.3, e.z, 16, e.a * 2, 0.5, 0.4, 0xff8a3a, 5, 3);
         break;
-      case Ev.Vacuum:
-        for (let k = 0; k < 50; k++) {
-          const a = (k / 50) * TAU * 3;
-          sp.emit(e.x + Math.cos(a) * (1 + k * 0.1), e.y + 0.5 + k * 0.04, e.z + Math.sin(a) * (1 + k * 0.1), -Math.sin(a) * 5, 1, Math.cos(a) * 5, 0.9, 0.36, 0xff6ad5, 0, 1);
+      case Ev.Magnet:
+        for (let k = 0; k < 60; k++) {
+          const a = (k / 60) * TAU * 3;
+          sp.emit(e.x + Math.cos(a) * (1 + k * 0.1), e.y + 0.5 + k * 0.04, e.z + Math.sin(a) * (1 + k * 0.1), -Math.sin(a) * 5, 1, Math.cos(a) * 5, 0.9, 0.36, k % 2 ? MAGNET_COLOR : 0xeef3f8, 0, 1);
         }
+        this.boom(e.x, e.y + 0.8, e.z, 9, MAGNET_COLOR, 0.5);
         break;
       case Ev.Pickup:
         sp.burst(e.x, e.y + 1, e.z, 8, 3, 0.5, 0.3, 0xffe0a0, 0, 2);
@@ -759,7 +829,8 @@ void main() {
       let nc = 0;
       let nb = 0;
       let nh = 0;
-      let nf = 0;
+      let nm = 0;
+      let nbeam = 0;
       for (let i = 0; i < k.n; i++) {
         if (!k.alive[i]) continue;
         const kind = k.kind[i] as number;
@@ -769,14 +840,25 @@ void main() {
         if (kind === PickupKind.Coin) writeMatrix(this.coins.instanceMatrix.array, nc++, x, y + 0.1, z, time * 4 + i, 1, 1, 1, 1.4);
         else if (kind === PickupKind.Bread && nb < 64) writeMatrix(this.bread.instanceMatrix.array, nb++, x, y, z, time + i, 1.3, 1.3, 1.3);
         else if (kind === PickupKind.Honey && nh < 64) writeMatrix(this.honey.instanceMatrix.array, nh++, x, y, z, time + i, 1.3, 1.3, 1.3);
-        else if (kind === PickupKind.Vacuum && nf < 16) writeMatrix(this.flower.instanceMatrix.array, nf++, x, y + 0.2, z, time * 2, 1.5, 1.5, 1.5);
+        else if (kind === PickupKind.Magnet && nm < MAX_MAGNETS) {
+          if (!k.mag[i]) {
+            const gy = k.y[i] as number;
+            writeMatrix(this.magnetBeams.instanceMatrix.array, nbeam++, x, gy, z, 0, 1, 1, 1);
+            if (emit && Math.random() < 0.2) sp.emit(x + (Math.random() - 0.5) * 0.9, gy + 0.3, z + (Math.random() - 0.5) * 0.9, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, MAGNET_COLOR, 0, 0.3);
+          }
+          writeMatrix(this.magnets.instanceMatrix.array, nm++, x, y + 0.25, z, time * 2.2, 1.7, 1.7, 1.7, 0.3);
+        }
       }
       flush(this.coins, nc);
       flush(this.bread, nb);
       flush(this.honey, nh);
-      flush(this.flower, nf);
+      flush(this.magnets, nm);
+      flush(this.magnetBeams, nbeam);
+      const pulse = 0.27 + Math.sin(time * 2.6) * 0.08;
+      (this.magnetBeams.material as THREE.MeshBasicMaterial).opacity = pulse;
+      this.giftBeamMat.opacity = pulse;
     }
-    this.syncChests(world, dt, time);
+    this.syncChests(world, dt, time, emit);
 
     // hero ring + wading splashes + dash afterimages
     {
@@ -1099,23 +1181,31 @@ void main() {
     fu.uNight!.value = night;
   }
 
-  private syncChests(world: World, dt: number, time: number): void {
+  private syncChests(world: World, dt: number, time: number, emit: boolean): void {
     const list = world.chests;
     while (this.chestViews.length < list.length) {
       const c = list[this.chestViews.length] as Chest;
       const group = new THREE.Group();
-      const base = new THREE.Mesh(this.chestParts.base, this.chestMat);
-      const lid = new THREE.Mesh(this.chestParts.lid, this.chestMat);
+      const parts = c.gift ? this.giftParts : this.chestParts;
+      const mat = c.gift ? this.giftMat : this.chestMat;
+      const base = new THREE.Mesh(parts.base, mat);
+      const lid = new THREE.Mesh(parts.lid, mat);
       lid.position.set(0, 0.56, -0.375);
       base.castShadow = true;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffd860, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
-      glow.scale.setScalar(3.4);
+      glow.scale.setScalar(c.gift ? 3.8 : 3.4);
       glow.position.y = 0.6;
       group.add(base, lid, glow);
+      let beam: THREE.Mesh | null = null;
+      if (c.gift) {
+        beam = new THREE.Mesh(this.beamGeo, this.giftBeamMat);
+        beam.renderOrder = 3;
+        group.add(beam);
+      }
       group.position.set(c.x, c.y, c.z);
       group.rotation.y = c.rot;
       this.group.add(group);
-      this.chestViews.push({ group, lid, glow, openT: 0 });
+      this.chestViews.push({ group, lid, glow, beam, openT: 0 });
     }
     for (let i = 0; i < list.length; i++) {
       const c = list[i] as Chest;
@@ -1125,20 +1215,28 @@ void main() {
         v.openT += dt;
         v.lid.rotation.x = -Math.min(1.9, v.openT * 9);
         mat.opacity = Math.max(0, 0.9 - v.openT * 0.6);
+        if (v.beam) v.beam.visible = false;
         if (v.openT > 6) v.group.visible = false;
         else if (v.openT > 4) v.group.scale.setScalar(Math.max(0.01, 1 - (v.openT - 4) / 2));
       } else {
         v.group.visible = true;
         v.group.scale.setScalar(c.free ? 1.15 + Math.sin(time * 6) * 0.05 : 1);
-        mat.opacity = c.free ? 0.6 + Math.sin(time * 5) * 0.2 : 0.22 + Math.sin(time * 2 + i) * 0.08;
-        mat.color.set(c.free ? 0xffe27a : 0xd9a441);
+        // The gift is already lit by its pillar: a softer halo keeps the white birch readable.
+        mat.opacity = c.gift ? 0.32 + Math.sin(time * 5) * 0.1 : c.free ? 0.6 + Math.sin(time * 5) * 0.2 : 0.22 + Math.sin(time * 2 + i) * 0.08;
+        mat.color.set(c.gift ? GIFT_COLOR : c.free ? 0xffe27a : 0xd9a441);
+        if (c.gift && emit && Math.random() < 0.2) {
+          this.sparks.emit(c.x + (Math.random() - 0.5) * 1.2, c.y + 0.4, c.z + (Math.random() - 0.5) * 1.2, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, GIFT_COLOR, 0, 0.3);
+        }
       }
     }
   }
 
   /** Removes chest meshes of a finished run. */
   reset(): void {
-    for (const v of this.chestViews) this.group.remove(v.group);
+    for (const v of this.chestViews) {
+      this.group.remove(v.group);
+      v.glow.material.dispose();
+    }
     this.chestViews.length = 0;
     for (const list of [this.sweeps, this.bolts, this.booms, this.warns]) for (const s of list) s.mesh.visible = false;
     for (const gh of this.ghosts) {

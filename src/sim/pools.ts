@@ -169,7 +169,8 @@ export class Gems {
   }
 }
 
-export const PickupKind = { Coin: 0, Bread: 1, Honey: 2, Vacuum: 3 } as const;
+/** Magnet: pulls every amber gem and coin of the map to the hero. */
+export const PickupKind = { Coin: 0, Bread: 1, Honey: 2, Magnet: 3 } as const;
 export const MAX_PICKUPS = 256;
 
 export class Pickups {
@@ -187,9 +188,10 @@ export class Pickups {
     return this.list.hi;
   }
 
-  spawn(kind: number, x: number, y: number, z: number, val: number): void {
+  /** Returns the slot index, or -1 when the pool is full. */
+  spawn(kind: number, x: number, y: number, z: number, val: number): number {
     const i = this.list.alloc();
-    if (i < 0) return;
+    if (i < 0) return -1;
     this.alive[i] = 1;
     this.kind[i] = kind;
     this.mag[i] = 0;
@@ -198,6 +200,7 @@ export class Pickups {
     this.z[i] = z;
     this.val[i] = val;
     this.age[i] = 0;
+    return i;
   }
 
   free(i: number): void {

@@ -1,5 +1,6 @@
 import { hash2, TAU } from '../core/math';
 import { FOG_DIM } from '../sim/fog';
+import { PickupKind } from '../sim/pools';
 import { MAP_HALF, PLAY_RADIUS, type GameMap, type LandmarkKind } from '../sim/terrain';
 import type { World } from '../sim/world';
 import parchmentUrl from '../assets/ui/parchment.jpg';
@@ -479,12 +480,18 @@ export class MapScreen {
       ctx.fill();
       ctx.stroke();
     }
-    // Chests that are still closed.
+    // Chests that are still closed. A gift chest was announced, so it shows even through the fog.
     for (const c of world.chests) {
-      if (c.opened || !fog.seen(c.x, c.z)) continue;
+      if (c.opened || (!c.gift && !fog.seen(c.x, c.z))) continue;
       const x = X(c.x);
       const y = X(c.z);
-      ctx.fillStyle = c.free ? '#ffd040' : '#b9772f';
+      if (c.gift) {
+        ctx.fillStyle = `rgba(63, 208, 168, ${0.3 + Math.sin(this.clock * 4) * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 11 * u, 0, TAU);
+        ctx.fill();
+      }
+      ctx.fillStyle = c.gift ? '#3fd0a8' : c.free ? '#ffd040' : '#b9772f';
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1.3 * u;
       ctx.beginPath();
@@ -495,6 +502,37 @@ export class MapScreen {
       ctx.moveTo(x - 5 * u, y - 0.5 * u);
       ctx.lineTo(x + 5 * u, y - 0.5 * u);
       ctx.stroke();
+    }
+    // Magnets waiting to be picked up: a red horseshoe with pale poles.
+    {
+      const k = world.pickups;
+      for (let i = 0; i < k.n; i++) {
+        if (!k.alive[i] || k.kind[i] !== PickupKind.Magnet || k.mag[i]) continue;
+        const x = X(k.x[i] as number);
+        const y = X(k.z[i] as number);
+        ctx.fillStyle = `rgba(216, 38, 42, ${0.26 + Math.sin(this.clock * 4) * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 11 * u, 0, TAU);
+        ctx.fill();
+        for (const [color, width] of [[INK, 5.6], ['#d8262a', 3.2]] as const) {
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width * u;
+          ctx.beginPath();
+          ctx.moveTo(x - 4 * u, y - 6 * u);
+          ctx.lineTo(x - 4 * u, y + 1 * u);
+          ctx.arc(x, y + 1 * u, 4 * u, Math.PI, 0, true);
+          ctx.lineTo(x + 4 * u, y - 6 * u);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = '#f2f4f6';
+        ctx.lineWidth = 3.2 * u;
+        ctx.beginPath();
+        ctx.moveTo(x - 4 * u, y - 5.2 * u);
+        ctx.lineTo(x - 4 * u, y - 2.6 * u);
+        ctx.moveTo(x + 4 * u, y - 5.2 * u);
+        ctx.lineTo(x + 4 * u, y - 2.6 * u);
+        ctx.stroke();
+      }
     }
     // Landmarks with their names.
     let found = 0;
@@ -578,7 +616,7 @@ export class MapScreen {
     const text = `Odkryto ${pct}% boru  •  miejsca: ${found}/${map.landmarks.length}`;
     if (this.info.dataset.t !== text) {
       this.info.dataset.t = text;
-      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><b>${text}</b>`;
+      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-gift"></i>dar boru</span><span><i class="mk mk-magnet"></i>magnes</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><b>${text}</b>`;
     }
   }
 }

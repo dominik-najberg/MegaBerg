@@ -87,6 +87,12 @@ Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2
   wyraźnie droższa (10, 18, 31, 54, 94…). **Trzy skrzynie stoją 20–25 m od startu** i widać je na mapie
   od pierwszej sekundy. Elitarni wrogowie (świecą na złoto) i mini-bossy zostawiają darmową skrzynię
   i sakiewkę monet.
+- **Dar boru:** czasami (zwykle dwa razy na run) w pobliżu bohatera pojawia się darmowa skrzynia. Nie da się jej pomylić
+  z płatną: jest z białej brzozy z zielonymi okuciami i stoi w słupie zielonego światła. Otwiera się
+  po dotknięciu, nie kosztuje złota i nie podnosi ceny płatnych skrzyń.
+- **Magnes:** co dwie–trzy minuty w pobliżu pojawia się czerwony magnes w słupie światła.
+  Podniesiony ściąga do bohatera **wszystkie bursztyny i monety z całej mapy** (jedzenie zostaje).
+  Baner zapowiada magnes i dar boru, a oba widać na mapie.
 - **Monety** wypadają z wrogów: na początku runu z mniej więcej co czwartego, po 3,5 minuty z co
   szesnastego. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
 - **Kapliczki:** podejdź, przytrzymaj `E` i wybierz błogosławieństwo Peruna (obrażenia), Swaroga (ogień),
@@ -241,6 +247,8 @@ __mb.debug.give('grom');          // dodaj broń na maksymalnym poziomie
 __mb.debug.spawn('leszy', 1, 14); // postaw wroga przed kamerą
 __mb.debug.time(590);             // przeskocz do końcówki runu
 __mb.debug.god();                 // nieśmiertelność
+__mb.debug.magnet();              // magnes w pobliżu (tak jak z minutnika)
+__mb.debug.gift();                // dar boru: darmowa skrzynia w pobliżu
 __mb.setBot('good');              // autopilot (null wyłącza)
 ```
 

@@ -77,6 +77,7 @@ sterowany `playwright-core`: prawdziwe klawisze, prawdziwy WebGL na zintegrowany
 | `ctxlost.mjs` | utrata kontekstu WebGL: komunikat i zapis złota (także w trakcie animacji końca) |
 | `dist.mjs` | build produkcyjny serwowany przez `npm run preview` (port 4173) |
 | `economy.mjs` | wczesna ekonomia: skrzynie przy starcie na mapie, podpowiedź o skrzyni, pierwszy zakup botem |
+| `bonus.mjs` | magnes (ściąga łup z całej mapy) i dar boru (darmowa skrzynia): wygląd, mapa, otwarcie, pojawianie się z minutnika |
 
 Pełne runy w przeglądarce: 5 rozegranych botem z przyspieszeniem ×8, 3 zakończone zwycięstwem nad Leszym
 (Chata na poziomach 3, 4 i 5), 2 porażki (bez Chaty i z poziomem 4).

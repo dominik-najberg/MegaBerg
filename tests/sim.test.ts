@@ -6,6 +6,8 @@ import { Bot } from '../src/debug/bot';
 import { emptyInput, MOVE, MoveFx, Player, stepPlayer } from '../src/sim/player';
 import { BASE_STATS } from '../src/data/types';
 import { GameMap, PLAY_RADIUS } from '../src/sim/terrain';
+import { BONUS_MAX, BONUS_MIN, GIFT_FIRST, MAGNET_FIRST } from '../src/sim/bonuses';
+import { Ev } from '../src/sim/events';
 import { PickupKind } from '../src/sim/pools';
 import { BOSS_GOLD, CHEST_COST, COIN_CHANCE, COIN_EARLY_BONUS, COIN_EARLY_TIME, coinChance, World } from '../src/sim/world';
 
@@ -409,5 +411,175 @@ describe('symulacja runu', () => {
     expect(w.choice?.type).toBe('chest');
     expect(w.gold).toBe(5);
     expect(w.chestCost()).toBeGreaterThan(cost);
+  });
+});
+
+describe('dary boru: magnes i darmowa skrzynia', () => {
+  /** Rozgrywa `seconds` sekund bez wrogów; bohater stoi w miejscu. */
+  const idle = (w: World, seconds: number): void => {
+    const inp = emptyInput();
+    for (let i = 0; i < seconds * 60 && !w.choice; i++) {
+      w.step(DT, inp);
+      w.events.clear();
+    }
+  };
+  const magnets = (w: World): number[] => {
+    const out: number[] = [];
+    const k = w.pickups;
+    for (let i = 0; i < k.n; i++) if (k.alive[i] && k.kind[i] === PickupKind.Magnet) out.push(i);
+    return out;
+  };
+
+  it('magnes pojawia się sam w wyznaczonym oknie czasu, blisko bohatera i na wolnym miejscu', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const w = new World(map, { seed });
+      w.spawner.disabled = true;
+      expect(w.bonuses.nextMagnet).toBeGreaterThanOrEqual(MAGNET_FIRST[0]);
+      expect(w.bonuses.nextMagnet).toBeLessThanOrEqual(MAGNET_FIRST[1]);
+      idle(w, MAGNET_FIRST[0] - 1);
+      expect(magnets(w).length).toBe(0);
+      idle(w, MAGNET_FIRST[1] - MAGNET_FIRST[0] + 2);
+      const list = magnets(w);
+      expect(list.length).toBe(1);
+      const i = list[0]!;
+      const d = Math.hypot(w.pickups.x[i]! - w.player.x, w.pickups.z[i]! - w.player.z);
+      expect(d).toBeGreaterThanOrEqual(BONUS_MIN - 0.01);
+      expect(d).toBeLessThanOrEqual(BONUS_MAX + 0.01);
+      expect(map.isFree(w.pickups.x[i]!, w.pickups.z[i]!, 1.2)).toBe(true);
+      expect(w.announce.some((t) => t.includes('magnes'))).toBe(true);
+    }
+  });
+
+  it('magnes ściąga bursztyny i monety z całej mapy, a jedzenie zostawia', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.bonuses.disabled = true;
+    const p = w.player;
+    // łup rozrzucony po całym borze, daleko poza zasięgiem zbierania
+    const spots: Array<[number, number]> = [[150, 0], [-150, 20], [0, 160], [-90, -120], [60, 40]];
+    for (const [x, z] of spots) {
+      w.gems.spawn(x, map.heightAt(x, z), z, 3);
+      w.pickups.spawn(PickupKind.Coin, x + 1, map.heightAt(x, z), z, 2);
+    }
+    w.pickups.spawn(PickupKind.Bread, 30, map.heightAt(30, 30), 30, 25);
+    idle(w, 2);
+    expect(w.gold).toBe(0);
+    expect(w.xp).toBe(0);
+    expect(w.level).toBe(1);
+    w.pickups.spawn(PickupKind.Magnet, p.x + 1, p.y, p.z, 0);
+    const inp = emptyInput();
+    let pulled = false;
+    for (let i = 0; i < 12 * 60; i++) {
+      w.step(DT, inp);
+      for (let e = 0; e < w.events.count; e++) if (w.events.items[e]!.type === Ev.Magnet) pulled = true;
+      w.events.clear();
+      if (w.choice) w.choose(0);
+    }
+    expect(pulled).toBe(true);
+    expect(w.gold).toBe(spots.length * 2);
+    expect(w.gems.list.count).toBe(0);
+    // 15 pkt doświadczenia: awans z 1. poziomu (9) i reszta na pasku
+    expect(w.level).toBe(2);
+    expect(w.xp).toBeCloseTo(spots.length * 3 - 9);
+    const k = w.pickups;
+    let bread = 0;
+    for (let i = 0; i < k.n; i++) if (k.alive[i] && k.kind[i] === PickupKind.Bread) bread++;
+    expect(bread).toBe(1);
+    expect(k.list.count).toBe(1);
+  });
+
+  it('kolejny magnes nie pojawia się, dopóki poprzedni czeka w pobliżu', () => {
+    const w = new World(map, { seed: 2 });
+    w.spawner.disabled = true;
+    expect(w.bonuses.dropMagnet(w)).toBe(true);
+    expect(w.bonuses.dropMagnet(w)).toBe(false);
+    expect(magnets(w).length).toBe(1);
+    // bohater odszedł daleko: nowy magnes pojawia się przy nim, a porzucony znika (nie kumulują się)
+    w.player.x = 120;
+    w.player.z = 0;
+    expect(w.bonuses.dropMagnet(w)).toBe(true);
+    const list = magnets(w);
+    expect(list.length).toBe(1);
+    expect(Math.hypot(w.pickups.x[list[0]!]! - 120, w.pickups.z[list[0]!]!)).toBeLessThanOrEqual(BONUS_MAX + 0.01);
+    // wędrówka po całym borze nie zostawia za bohaterem coraz większej liczby magnesów
+    for (let k = 0; k < 40; k++) {
+      const a = k * 2.4;
+      w.player.x = Math.cos(a) * (40 + (k % 5) * 25);
+      w.player.z = Math.sin(a) * (40 + (k % 5) * 25);
+      w.bonuses.dropMagnet(w);
+      expect(magnets(w).length).toBe(1);
+    }
+  });
+
+  it('dar boru: darmowa skrzynia pojawia się sama, różni się od płatnych i otwiera się bez złota', () => {
+    for (let seed = 1; seed <= 6; seed++) {
+      const w = new World(map, { seed });
+      w.spawner.disabled = true;
+      const before = w.chests.length;
+      expect(w.chests.every((c) => !c.gift && !c.free)).toBe(true);
+      expect(w.bonuses.nextGift).toBeGreaterThanOrEqual(GIFT_FIRST[0]);
+      expect(w.bonuses.nextGift).toBeLessThanOrEqual(GIFT_FIRST[1]);
+      idle(w, GIFT_FIRST[0] - 1);
+      expect(w.chests.length).toBe(before);
+      idle(w, GIFT_FIRST[1] - GIFT_FIRST[0] + 2);
+      expect(w.chests.length).toBe(before + 1);
+      const c = w.chests[before]!;
+      expect(c.gift).toBe(true);
+      expect(c.free).toBe(true);
+      const d = Math.hypot(c.x - w.player.x, c.z - w.player.z);
+      expect(d).toBeGreaterThanOrEqual(BONUS_MIN - 0.01);
+      expect(d).toBeLessThanOrEqual(BONUS_MAX + 0.01);
+      expect(map.isFree(c.x, c.z, 1.2)).toBe(true);
+      expect(map.inPuddle(c.x, c.z)).toBe(false);
+      expect(w.announce.some((t) => t.includes('Dar boru'))).toBe(true);
+      // podejście do skrzyni otwiera ją od razu: bez złota i bez przytrzymywania E
+      expect(w.gold).toBe(0);
+      w.player.x = c.x + 1;
+      w.player.z = c.z;
+      w.step(DT, emptyInput());
+      expect(c.opened).toBe(true);
+      expect(w.choice?.type === 'chest' && w.choice.gift).toBe(true);
+      expect(w.paidChests).toBe(0);
+      expect(w.chestCost()).toBe(CHEST_COST);
+    }
+  });
+
+  it('skrzynia po elicie jest darmowa, ale nie jest darem boru', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    const i = w.spawnEnemy(ENEMY_INDEX.utopiec as number, 30, 0, true);
+    w.damageEnemy(i, 1e9, -1, 0, 0, 0, null);
+    const c = w.chests[w.chests.length - 1]!;
+    expect(c.free).toBe(true);
+    expect(c.gift).toBe(false);
+  });
+
+  it('dary nie zmieniają przebiegu fal: ten sam seed daje tych samych wrogów z darami i bez', () => {
+    const end = GIFT_FIRST[1] + 10;
+    const run = (bonuses: boolean): string => {
+      const w = new World(map, { seed: 9 });
+      w.bonuses.disabled = !bonuses;
+      const inp = emptyInput();
+      // bohater stoi w miejscu i jest nietykalny; dary leżą nietknięte 14-24 m dalej
+      while (w.time < end) {
+        w.player.invuln = 1;
+        w.step(DT, inp);
+        w.events.clear();
+        if (w.choice) w.choose(0);
+      }
+      // porównanie ma sens tylko wtedy, gdy run naprawdę trwał i oba dary się pojawiły
+      expect(w.dead).toBe(false);
+      expect(w.damageTaken).toBe(0);
+      const magnet = Array.from(w.pickups.kind.subarray(0, w.pickups.n)).some((kind, i) => w.pickups.alive[i] === 1 && kind === PickupKind.Magnet);
+      expect(magnet).toBe(bonuses);
+      expect(w.chests.some((c) => c.gift)).toBe(bonuses);
+      const e = w.enemies;
+      let sig = `${e.count}/${w.kills}`;
+      for (let i = 0; i < e.n; i++) if (e.alive[i]) sig += `|${e.type[i]}:${e.x[i]!.toFixed(2)}:${e.z[i]!.toFixed(2)}`;
+      return sig;
+    };
+    const withGifts = run(true);
+    expect(withGifts.split('|').length).toBeGreaterThan(20);
+    expect(withGifts).toBe(run(false));
   });
 });
