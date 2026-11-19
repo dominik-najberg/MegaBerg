@@ -82,8 +82,6 @@ export class Gfx {
 
   applyQuality(q: Quality): void {
     this.quality = q;
-    const dpr = window.devicePixelRatio || 1;
-    this.renderer.setPixelRatio(q === 0 ? Math.min(dpr, 1) : q === 1 ? Math.min(dpr, 1.5) : Math.min(dpr, 2));
     this.renderer.shadowMap.enabled = q > 0;
     this.sky.sun.castShadow = q > 0;
     this.sky.sun.shadow.mapSize.setScalar(q === 2 ? 2048 : 1024);
@@ -104,6 +102,13 @@ export class Gfx {
   resize(): void {
     const w = this.canvas.clientWidth || window.innerWidth;
     const h = this.canvas.clientHeight || window.innerHeight;
+    // Internal resolution: the device pixel ratio, capped per quality level and by a pixel budget.
+    // The HDR + MSAA + bloom pipeline is fill-rate bound, and a 4K panel has four times the pixels of 1080p.
+    const q = this.quality;
+    const dpr = window.devicePixelRatio || 1;
+    const cap = q === 0 ? 1 : q === 1 ? 1.5 : 2;
+    const budget = q === 0 ? 2.1e6 : q === 1 ? 2.3e6 : 3.2e6;
+    this.renderer.setPixelRatio(Math.max(0.5, Math.min(dpr, cap, Math.sqrt(budget / Math.max(1, w * h)))));
     this.renderer.setSize(w, h, false);
     this.post?.setSize(w, h, this.renderer.getPixelRatio());
     this.camera.aspect = w / Math.max(1, h);
