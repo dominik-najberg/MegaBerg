@@ -4,10 +4,14 @@ Oryginalna gra 3D z gatunku „survivors-like” (roguelite z automatycznym atak
 folklorze. Zapada zmierzch, z kniei wyłażą chochliki, utopce i strzygi, a ty masz przetrwać 10 minut
 i pokonać Leszego. Bronie atakują same: ty biegasz, skaczesz, robisz zrywy i wybierasz ulepszenia.
 
-Cała grafika i dźwięk powstają w kodzie (zero plików graficznych i audio).
+Postacie, efekty i dźwięk powstają w kodzie. Drzewa, głazy i budowle to modele zbudowane skryptem
+w **Blenderze** (z wypalonym cieniowaniem otoczenia), a tekstury ziemi, pergamin mapy i ilustracja
+ekranu wczytywania pochodzą z generatora obrazów **Codeksa**. Dźwięk nadal nie używa żadnych plików.
 Stack: **Three.js + TypeScript (strict) + Vite**, testy w **Vitest**.
 
 ![Walka o zmroku](docs/screenshots/06-zmrok.png)
+
+![Mapa boru pod klawiszem Tab](docs/screenshots/09-mapa-odkryta.png)
 
 ## Uruchomienie
 
@@ -45,6 +49,7 @@ Wymagana przeglądarka z WebGL 2 (aktualny Chrome, Firefox, Edge).
 | `Spacja` | skok (przytrzymaj dłużej = wyżej; podwójny skok po zdobyciu Pióra Żar-ptaka) |
 | `Shift` | zryw z krótką nietykalnością (odnowienie 1,5 s) |
 | `E` (przytrzymaj) | otwieranie płatnych skrzyń, pokłon w kapliczce |
+| `Tab` (przytrzymaj) | mapa boru; gra toczy się dalej |
 | `1` `2` `3` (`4`) | wybór karty; `R` przelosowanie; `Enter` zabranie łupu ze skrzyni |
 | `Esc` lub `P` | pauza (z podglądem buildu i opcjami) |
 
@@ -67,6 +72,13 @@ Wymagana przeglądarka z WebGL 2 (aktualny Chrome, Firefox, Edge).
 - **Czerwone kręgi na ziemi** to zapowiedź ataku obszarowego. Wyjdź z kręgu albo podskocz w chwili uderzenia
   (ataki naziemne da się przeskoczyć; zielone bomby Baby Jagi wybuchają także w powietrzu).
 - **Bagienne kałuże** spowalniają; wyłażą z nich utopce.
+- **Bór jest duży** (polana o promieniu 180 m, prawie cztery razy większa niż dawniej). Z polany startowej
+  rozchodzi się sześć ścieżek do nazwanych miejsc: Posąg Świętowita, Topielcowe Jezioro, Kamienny Krąg,
+  Święty Dąb, Kurhan i Chata na Kurzej Stopce. Przy każdym (poza jeziorem) czeka skrzynia, a przy ścieżkach
+  stoją kapliczki i ogniska.
+- **Mapa (`Tab`)** jest na początku zakryta. Odkrywa się w promieniu 30 m wokół bohatera i pokazuje teren,
+  ścieżki, wodę, drzewa oraz znaczniki: kapliczki (jasne, dopóki mają błogosławieństwo), zamknięte skrzynie,
+  ogniska i odkryte miejsca z nazwami. Bossa widać na mapie zawsze, także w nieodkrytej części.
 - **Złoto**, które zostanie w sakiewce na koniec runu, trafia do **Chaty**: stałe ulepszenia między runami.
 - **Osiągnięcia** odblokowują postacie, bronie i pasywki albo dają złoto.
 
@@ -111,20 +123,41 @@ src/
   core/      pętla o stałym kroku 60 Hz z interpolacją, wejście, RNG z ziarnem, siatka przestrzenna
   data/      CAŁA treść gry jako dane: bronie, pasywki, wrogowie, postacie, fale, sklep, osiągnięcia
   sim/       czysta symulacja (bez Three.js i DOM): świat, gracz, AI, bronie, karty, spawner, pule SoA
-  render/    Three.js: niebo, teren, rekwizyty, bohater, wrogowie (InstancedMesh), efekty, cząsteczki
+  render/    Three.js: niebo, teren (tekstury), scenografia w kafelkach z LOD, bohater, wrogowie
+             (InstancedMesh), efekty, cząsteczki, postprocessing (bloom, gradacja barw)
+  assets/    tekstury i ilustracje (Codex), modele scenografii (Blender): models/props.bin + props.json
   audio/     Web Audio: efekty i muzyka generowane w kodzie
-  ui/        DOM: HUD, menu, karty, Chata, opcje, ekran końca (po polsku)
+  ui/        DOM: HUD, menu, karty, Chata, opcje, ekran końca, mapa pod Tab (po polsku)
   meta/      zapis w localStorage, osiągnięcia, zakupy
   debug/     bot-autopilot i narzędzia testera (window.__mb.debug)
   game.ts    maszyna stanów: menu → gra → pauza / wybór → koniec
 tests/       testy Vitest (obrażenia, skalowanie, karty, ewolucje, zapis, ruch, symulacja)
 scripts/     symulacja balansu (simulate.ts) i playtesty w bezgłowym Chrome (verify/*.mjs)
+tools/       blender/build_props.py: generator modeli scenografii
 docs/        PLAN.md, DECISIONS.md, PERF.md, REPORT.md, screenshots/
 ```
 
 Symulacja nie wie nic o renderowaniu. Renderer czyta stan świata co klatkę, a o zdarzeniach
 (trafienie, wybuch, awans) dowiaduje się z bufora `world.events`. Dzięki temu logikę da się testować
 i rozgrywać całe runy bez przeglądarki.
+
+## Modele i tekstury
+
+Modele scenografii (świerki, sosny, dęby, brzozy, krzaki, głazy, menhiry, Święty Dąb, chata na kurzej
+stopce, posąg) buduje skrypt w Blenderze. Po zmianie skryptu:
+
+```bash
+blender -b --factory-startup --python tools/blender/build_props.py -- --preview /tmp/podglad
+```
+
+Skrypt zapisuje `src/assets/models/props.bin` i `props.json`, a z `--preview` renderuje też podgląd
+wszystkich modeli. Każdy model to trójkąty z kolorem na wierzchołek (z wypalonym cieniowaniem otoczenia)
+i wagą kołysania na wietrze. Nowy model to funkcja w skrypcie, wpis w `build_all()` i jedno wywołanie
+`put(...)` w `src/render/props.ts`.
+
+Tekstury leżą w `src/assets/tex` (bezszwowe, 1024 px). Teren miesza je wagami na wierzchołek
+(`src/render/terrainView.ts`): trawa i mech, ściółka pod drzewami, ziemia na ścieżkach, błoto przy wodzie,
+skała na stromiznach.
 
 ## Jak dodać nową broń
 
@@ -168,7 +201,8 @@ Nowe zachowanie AI to jeden `case` w `updateEnemies` w `src/sim/ai.ts`.
 
 ## Opcje, zapis, dostępność
 
-- Opcje: głośność ogólna, muzyki i efektów, czułość myszy, liczby obrażeń, wstrząsy ekranu, jakość grafiki.
+- Opcje: głośność ogólna, muzyki i efektów, czułość myszy, liczby obrażeń, wstrząsy ekranu, jakość grafiki
+  (niska: bez postprocessingu i cieni; średnia i wysoka: bloom, gradacja barw, cienie, wygładzanie krawędzi).
 - Postęp zapisuje się w `localStorage` (klucz `megaberg-slowianskie-bory-v1`). Uszkodzony lub niedostępny
   zapis nie wywraca gry. Reset postępu: Opcje → „Resetuj postęp” (kliknij dwa razy).
 - Kamera działa też bez myszy (strzałki). Muzyka startuje po pierwszej interakcji.

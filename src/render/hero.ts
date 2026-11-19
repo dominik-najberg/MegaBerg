@@ -30,6 +30,17 @@ export class HeroView {
   private amp = 0;
 
   constructor(blobTex: THREE.Texture) {
+    // Rim light and a little self-illumination: the hero must read at a glance in any light.
+    this.mat.onBeforeCompile = (shader) => {
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+totalEmissiveRadiance += diffuseColor.rgb * 0.06;
+float mbRim = pow(1.0 - max(dot(normalize(vNormal), normalize(vViewPosition)), 0.0), 2.5);
+totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
+      );
+    };
+    this.mat.customProgramCacheKey = () => 'mb-hero';
     this.group.add(this.body);
     this.body.add(this.torso, this.legL, this.legR);
     this.torso.add(this.armL, this.armR);

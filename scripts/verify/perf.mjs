@@ -23,8 +23,8 @@ const measure = async (label, setup) => {
   await sleep(2500);
   await page.evaluate(() => window.__mb.resetPerf());
   await sleep(5000);
-  const r = await page.evaluate(() => ({ ...window.__mb.perfReport(), calls: window.__mb.gfx.renderer.info.render.calls, tris: window.__mb.gfx.renderer.info.render.triangles }));
-  console.log(label.padEnd(26), `${String(r.fps).padStart(6)} fps  ${r.cpuMsPerFrame.toFixed(2)} ms/frame  calls ${r.calls}  tris ${r.tris}`);
+  const r = await page.evaluate(() => window.__mb.perfReport());
+  console.log(label.padEnd(26), `${String(r.fps).padStart(6)} fps  ${r.cpuMsPerFrame.toFixed(2)} ms/klatkę  najgorsza ${r.worstFrameMs} ms`);
 };
 const q = (n) => `(() => { const g = window.__mb; g.store.data.options.quality = ${n}; g.gfx.applyQuality(${n}); })()`;
 await measure('wysoka', q(2));

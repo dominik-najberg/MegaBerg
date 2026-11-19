@@ -95,3 +95,41 @@ zmienianą dopiero po przeładowaniu (teraz od razu) i brak reakcji na utratę k
 Drugi przebieg (`codex exec review --uncommitted`, na samych poprawkach) zgłosił jedną uwagę P2, **przyjętą**:
 utrata kontekstu WebGL w trakcie 1,4-sekundowej animacji śmierci lub 2,4-sekundowej animacji zwycięstwa
 (stan `ending`) nie zapisywała runu. Obsługa utraty kontekstu bankuje teraz run także w tym stanie.
+
+## Grafika, większa mapa i mapa pod Tab (nocna sesja)
+
+Zlecenie: poprawić jakość grafiki (wolno użyć generatora obrazów Codeksa i Blendera), powiększyć mapę,
+dodać mapę pod przytrzymanym `Tab`, na początku zakrytą. Użytkownik poszedł spać, więc wszystko poniżej
+rozstrzygnąłem sam.
+
+- **Zasada „zero plików graficznych” przestaje obowiązywać dla scenografii i tekstur**, bo zlecenie wprost
+  pozwala na Blendera i generowane obrazy. Postacie, wrogowie, efekty i dźwięk zostają w kodzie.
+- **Styl zostaje low-poly z płaskim cieniowaniem**, a jakość podnoszą: malowane tekstury ziemi, bogatsze
+  sylwetki drzew, wypalone cieniowanie otoczenia, bloom i gradacja barw. Powód: wrogowie i bohater są
+  z brył, więc fotorealistyczne drzewa by do nich nie pasowały.
+- **Modele w Blenderze powstają ze skryptu** (`tools/blender/build_props.py`), nie z ręcznie zapisanych
+  plików `.blend`: da się je odtworzyć i poprawić jedną komendą. Cieniowanie otoczenia liczy skrypt
+  promieniami przez BVH Blendera i zapisuje w kolorach wierzchołków.
+- **Własny format modeli** (`props.bin` + `props.json`) zamiast glTF: 660 kB, wczytywanie w kilkunastu
+  liniach, bez `GLTFLoader` w paczce i bez zależności od ustawień eksportera.
+- **Mapa: promień 180 m zamiast 92 m** (3,8× powierzchni). Gęstość drzew, głazów, kałuż i ognisk
+  mniej więcej jak dawniej. **Kapliczek jest 8, nie więcej**: czterech bogów błogosławi po dwa razy,
+  więc dziewiąta kapliczka nie miałaby czego dać (przy 10 pękał test limitu błogosławieństw).
+- **Ścieżki i nazwane miejsca** dają większej mapie cel wędrówki. Skrzynia przy każdym miejscu to nagroda
+  za dojście. Kolizje nowych obiektów to nadal koła.
+- **Balans sprawdzony symulacją**: dobry bot bez Chaty 6/16 wygranych (przed zmianą 5/16), z poziomem 2
+  ulepszeń 11/16, nowicjusz 0/8. Mieści się w dotychczasowym rozrzucie, więc liczb wrogów nie ruszałem.
+- **Mapa pod `Tab` nie pauzuje gry** („przytrzymanie” to podgląd, nie ekran) i zasłania środek ekranu
+  półprzezroczystym tłem. Mgła odkrywania jest w symulacji (`src/sim/fog.ts`, komórki 4 m, zasięg wzroku
+  30 m), więc ma testy i zeruje się z każdym runem. Boss jest na mapie zawsze widoczny, żeby dało się
+  go znaleźć na dużym terenie.
+- **Scenografia w kafelkach 44 m**: pełne modele do ok. 92 m, uproszczone dalej, nic powyżej 235 m
+  (mgła i tak wszystko zasłania), drobne rośliny do 78 m.
+- **Budżet pikseli**: rozdzielczość wewnętrzna jest ograniczona do ok. 3,2 mln pikseli na jakości wysokiej
+  (2,3 mln na średniej). Bez tego ekran 4K dawał 44 kl./s na zintegrowanym GPU, z limitem ok. 80.
+- **Jakość niska nie ma postprocessingu** (bez bloomu, MSAA i gradacji): to tryb dla słabego sprzętu.
+- **Jaśniejsze światło otoczenia i cienie o sile 0,72**: w gęstym lesie nocą walka była nieczytelna.
+- **Księżyc wisi nisko nad lasem** (widać go z kamery zza pleców bohatera), ale światło pada z wyższego
+  kąta, żeby długie cienie nie zasłaniały walki.
+- **Commity na gałęzi `grafika-mapa-minimapa`, bez wypychania**: praca nocna bez nadzoru powinna dać się
+  przejrzeć i cofnąć etapami.

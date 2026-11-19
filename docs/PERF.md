@@ -6,18 +6,37 @@ cienie 2048, bot gra, sześć broni naraz, spawner utrzymuje zadaną liczbę ży
 
 Sprzęt: laptop, **zintegrowany AMD Radeon 860M** (ANGLE / OpenGL ES 3.2). Pomiar z 10 s po 6 s rozgrzewki.
 
+Stan po nocnej sesji graficznej (większa mapa, tekstury, modele z Blendera, postprocessing):
+
 | Żywi wrogowie | FPS (bez limitu) | Symulacja / krok | CPU + GPU / klatkę | Najgorsza klatka |
 |---:|---:|---:|---:|---:|
-| 300 | 562 | 0,20 ms | 1,6 ms | 52 ms |
-| 500 | 482 | 0,33 ms | 1,8 ms | 29 ms |
-| 700 | 462 | 0,39 ms | 1,9 ms | 29 ms |
+| 300 | 103 | 0,27 ms | 9,0 ms | 122 ms |
+| 500 | 121 | 0,31 ms | 7,7 ms | 244 ms |
+| 700 | 103 | 0,42 ms | 8,9 ms | 135 ms |
 
-Wymaganie „300+ wrogów przy stabilnych 60 FPS” jest spełnione z zapasem około 8×: przy 500 wrogach
-klatka zajmuje ~1,8 ms z budżetu 16,7 ms. Pojedyncze „najgorsze klatki” (29–52 ms) to kompilacja
-shaderów przy pierwszym pojawieniu się nowego efektu, nie stały koszt.
+Wymaganie „300+ wrogów przy stabilnych 60 FPS” jest nadal spełnione, z zapasem około 2× zamiast
+dawnych 8×: klatka kosztuje 8–9 ms z budżetu 16,7 ms. Liczba wrogów prawie nie wpływa na wynik, bo
+koszt przeniósł się na wypełnianie pikseli (HDR, MSAA, bloom). Rozrzut między przebiegami to kilkanaście
+procent (bot stoi w innym miejscu lasu). „Najgorsze klatki” to kompilacja shaderów przy pierwszym
+pojawieniu się nowego efektu; jest ich teraz więcej niż przed sesją (wtedy 29–52 ms).
 
-Dla porównania RTX 5070 przez ANGLE/Vulkan w trybie headless dał 157 FPS przy 500 wrogach
-(ścieżka headless Vulkan ma narzut na odczyt bufora; w zwykłym oknie wynik będzie wyższy).
+Przed sesją (dla porównania): 562 / 482 / 462 FPS przy 300 / 500 / 700 wrogach, 1,6–1,9 ms na klatkę.
+
+## Koszt poziomów jakości
+
+`node scripts/verify/perf.mjs 500 1` (500 wrogów, 1920×1080):
+
+| Ustawienie | FPS | ms / klatkę |
+|---|---:|---:|
+| Wysoka | 110 | 8,2 |
+| Wysoka bez bloomu | 141 | 6,6 |
+| Wysoka bez cieni | 120 | 7,9 |
+| Średnia | 161 | 5,6 |
+| Niska | 276 | 3,3 |
+
+Ekran HiDPI (1920×1080 CSS przy `devicePixelRatio` 2, czyli 4K): jakość wysoka dawała 44 FPS, bo
+potok postprocessingu jest ograniczony wypełnianiem pikseli. Po wprowadzeniu budżetu pikseli
+(patrz niżej) to samo ustawienie daje ok. 80 FPS.
 
 ## Skąd ta wydajność
 
@@ -27,6 +46,13 @@ Dla porównania RTX 5070 przez ANGLE/Vulkan w trybie headless dał 157 FPS przy 
 - **Pule SoA** (`Float32Array`) dla wrogów, pocisków, bursztynów, stref i zagrożeń: zero alokacji w pętli gry.
 - **Siatka przestrzenna** przebudowywana co krok sortowaniem przez zliczanie: celowanie, trafienia
   i rozpychanie wrogów pytają tylko sąsiednie komórki.
+- **Scenografia w kafelkach 44 m**: jeden InstancedMesh na model i kafelek z własną sferą otaczającą,
+  więc bryła widzenia odcina większość lasu. Do ok. 92 m pełne modele z cieniami, dalej uproszczone
+  (150–250 trójkątów na drzewo), powyżej 235 m nic; trawa, paprocie i grzyby tylko do 78 m.
+- **Budżet pikseli**: rozdzielczość wewnętrzna to `devicePixelRatio` ograniczone poziomem jakości
+  i liczbą pikseli (wysoka 3,2 mln, średnia 2,3 mln, niska 2,1 mln przy ×1).
+- **Bloom w połowie rozdzielczości**, MSAA ×4 na wysokiej i ×2 na średniej, jeden końcowy przebieg
+  (mapowanie tonów, gradacja, winieta, ziarno).
 - **Pula 4 świateł punktowych** przenoszonych do najbliższych ognisk i kapliczek: stały koszt shaderów
   niezależnie od liczby źródeł ognia na mapie.
 - **Cząsteczki** w jednym `Points` na system (addytywny i „kurz”), **liczby obrażeń** na osobnym canvasie 2D.
@@ -34,8 +60,8 @@ Dla porównania RTX 5070 przez ANGLE/Vulkan w trybie headless dał 157 FPS przy 
 
 ## Ustawienia jakości
 
-| Jakość | Cienie | Rozdzielczość | Roślinność | Cząsteczki |
-|---|---|---|---|---|
-| Niska | wyłączone | ×1 | 35% | 50% |
-| Średnia | 1024 | do ×1,5 | 70% | 80% |
-| Wysoka | 2048 | do ×2 | 100% | 100% |
+| Jakość | Postprocessing | Cienie | Rozdzielczość | Roślinność | Cząsteczki |
+|---|---|---|---|---|---|
+| Niska | brak | wyłączone | ×1 | 35% | 50% |
+| Średnia | bloom, gradacja, MSAA ×2 | 1024 | do ×1,5 (maks. 2,3 mln px) | 70% | 80% |
+| Wysoka | bloom, gradacja, MSAA ×4 | 2048 | do ×2 (maks. 3,2 mln px) | 100% | 100% |

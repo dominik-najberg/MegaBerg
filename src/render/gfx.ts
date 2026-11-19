@@ -179,7 +179,7 @@ export class Gfx {
     this.terrain.update(this.clock, this.sky.night, this.sky.reflect, this.sky.lightDir, this.sky.sun.color);
     this.props.update(this.clock, hp.x, hp.z);
     this.heroLight.position.set(hp.x, hp.y + 2.6, hp.z);
-    this.heroLight.intensity = 5 + this.sky.night * 9;
+    this.heroLight.intensity = 3.5 + this.sky.night * 5.5;
 
     for (let i = 0; i < world.shrines.length; i++) this.props.setShrineUsed(i, (world.shrines[i] as { used: boolean }).used);
     this.enemies.update(world, alpha, this.clock);
