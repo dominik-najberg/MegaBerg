@@ -1,4 +1,5 @@
 import { ACHIEVEMENTS } from '../data/achievements';
+import { BLESSING_MAX } from '../data/blessings';
 import { CHARACTERS } from '../data/characters';
 import { ENEMIES } from '../data/enemies';
 import { RARITIES } from '../data/rarity';
@@ -495,6 +496,14 @@ export class UI {
     </div>`;
   }
 
+  /** Footer of a blessing card: which level of this god's blessing the card gives, out of the per-run limit. */
+  private blessLevelHtml(world: World, id: string): string {
+    const next = world.blessings.filter((x) => x.id === id).length + 1;
+    const max = Math.max(BLESSING_MAX, next);
+    const pips = Array.from({ length: max }, (_, i) => `<i class="${i < next - 1 ? 'on' : i === next - 1 ? 'next' : ''}"></i>`).join('');
+    return `<div class="bless-lvl"><span>Podnosi do poziomu <b>${next}</b> / ${max}</span><div class="pips">${pips}</div></div>`;
+  }
+
   showChoice(world: World): void {
     const ch = world.choice;
     if (!ch) return;
@@ -513,7 +522,7 @@ export class UI {
           <div class="card-key">${i + 1}</div>
           <div class="card-rarity">${b.god}</div>
           <div class="card-icon" style="--ic:${hex(b.color)}">${icon(b.icon, hex(b.color), 54)}</div>
-          <h3>${b.name}</h3><p>${b.desc}</p></div>`,
+          <h3>${b.name}</h3><p>${b.desc}</p>${this.blessLevelHtml(world, b.id)}</div>`,
         )
         .join('');
       this.open('choice', `<div class="choice"><h2>Kapliczka</h2><p class="lead">Któremu z bogów złożysz pokłon?</p><div class="cards">${opts}</div><div class="row"><button class="btn small" data-act="cancel">Odejdź <kbd>Esc</kbd></button></div></div>`, 'dim shrine');

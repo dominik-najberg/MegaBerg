@@ -198,6 +198,8 @@ export class PropsView {
   readonly group = new THREE.Group();
   private readonly flames: FlameSet[] = [];
   private readonly shrineFlames: THREE.Group[] = [];
+  /** Aura of active shrines (ground glow, halo, drifting motes), animated in update(). */
+  private readonly shrineAuras: Array<{ ground: THREE.Mesh; halo: THREE.Sprite; motes: THREE.Sprite[]; phase: number }> = [];
   private readonly glowTex: THREE.Texture;
   private readonly sources: LightSource[] = [];
   private readonly lights: THREE.PointLight[] = [];
@@ -452,6 +454,7 @@ export class PropsView {
         g.add(f.group);
         this.flames.push(f);
       }
+      this.addShrineAura(g);
       this.group.add(g);
       this.shrineFlames.push(g);
       this.sources.push({
@@ -464,6 +467,35 @@ export class PropsView {
         on: true,
       });
     }
+  }
+
+  /**
+   * Marks an active shrine without shouting: a warm pool of light on the ground, a soft halo around the box
+   * and a few motes drifting upwards. All of it lives in the candle group, so it goes out together with the
+   * candles once the blessing is taken.
+   */
+  private addShrineAura(g: THREE.Group): void {
+    const glow = (opacity: number): THREE.SpriteMaterial =>
+      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc670, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity, fog: false });
+    const ground = new THREE.Mesh(
+      shrineGroundGeo,
+      new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffb860, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3 }),
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0.22;
+    g.add(ground);
+    const halo = new THREE.Sprite(glow(0.3));
+    halo.position.y = 3.3;
+    halo.scale.setScalar(6);
+    g.add(halo);
+    const motes: THREE.Sprite[] = [];
+    for (let i = 0; i < SHRINE_MOTES; i++) {
+      const m = new THREE.Sprite(glow(0));
+      m.scale.setScalar(0.34);
+      motes.push(m);
+      g.add(m);
+    }
+    this.shrineAuras.push({ ground, halo, motes, phase: Math.random() * 10 });
   }
 
   /** Extinguishes the candles of a used shrine. */
@@ -523,8 +555,29 @@ export class PropsView {
         c.rotation.y = t * 0.4 + j;
       }
     }
+    for (let i = 0; i < this.shrineAuras.length; i++) {
+      const a = this.shrineAuras[i] as (typeof this.shrineAuras)[number];
+      if (!(this.shrineFlames[i] as THREE.Group).visible) continue;
+      const t = time + a.phase;
+      const breath = 0.5 + 0.5 * Math.sin(t * 1.3);
+      (a.ground.material as THREE.MeshBasicMaterial).opacity = 0.22 + breath * 0.12;
+      a.halo.material.opacity = 0.24 + breath * 0.12;
+      a.halo.scale.setScalar(5.6 + breath * 0.8);
+      // Motes circle the shrine slowly while rising, fading in at the plinth and out above the roof.
+      for (let j = 0; j < a.motes.length; j++) {
+        const m = a.motes[j] as THREE.Sprite;
+        const k = (t * 0.11 + j / a.motes.length) % 1;
+        const ang = j * 2.4 + t * 0.35;
+        const r = 1.5 + Math.sin(j * 1.7 + t * 0.5) * 0.45;
+        m.position.set(Math.cos(ang) * r, 0.5 + k * 5.2, Math.sin(ang) * r);
+        m.material.opacity = Math.sin(k * Math.PI) * 0.85;
+      }
+    }
   }
 }
+
+const SHRINE_MOTES = 7;
+const shrineGroundGeo = new THREE.PlaneGeometry(11, 11);
 
 export function makeGlowTexture(): THREE.Texture {
   const c = document.createElement('canvas');

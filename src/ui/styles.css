@@ -1018,8 +1018,54 @@ h4 {
 }
 
 .card.bless {
+  display: flex;
+  flex-direction: column;
   width: 222px;
   min-height: 250px;
+}
+
+.bless-lvl {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--rc) 35%, transparent);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.card.bless p {
+  margin-bottom: 12px;
+}
+
+.bless-lvl b {
+  font-size: 16px;
+  color: var(--rc);
+}
+
+.bless-lvl .pips {
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.bless-lvl .pips i {
+  width: 28px;
+  height: 7px;
+}
+
+.bless-lvl .pips i.on {
+  background: color-mix(in srgb, var(--rc) 70%, #fff);
+  box-shadow: none;
+}
+
+.bless-lvl .pips i.next {
+  background: var(--rc);
+  box-shadow: 0 0 8px var(--rc);
+  animation: pip-next 1s ease-in-out infinite alternate;
+}
+
+@keyframes pip-next {
+  to {
+    opacity: 0.45;
+  }
 }
 
 .card-key {
