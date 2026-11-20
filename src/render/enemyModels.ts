@@ -20,36 +20,54 @@ function builder(seed: number): GeoBuilder {
 
 const EYE = 0xffe9a0;
 
-/** Chochlik: forest imp hiding behind a painted wooden mask. */
+/**
+ * Chochlik: forest imp under a tall painted wooden mask.
+ * Built after the concept render: box mask with two long horns, red brow slat, cream cheek marks,
+ * leaf pauldrons pinned to a burlap neckerchief, fur tunic with a ragged hem, woven limbs.
+ */
 function chochlik(): THREE.BufferGeometry {
   const b = builder(101);
-  const fur = 0x5a3c2a;
-  const wood = 0xb9783c;
-  b.box(0.36, 0.42, 0.3, fur, { y: 0.55 });
-  // leaf ruff + skirt
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU;
-    b.cone(0.13, 0.34, 4, i % 2 ? 0x4c8a3a : 0x3d7230, { x: Math.cos(a) * 0.2, y: 0.74, z: Math.sin(a) * 0.17, rz: Math.cos(a) * 1.9, rx: -Math.sin(a) * 1.9 });
+  const wood = 0xd27a2e;
+  const paint = 0xbe241e;
+  const cream = 0xeadcb4;
+  const fur = 0x7a4628;
+  const furDark = 0x643620;
+  const weave = 0x4a2c24;
+  const burlap = 0x9c5a30;
+  const thread = 0xb89468;
+
+  // fur tunic, ragged hem
+  b.box(0.33, 0.42, 0.25, fur, { y: 0.49 });
+  for (let i = 0; i < 4; i++) b.cone(0.05, 0.11, 3, i % 2 ? fur : furDark, { x: -0.12 + i * 0.08, y: 0.25, z: 0.085, rx: Math.PI });
+  for (let i = 0; i < 3; i++) b.cone(0.05, 0.11, 3, i % 2 ? furDark : fur, { x: -0.1 + i * 0.1, y: 0.25, z: -0.085, rx: Math.PI });
+  for (const s of [-1, 1]) {
+    b.cone(0.05, 0.1, 3, furDark, { x: s * 0.13, y: 0.255, rx: Math.PI });
+    // woven arms hanging straight down, short stitched legs
+    b.box(0.085, 0.4, 0.1, weave, { x: s * 0.205, y: 0.5, swing: -s * 0.9, pivot: 0.72 });
+    b.box(0.125, 0.3, 0.13, weave, { x: s * 0.085, y: 0.15, swing: s * 1.3, pivot: 0.34 });
+    for (let k = 0; k < 3; k++) b.plane(0.014, 0.045, thread, { x: s * 0.125, y: 0.07 + k * 0.075, z: 0.073, jitter: 0, swing: s * 1.3, pivot: 0.34 });
+    // leaf pauldrons: a bright leaf in front, a darker one behind; the tips bob with every step
+    b.octa(0.15, 0x5f9a38, { x: s * 0.27, y: 0.645, z: 0.1, sx: 0.64, sy: 0.92, sz: 0.6, rz: -s * 0.2, flap: 0.2, flapFrom: 0.22 });
+    b.octa(0.15, 0x3a7a36, { x: s * 0.37, y: 0.7, z: -0.02, sx: 0.62, sy: 0.98, sz: 0.6, rz: -s * 0.45, flap: 0.2, flapFrom: 0.22 });
+    // brass pins holding the leaves
+    b.box(0.035, 0.035, 0.03, 0xd0a850, { x: s * 0.115, y: 0.665, z: 0.17, jitter: 0 });
   }
-  // mask
-  b.box(0.44, 0.52, 0.1, wood, { y: 0.98, z: 0.17 });
-  b.box(0.3, 0.1, 0.11, 0x8a5226, { y: 0.74, z: 0.18 });
-  b.box(0.09, 0.07, 0.04, 0x1a120c, { x: 0.1, y: 1.04, z: 0.225 });
-  b.box(0.09, 0.07, 0.04, 0x1a120c, { x: -0.1, y: 1.04, z: 0.225 });
-  b.box(0.035, 0.035, 0.05, EYE, { x: 0.1, y: 1.04, z: 0.23, jitter: 0 });
-  b.box(0.035, 0.035, 0.05, EYE, { x: -0.1, y: 1.04, z: 0.23, jitter: 0 });
-  b.box(0.05, 0.2, 0.03, 0xb3261e, { y: 1.16, z: 0.225 });
-  b.box(0.2, 0.04, 0.03, 0xb3261e, { y: 0.88, z: 0.225 });
-  b.box(0.04, 0.12, 0.03, 0xe9e1cc, { x: 0.16, y: 0.9, z: 0.225 });
-  b.box(0.04, 0.12, 0.03, 0xe9e1cc, { x: -0.16, y: 0.9, z: 0.225 });
-  // horns
-  b.cone(0.07, 0.36, 4, wood, { x: 0.2, y: 1.36, z: 0.14, rz: -0.45 });
-  b.cone(0.07, 0.36, 4, wood, { x: -0.2, y: 1.36, z: 0.14, rz: 0.45 });
-  // limbs
-  b.box(0.09, 0.4, 0.09, fur, { x: 0.25, y: 0.5, swing: -0.9, pivot: 0.72 });
-  b.box(0.09, 0.4, 0.09, fur, { x: -0.25, y: 0.5, swing: 0.9, pivot: 0.72 });
-  b.box(0.11, 0.36, 0.12, 0x3a281c, { x: 0.1, y: 0.18, swing: 1.3, pivot: 0.36 });
-  b.box(0.11, 0.36, 0.12, 0x3a281c, { x: -0.1, y: 0.18, swing: -1.3, pivot: 0.36 });
+  // burlap neckerchief with a point down the chest
+  b.box(0.38, 0.13, 0.33, burlap, { y: 0.665 });
+  b.cone(0.13, 0.2, 4, burlap, { y: 0.57, z: 0.142, rx: Math.PI, sz: 0.15 });
+
+  // mask: a tall wooden box, horns rising from the top corners
+  b.box(0.4, 0.47, 0.31, wood, { y: 0.955, z: 0.02 });
+  for (const s of [-1, 1]) {
+    b.cone(0.08, 0.38, 4, wood, { x: s * 0.176, y: 1.35, z: 0.02, rz: -s * 0.3 });
+    b.box(0.104, 0.095, 0.02, 0x17100c, { x: s * 0.102, y: 0.986, z: 0.178 });
+    b.box(0.045, 0.045, 0.02, EYE, { x: s * 0.102, y: 0.986, z: 0.185, jitter: 0 });
+    b.box(0.045, 0.14, 0.03, cream, { x: s * 0.155, y: 0.83, z: 0.18 });
+  }
+  // red brow slat running over the top edge, red mouth
+  b.box(0.056, 0.24, 0.035, paint, { y: 1.105, z: 0.185 });
+  b.box(0.056, 0.03, 0.12, paint, { y: 1.205, z: 0.13 });
+  b.box(0.19, 0.042, 0.03, paint, { y: 0.816, z: 0.18 });
   return b.build();
 }
 

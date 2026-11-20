@@ -15,7 +15,7 @@ const _c = new THREE.Color();
 
 /** Death-burst colour per enemy id. */
 const KILL_COLOR: Record<string, number> = {
-  chochlik: 0xb9783c,
+  chochlik: 0xd27a2e,
   utopiec: 0x8fd0a0,
   kruk: 0x4a4068,
   ognik: 0x8ff0ff,

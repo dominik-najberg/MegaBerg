@@ -86,6 +86,11 @@ export class GeoBuilder {
     return this.add(new THREE.BoxGeometry(w, h, d), color, xf);
   }
 
+  /** Flat quad facing +z: stitches, paint and other decals that do not need thickness. */
+  plane(w: number, h: number, color: number, xf?: Xf): this {
+    return this.add(new THREE.PlaneGeometry(w, h), color, xf);
+  }
+
   cyl(rTop: number, rBottom: number, h: number, seg: number, color: number, xf?: Xf): this {
     return this.add(new THREE.CylinderGeometry(rTop, rBottom, h, seg, 1), color, xf);
   }
