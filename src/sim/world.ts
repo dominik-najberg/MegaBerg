@@ -283,6 +283,8 @@ export class World {
   pendingLevels = 0;
   choice: Choice | null = null;
   dead = false;
+  /** Dev menu immortality: every blow is ignored. */
+  godMode = false;
   won = false;
   endless = false;
   bossIdx = -1;
@@ -719,7 +721,7 @@ export class World {
   /** `attacker` is the enemy index for melee contact (thorns hit it back), -1 for anything else. */
   hurtPlayer(damage: number, attacker = -1): void {
     const p = this.player;
-    if (p.invuln > 0 || this.dead || (this.won && !this.endless)) return;
+    if (this.godMode || p.invuln > 0 || this.dead || (this.won && !this.endless)) return;
     const st = this.stats;
     if (st.evasion > 0 && this.rng.next() < dodgeChance(st.evasion)) {
       // A dodged blow still grants the usual invulnerability, otherwise a crowd would re-roll every frame.

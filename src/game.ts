@@ -5,6 +5,7 @@ import { CHARACTER_BY_ID, CHARACTERS } from './data/characters';
 import type { CharacterDef } from './data/types';
 import { RUN_LENGTH } from './data/waves';
 import { Bot, type BotSkill } from './debug/bot';
+import { DevMenu } from './debug/devMenu';
 import { DebugTools } from './debug/tools';
 import { applyRun, buyShopItem, buySilver, grantFromTotals, isUnlocked, runPool, togglePool, type PoolKind } from './meta/progress';
 import { browserStorage, SaveStore } from './meta/save';
@@ -27,6 +28,8 @@ export class Game {
   readonly store = new SaveStore(browserStorage());
   readonly ui: UI;
   readonly mapScreen: MapScreen;
+  /** Hidden developer menu under ~ (see src/debug/devMenu.ts). */
+  readonly devMenu: DevMenu;
   world: World;
   state: State = 'menu';
   bot: Bot | null = null;
@@ -75,6 +78,7 @@ export class Game {
       this.store.data,
     );
     this.mapScreen = new MapScreen(uiRoot, this.map);
+    this.devMenu = new DevMenu(uiRoot, this);
     this.applyOptions();
     this.loop = new Loop({ step: (dt) => this.step(dt), render: (a, dt) => this.render(a, dt) });
 
@@ -118,6 +122,8 @@ export class Game {
       itemPool: runPool(save, 'i'),
     });
     if (idle) w.spawner.disabled = true;
+    // The dev menu is created after the first (idle) world; later worlds inherit its immortality switch.
+    if (this.devMenu?.god) w.godMode = true;
     return w;
   }
 
@@ -303,6 +309,7 @@ export class Game {
 
   private onKey(code: string): void {
     this.audio.unlock();
+    if (this.devMenu.key(code)) return;
     if (this.ui.key(code)) return;
     if ((code === 'Escape' || code === 'KeyP') && this.state === 'playing') this.pause();
   }

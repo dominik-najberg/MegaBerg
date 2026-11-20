@@ -1545,3 +1545,80 @@ h4 {
   opacity: 0.4;
   text-decoration: line-through;
 }
+
+/* ---------------------------------------------------------------- dev menu (~) */
+
+.devmenu {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  background: rgba(6, 4, 10, 0.25);
+}
+
+.devmenu-box {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+  font: 14px ui-monospace, Menlo, Consolas, monospace;
+  animation: fade 0.12s ease both;
+}
+
+.devmenu-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 2px 6px;
+  border-bottom: 1px solid var(--line);
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}
+
+.devmenu-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.devmenu-row span {
+  color: var(--muted);
+}
+
+.devmenu-row:hover:not([disabled]) {
+  border-color: var(--gold-hi);
+  background: rgba(233, 196, 106, 0.1);
+}
+
+.devmenu-row.on {
+  border-color: #7ad17a;
+  background: rgba(90, 200, 90, 0.14);
+}
+
+.devmenu-row.on span {
+  color: #9be59b;
+}
+
+.devmenu-row[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.devmenu-row.close {
+  margin-top: 4px;
+}

@@ -84,6 +84,7 @@ przeglądarki. Kod: `tools/edytor/`.
 | `Tab` (przytrzymaj) | mapa boru; gra toczy się dalej |
 | `1` `2` `3` (`4`) | wybór karty; `R` przelosowanie; `Enter` zabranie łupu ze skrzyni |
 | `Esc` lub `P` | pauza (z podglądem buildu i opcjami) |
+| `~` | ukryte menu dewelopera: nieśmiertelność, +1000 złota (w runie do runu, w menu do Chaty), +100 srebra, +1/+5 poziomów, edytor konceptów (tylko na `npm run dev`); w trakcie runu pauzuje grę |
 
 ## Jak się w to gra
 
