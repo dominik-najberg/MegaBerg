@@ -115,7 +115,7 @@ describe('skalowanie', () => {
       dmg = enemyDamageMul(t);
     }
     expect(enemyHpMul(RUN_LENGTH)).toBeGreaterThan(8);
-    expect(enemyDamageMul(RUN_LENGTH)).toBeCloseTo(1.8);
+    expect(enemyDamageMul(RUN_LENGTH)).toBeCloseTo(2.3);
   });
 
   it('każdy kolejny poziom wymaga więcej doświadczenia', () => {

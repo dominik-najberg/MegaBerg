@@ -1,6 +1,6 @@
 import { Rng } from '../core/rng';
 import { SpatialGrid } from '../core/spatialGrid';
-import { BLESSINGS } from '../data/blessings';
+import { BLESSING_MAX, BLESSINGS } from '../data/blessings';
 import { CHARACTERS } from '../data/characters';
 import { ENEMIES } from '../data/enemies';
 import { PASSIVES } from '../data/passives';
@@ -439,10 +439,10 @@ export class World {
         this.won = true;
         this.events.emit(Ev.Win, x, gy, z);
       } else {
-        for (let k = 0; k < 30; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-6, 6), gy, z + rng.range(-6, 6), BOSS_GOLD / 30);
+        for (let k = 0; k < 30; k++) this.dropCoin(x + rng.range(-6, 6), gy, z + rng.range(-6, 6), BOSS_GOLD / 30);
       }
     } else if (def.rank === 'mini') {
-      for (let k = 0; k < 10; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-2.5, 2.5), gy, z + rng.range(-2.5, 2.5), 4);
+      for (let k = 0; k < 10; k++) this.dropCoin(x + rng.range(-2.5, 2.5), gy, z + rng.range(-2.5, 2.5), 4);
       this.spawnChest(x, z, true);
       this.pickups.spawn(PickupKind.Bread, x + 1, gy, z + 1, 30);
       this.hitstop = 0.18;
@@ -450,9 +450,9 @@ export class World {
       if (elite) {
         // Elites always pay: a small purse next to the free chest.
         this.spawnChest(x, z, true);
-        for (let k = 0; k < 5; k++) this.pickups.spawn(PickupKind.Coin, x + rng.range(-1.5, 1.5), gy, z + rng.range(-1.5, 1.5), 2);
+        for (let k = 0; k < 5; k++) this.dropCoin(x + rng.range(-1.5, 1.5), gy, z + rng.range(-1.5, 1.5), 2);
       }
-      if (rng.next() < coinChance(this.time) * (1 + luck * 0.6)) this.pickups.spawn(PickupKind.Coin, x, gy, z, 1);
+      if (rng.next() < coinChance(this.time) * (1 + luck * 0.6)) this.dropCoin(x, gy, z, 1);
       else if (rng.next() < 0.007 * (1 + luck * 0.5)) {
         if (rng.next() < 0.25) this.pickups.spawn(PickupKind.Honey, x, gy, z, 60);
         else this.pickups.spawn(PickupKind.Bread, x, gy, z, 25);
@@ -460,6 +460,16 @@ export class World {
     }
     e.free(i);
     if (def.rank) this.trackBoss();
+  }
+
+  /**
+   * Coins from a kill are collected automatically: they appear already pulled toward the hero
+   * (like after a magnet), so the player never has to walk back for them.
+   */
+  private dropCoin(x: number, y: number, z: number, val: number): void {
+    const i = this.pickups.spawn(PickupKind.Coin, x, y, z, val);
+    if (i >= 0) this.pickups.mag[i] = 1;
+    else this.addGold(val); // pool full: the coin still counts
   }
 
   /** Removes an enemy without drops or kill credit. */
@@ -842,9 +852,9 @@ export class World {
     }
   }
 
-  /** Each god grants at most two blessings per run. */
+  /** Each god grants at most BLESSING_MAX blessings per run. */
   private blessingOptions(): BlessingDef[] {
-    const opts = BLESSINGS.filter((b) => this.blessings.filter((x) => x.id === b.id).length < 2);
+    const opts = BLESSINGS.filter((b) => this.blessings.filter((x) => x.id === b.id).length < BLESSING_MAX);
     return opts.length > 0 ? opts : BLESSINGS;
   }
 

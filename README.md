@@ -94,7 +94,8 @@ Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2
   Podniesiony ściąga do bohatera **wszystkie bursztyny i monety z całej mapy** (jedzenie zostaje).
   Baner zapowiada magnes i dar boru, a oba widać na mapie.
 - **Monety** wypadają z wrogów: na początku runu z mniej więcej co czwartego, po 3,5 minuty z co
-  szesnastego. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
+  szesnastego. **Monety z zabitych wrogów zbierają się same**: od razu lecą do bohatera, nie trzeba
+  po nie wracać. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
 - **Kapliczki:** podejdź, przytrzymaj `E` i wybierz błogosławieństwo Peruna (obrażenia), Swaroga (ogień),
   Welesa (szczęście i złoto) albo Mokoszy (leczenie). Każdy bóg błogosławi najwyżej dwa razy na run.
 - **Leczenie:** z wrogów rzadko wypada chleb ze smalcem albo dzban miodu. Jedzenie czeka na ziemi,

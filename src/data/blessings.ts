@@ -1,5 +1,8 @@
 import type { BlessingDef } from './types';
 
+/** How many times one god's blessing can be taken in a run. */
+export const BLESSING_MAX = 2;
+
 /** Shrine blessings: one per god. */
 export const BLESSINGS: BlessingDef[] = [
   {

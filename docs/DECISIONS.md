@@ -57,7 +57,8 @@ Każda niejasność rozstrzygnięta bez pytania użytkownika, z krótkim powodem
   dobry bot wygrywa ok. 30% bez Chaty, ok. 55% z poziomem 1–2 wszystkich ulepszeń, ok. 94% z poziomem 4
   (po 16 runów na konfigurację; przy 12 runach wychodziło 25% / 42% / 92%, więc rozrzut to kilkanaście punktów);
   nowicjusz bez Chaty ginie średnio po 2–3 minutach, z poziomem 3 po ok. 5,5 minuty.
-- Zdrowie wrogów: `1 + minuta^1,55 × 0,33`, obrażenia: `1 + 0,8 × czas/10 min`.
+- Zdrowie wrogów: `1 + minuta^1,55 × 0,37`, obrażenia: `1 + 1,3 × czas/10 min` (do zmiany monet zbieranych
+  samoczynnie było `0,33` i `0,8`; patrz niżej).
   Pierwsza wersja (wykładnik 1,4) pozwalała botowi wygrywać 4/6 bez Chaty, a 1,7 nie dawała szans.
 - Ewolucje „Gniew Gromowładcy”, „Gwiezdny Grad” i „Krąg Swaroga” osłabione po tym, jak w symulacji
   zadawały ponad milion obrażeń na run; Kruki, Włócznia i Dziegieć wzmocnione (były wyraźnie najsłabsze).
@@ -274,3 +275,61 @@ po elicie, otwarcie za darmo, oba dary przychodzą same w prawdziwym runie, kons
 | 3 | [P2] Porzucone magnesy mogły się kumulować ponad limit rysowania (16), więc nowy bywałby niewidoczny | przyjęta | nowy magnes zabiera porzucone; test wędrówki po borze |
 | 4 | [P3] Skrypt w przeglądarce nie sprawdzał, czy bursztyny dały doświadczenie | przyjęta | asercja zdobytego doświadczenia |
 | 5 | [P3] Skrypt nie sprawdzał wyglądu ani znaczników na mapie | przyjęta | asercje modelu, materiału i słupa światła w rendererze oraz kolorów znaczników na płótnie mapy |
+
+## Monety z zabitych wrogów zbierają się same
+
+Prośba: „Zabicie wroga powinno dawać monety z automatu”.
+
+- **Monety z zabicia od razu lecą do bohatera** (`World.dropCoin` w `src/sim/world.ts`): pojawiają się
+  już przyciągnięte, tak jak po podniesieniu magnesu. Dotyczy każdej monety z wroga: zwykłej, sakiewki
+  elity, monet mini-bossa i bossa w trybie nieskończonym. Powód: gracz widzi, skąd przyszło złoto,
+  dźwięk i błysk zebrania zostają, a nie musi wracać po łup.
+- **Pełna pula przedmiotów** (256): moneta, której nie da się pokazać, i tak trafia do sakiewki.
+- Szanse na monetę zostają bez zmian. Jedzenie i magnes nadal leżą na ziemi.
+
+Wpływ na balans (`npm run sim`, Wojmir, bez Chaty, po 32 runy; rozrzut ok. ±10 punktów):
+
+| | przed | po |
+|---|---|---|
+| dobry bot, wygrane | 11/32 (34%) | 24/32 (75%) |
+| dobry bot, średnie złoto z runu | 700 | 1121 |
+| początkujący, wygrane / średni czas | 1/32, 3:31 | 0/32, 4:00 |
+| początkujący, średnie złoto z runu | 175 | 203 |
+
+Ceny skrzyń i szanse na monetę tego nie wyrównują: przy mnożniku ceny skrzyń 2,1 / 2,4 / 2,8 dobry bot
+wygrywał 22 / 21 / 24 na 32, a przy szansach na monetę obciętych o połowę (mniej więcej tyle złota co
+przed zmianą) 21/32. Powód okazał się inny niż złoto: na starym kodzie bot, który **nie zbacza po monety**,
+wygrywa 21/32 zamiast 11/32 (większa pula przedmiotów nic nie zmienia, 11/32). Wcześniej bot wchodził po
+złoto między wrogów i tam ginął; strojenie trudności zakładało ten koszt, a teraz go nie ma.
+
+**Wyrównanie: trudność walki, nie ekonomia** (`src/data/waves.ts`):
+
+- obrażenia wrogów `1 + 0,8 × czas/10 min` → `1 + 1,3 × czas/10 min` (w 1. minucie +5%, pod koniec +28%),
+- zdrowie wrogów `1 + minuta^1,55 × 0,33` → `… × 0,37` (ok. +11% pod koniec runu).
+
+Szukanie (dobry bot, Wojmir, bez Chaty): obrażenia 1,6 + zdrowie 0,40 dawało 25% na 64 runach (za trudno),
+1,4 + 0,33 dawało 56%, wybrane 1,3 + 0,37 daje 39%.
+
+| dobry bot bez Chaty, wygrane (32 runy, Wojmir 64) | przed | same monety | ostatecznie |
+|---|---|---|---|
+| Wojmir | 11/32 (34%) | 24/32 (75%) | 25/64 (39%) |
+| Bogumił | 23/32 | 22/32 | 18/32 |
+| Dobrosława | 16/32 | 21/32 | 11/32 |
+| Jagna | 7/32 | 11/32 | 11/32 |
+| wszyscy razem | 45% | 61% | ok. 41% |
+
+| inne profile | przed | ostatecznie |
+|---|---|---|
+| dobry bot z poziomem 2 ulepszeń (Wojmir) | cel 63–78% | 25/32 (78%) |
+| początkujący bez Chaty: wygrane / średni czas runu | 1/32, 3:31 | 0/32, 3:04 |
+
+Średnio wróciło do poziomu sprzed zmiany, ale nie dla każdej postaci tak samo: Bogumił i Dobrosława są
+o ok. 5 wygranych na 32 trudniejsi niż przedtem, Jagna o 4 łatwiejsza (rozrzut przy 32 runach to ok. ±3).
+Ogólne mnożniki nie wyrównają tego osobno dla postaci. Początkujący ginie ok. 30 s wcześniej, nadal
+w przedziale 2–3 minut z pierwotnego celu.
+
+Sprawdzone w grze (`scripts/verify/coins.mjs`, bezgłowy Chrome): elita zabita 18 m od stojącego
+bohatera, pięć monet doleciało samo, +10 złota, nic nie zostało na ziemi, konsola bez błędów.
+Zrzut: `docs/screenshots/12-monety-leca.png`.
+
+Review Codexem (`codex exec review --uncommitted`): bez uwag; testy i typy przechodzą, zbudowany `dist/` zgadza się ze źródłem.

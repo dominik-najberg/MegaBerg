@@ -368,6 +368,28 @@ describe('symulacja runu', () => {
     expect(coins).toBeGreaterThanOrEqual(10);
   });
 
+  it('monety z zabitego wroga same lecą do bohatera i trafiają do sakiewki', () => {
+    const w = new World(map, { seed: 4 });
+    w.spawner.disabled = true;
+    w.time = COIN_EARLY_TIME * 2;
+    const p = w.player;
+    const i = w.spawnEnemy(ENEMY_INDEX.utopiec as number, p.x + 30, p.z, true);
+    w.damageEnemy(i, 1e9, -1, 0, 0, 0, null);
+    const k = w.pickups;
+    for (let c = 0; c < k.n; c++) if (k.alive[c] && k.kind[c] === PickupKind.Coin) expect(k.mag[c]).toBe(1);
+    const before = w.gold;
+    // bohater stoi w miejscu
+    for (let t = 0; t < 180 && !w.dead; t++) {
+      p.invuln = 1;
+      w.step(DT, emptyInput());
+      w.events.clear();
+    }
+    let left = 0;
+    for (let c = 0; c < k.n; c++) if (k.alive[c] && k.kind[c] === PickupKind.Coin) left++;
+    expect(left).toBe(0);
+    expect(w.gold - before).toBeGreaterThanOrEqual(10);
+  });
+
   it('podpowiedź o skrzyni pojawia się raz, gdy starcza złota na pierwszą', () => {
     const w = new World(map, { seed: 4 });
     w.spawner.disabled = true;

@@ -43,12 +43,12 @@ export const ELITE_HP_MUL = 8;
 /** Enemy health multiplier at run time t (seconds). */
 export function enemyHpMul(t: number): number {
   const m = t / 60;
-  return 1 + Math.pow(m, 1.55) * 0.33;
+  return 1 + Math.pow(m, 1.55) * 0.37;
 }
 
 /** Enemy damage multiplier at run time t (seconds). */
 export function enemyDamageMul(t: number): number {
-  return 1 + (t / RUN_LENGTH) * 0.8;
+  return 1 + (t / RUN_LENGTH) * 1.3;
 }
 
 /** Wave phase active at time t. */
