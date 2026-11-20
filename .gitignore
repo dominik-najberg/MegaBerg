@@ -5,3 +5,5 @@ node_modules/
 concepts/zrzuty/
 # propozycje obrazów z edytora konceptów: duże pliki, lokalne
 concepts/propozycje/
+# klucze API (WAVESPEED=… dla edytora konceptów)
+.env

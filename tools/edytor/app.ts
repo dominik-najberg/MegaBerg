@@ -1,6 +1,6 @@
 // Concept editor frontend: pick references from concepts/, describe what should come out,
-// and let the dev server run Codex to produce proposal images. Talks to tools/edytor/plugin.ts.
-import type { Batch, LibraryRef, ProposalItem } from './plugin';
+// and let the dev server produce proposal images with Codex or WaveSpeed models. Talks to tools/edytor/plugin.ts.
+import type { Batch, Engine, LibraryRef, ProposalItem } from './plugin';
 
 const API = '/__edytor';
 
@@ -8,9 +8,14 @@ interface ServerState {
   refs: LibraryRef[];
   batches: Batch[];
   codex: boolean;
+  wavespeed: boolean;
+  engines: Engine[];
   formats: Record<string, string>;
-  limits: { refs: number; variants: number };
+  resolutions: string[];
+  limits: { refs: number; variants: number; items: number };
 }
+
+type Mode = 'koncept' | 'skorka';
 
 interface Idea {
   title: string;
@@ -47,6 +52,34 @@ const CHARACTER_PRESETS: Idea[] = [
     title: 'Więcej charakteru',
     prompt:
       'Ta sama postać z wyrazistszą twarzą i gestem: pokaż jej charakter w pozie i mimice, nie zmieniając stroju ani palety. Kadr do pasa, ciemne tło boru.',
+  },
+];
+
+/** Reskins of an existing model: the server adds the rule that the shape and pose stay as they are. */
+const SKIN_PRESETS: Idea[] = [
+  {
+    title: 'Zimowa',
+    prompt: 'Skórka zimowa „Szczodre Gody”: szron na krawędziach, białe futro, lodowy błękit i srebro, sople i śnieg zamiast dotychczasowych ozdób.',
+  },
+  {
+    title: 'Noc Kupały',
+    prompt: 'Skórka „Noc Kupały”: wianek z ziół i kwiatu paproci, soczysta zieleń, żar ognisk i świetliki, lniane tkaniny z czerwonym haftem.',
+  },
+  {
+    title: 'Dożynkowa',
+    prompt: 'Skórka dożynkowa: słoma i kłosy zbóż, ciepłe złoto i miód, czerwone wstążki, wieniec żniwny jako ozdoba.',
+  },
+  {
+    title: 'Dziady',
+    prompt: 'Skórka „Dziady”: upiorna, blada poświata, popiół i sadza, zimne zielone ogniki, strzępy płótna, puste świecące oczy.',
+  },
+  {
+    title: 'Bursztynowa',
+    prompt: 'Skórka bursztynowa: ciało i ozdoby z półprzezroczystego bursztynu i ciemnego złota, drobne inkluzje, ciepły wewnętrzny blask.',
+  },
+  {
+    title: 'Nawia',
+    prompt: 'Skórka „Nawia”: głęboka czerń i fiolet zaświatów, srebrne runy świecące na krawędziach, dym zamiast futra, zimne światło księżyca.',
   },
 ];
 
@@ -122,7 +155,18 @@ const PRESETS: Record<string, Idea[]> = {
 
 // -------------------------------------------------------------------- state
 
-let state: ServerState = { refs: [], batches: [], codex: true, formats: {}, limits: { refs: 4, variants: 4 } };
+let state: ServerState = {
+  refs: [],
+  batches: [],
+  codex: true,
+  wavespeed: false,
+  engines: [],
+  formats: {},
+  resolutions: [],
+  limits: { refs: 4, variants: 4, items: 12 },
+};
+let mode: Mode = 'koncept';
+let engines: string[] = ['codex'];
 let selected: string[] = [];
 let tab = 'wszystko';
 let search = '';
@@ -134,6 +178,7 @@ let submitting = false;
 let lightbox: { images: Array<{ src: string; caption: string }>; title: string } | null = null;
 let lastLibraryKey = '';
 let lastResultsKey = '';
+let lastEnginesKey = '';
 
 // -------------------------------------------------------------------- dom helpers
 
@@ -185,6 +230,11 @@ const promptEl = h('textarea', { placeholder: 'Co ma powstać? Np. „dopracowan
 const chipsEl = h('div', { class: 'chips' });
 const variantsEl = h('select');
 const formatEl = h('select');
+const resolutionEl = h('select', { title: 'Dotyczy modeli WaveSpeed' });
+const modeEl = h('div', { class: 'chips' });
+const enginesEl = h('div', { class: 'chips' });
+const costEl = h('span', { class: 'hint' });
+const toolbarEl = h('div', { class: 'toolbar' });
 const styleEl = h('input', { type: 'checkbox', checked: true });
 const generateEl = h('button', { class: 'primary' }, 'Generuj propozycje');
 const formErrorEl = h('span', { class: 'error' });
@@ -196,7 +246,7 @@ document.getElementById('app')!.append(
     'header',
     {},
     h('h1', {}, 'Edytor konceptów'),
-    h('span', { class: 'sub' }, 'referencje z concepts/ → propozycje z Codeksa → concepts/propozycje/'),
+    h('span', { class: 'sub' }, 'referencje z concepts/ → propozycje z Codeksa i WaveSpeed → concepts/propozycje/'),
     statusEl,
   ),
   h(
@@ -216,24 +266,28 @@ document.getElementById('app')!.append(
         { class: 'scroll' },
         h('div', { class: 'head', style: 'padding-left:0' } as never, h('h2', {}, 'Zlecenie')),
         h('div', { class: 'field', style: 'margin-top:0' } as never, h('span', { class: 'name' }, 'Referencje'), refsEl),
+        h('div', { class: 'field' }, h('span', { class: 'name' }, 'Cel'), modeEl),
         h('div', { class: 'field' }, h('span', { class: 'name' }, 'Podpowiedzi'), chipsEl),
         h('div', { class: 'field' }, h('span', { class: 'name' }, 'Opis'), promptEl),
+        h('div', { class: 'field' }, h('span', { class: 'name' }, 'Modele'), enginesEl),
         h(
           'div',
           { class: 'field options' },
-          h('label', { class: 'row' }, 'Propozycji', variantsEl),
+          h('label', { class: 'row' }, 'Propozycji na model', variantsEl),
           h('label', { class: 'row' }, 'Format', formatEl),
+          h('label', { class: 'row' }, 'Rozdzielczość', resolutionEl),
           h('label', { class: 'row' }, styleEl, 'Trzymaj styl gry'),
         ),
-        h('div', { class: 'actions' }, generateEl, formErrorEl),
+        h('div', { class: 'actions' }, generateEl, costEl),
+        h('div', { class: 'actions', style: 'margin-top:6px' } as never, formErrorEl),
         h(
           'p',
           { class: 'hint' },
-          'Każda propozycja to osobne uruchomienie Codeksa (zwykle 1–2 minuty) i idzie na konto, na które zalogowany jest `codex`. Skrót: Ctrl+Enter.',
+          'Codex rysuje 1–2 minuty na koncie, na które zalogowany jest `codex`. Modele WaveSpeed są płatne z klucza w .env, a referencje są wysyłane na serwery WaveSpeed. Skrót: Ctrl+Enter.',
         ),
       ),
     ),
-    h('section', { class: 'results' }, h('div', { class: 'head' }, h('h2', {}, 'Propozycje')), h('div', { class: 'scroll' }, resultsEl)),
+    h('section', { class: 'results' }, h('div', { class: 'head' }, h('h2', {}, 'Propozycje'), toolbarEl), h('div', { class: 'scroll' }, resultsEl)),
   ),
   lightboxHost,
 );
@@ -250,21 +304,34 @@ function saveDraft(): void {
   try {
     sessionStorage.setItem(
       DRAFT_KEY,
-      JSON.stringify({ selected, tab, prompt: promptEl.value, variants: variantsEl.value, format: formatEl.value, keepStyle: styleEl.checked }),
+      JSON.stringify({
+        selected,
+        tab,
+        mode,
+        engines,
+        prompt: promptEl.value,
+        variants: variantsEl.value,
+        format: formatEl.value,
+        resolution: resolutionEl.value,
+        keepStyle: styleEl.checked,
+      }),
     );
   } catch {
     // Storage can be unavailable; the form then simply starts empty.
   }
 }
 
-function loadDraft(): { variants?: string; format?: string } {
+function loadDraft(): { variants?: string; format?: string; resolution?: string } {
   try {
     const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) ?? '{}') as Record<string, unknown>;
     if (Array.isArray(draft.selected)) selected = draft.selected.map(String).slice(0, 4);
     if (typeof draft.tab === 'string' && TABS.some(([id]) => id === draft.tab)) tab = draft.tab;
     if (typeof draft.prompt === 'string') promptEl.value = draft.prompt;
     if (typeof draft.keepStyle === 'boolean') styleEl.checked = draft.keepStyle;
-    return { variants: typeof draft.variants === 'string' ? draft.variants : undefined, format: typeof draft.format === 'string' ? draft.format : undefined };
+    if (draft.mode === 'skorka') mode = 'skorka';
+    if (Array.isArray(draft.engines)) engines = draft.engines.map(String);
+    const text = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
+    return { variants: text(draft.variants), format: text(draft.format), resolution: text(draft.resolution) };
   } catch {
     return {};
   }
@@ -348,7 +415,7 @@ function toggleRef(id: string): void {
 function renderForm(): void {
   refsEl.replaceChildren(
     ...(selected.length === 0
-      ? [h('div', { class: 'empty' }, 'Wybierz z biblioteki do 4 obrazów. Bez referencji Codex narysuje obraz z samego opisu.')]
+      ? [h('div', { class: 'empty' }, 'Wybierz z biblioteki do 4 obrazów. Bez referencji rysuje tylko Codex, z samego opisu; modele WaveSpeed przerabiają obraz wejściowy.')]
       : selected.map((id) =>
           h(
             'div',
@@ -364,9 +431,45 @@ function renderForm(): void {
         )),
   );
 
+  modeEl.replaceChildren(
+    ...(
+      [
+        ['koncept', 'Koncept', 'Dowolny obraz koncepcyjny na podstawie referencji'],
+        ['skorka', 'Skórka', 'Nowy wygląd istniejącego modelu: bryła, poza i kadr zostają, zmieniają się kolory, materiały i dodatki'],
+      ] as Array<[Mode, string, string]>
+    ).map(([id, label, title]) =>
+      h('button', { class: mode === id ? 'on' : '', title, onclick: () => ((mode = id), renderForm()) }, label),
+    ),
+  );
+
+  enginesEl.replaceChildren(
+    ...state.engines.map((e) => {
+      const price = e.price[resolutionEl.value || '1k'];
+      return h(
+        'button',
+        {
+          class: engines.includes(e.id) ? 'on' : '',
+          disabled: !e.available,
+          title: !e.available
+            ? e.lane === 'codex'
+              ? 'Nie znaleziono polecenia `codex` w PATH'
+              : 'Brak klucza: dopisz WAVESPEED=… do pliku .env'
+            : e.lane === 'codex'
+              ? 'Lokalny Codex CLI, na koncie ChatGPT'
+              : `WaveSpeed: ${e.id}`,
+          onclick: () => {
+            engines = engines.includes(e.id) ? engines.filter((id) => id !== e.id) : [...engines, e.id];
+            renderForm();
+          },
+        },
+        e.label + (price ? ` · $${price.toFixed(3)}` : ''),
+      );
+    }),
+  );
+
   const group = selected.length > 0 ? refGroup(selected[0]!) : 'brak';
-  const presets = PRESETS[group] ?? PRESETS.koncepty!;
-  const key = selected.join('|');
+  const presets = mode === 'skorka' ? SKIN_PRESETS : (PRESETS[group] ?? PRESETS.koncepty!);
+  const key = mode + '|' + selected.join('|');
   const fresh = ideasFor === key ? ideas : [];
   chipsEl.replaceChildren(
     ...presets.map((p) => h('button', { title: p.prompt, onclick: () => usePrompt(p.prompt) }, p.title)),
@@ -379,9 +482,27 @@ function renderForm(): void {
   );
 
   saveDraft();
-  generateEl.disabled = submitting || !state.codex;
-  generateEl.textContent = submitting ? 'Wysyłam…' : 'Generuj propozycje';
+  const chosen = chosenEngines();
+  const count = chosen.length * Number(variantsEl.value || 1);
+  const paid = chosen.filter((e) => e.lane === 'wavespeed');
+  const cost = paid.reduce(
+    (sum, e) => sum + ((e.price[resolutionEl.value || '1k'] ?? 0) + e.extraRef * Math.max(0, selected.length - 1)) * Number(variantsEl.value || 1),
+    0,
+  );
+  generateEl.disabled = submitting || count === 0 || count > state.limits.items;
+  generateEl.textContent = submitting ? 'Wysyłam…' : mode === 'skorka' ? 'Generuj skórki' : 'Generuj propozycje';
+  costEl.textContent =
+    count === 0
+      ? 'Wybierz co najmniej jeden model.'
+      : count > state.limits.items
+        ? `Za dużo naraz: najwyżej ${state.limits.items} obrazów w serii.`
+        : `${count} ${count === 1 ? 'obraz' : count < 5 ? 'obrazy' : 'obrazów'}` + (paid.length > 0 ? ` · WaveSpeed około $${cost.toFixed(2)} (cennik orientacyjny)` : '');
   formErrorEl.textContent = formError;
+}
+
+/** Engines picked in the form that the server can actually run right now. */
+function chosenEngines(): Engine[] {
+  return state.engines.filter((e) => e.available && engines.includes(e.id));
 }
 
 function usePrompt(text: string): void {
@@ -391,12 +512,12 @@ function usePrompt(text: string): void {
 }
 
 async function askIdeas(): Promise<void> {
-  const key = selected.join('|');
+  const key = mode + '|' + selected.join('|');
   ideasBusy = true;
   formError = '';
   renderForm();
   try {
-    const res = await api<{ ideas: Idea[] }>('/ideas', { refs: selected, hint: promptEl.value });
+    const res = await api<{ ideas: Idea[] }>('/ideas', { refs: selected, hint: promptEl.value, mode });
     ideas = res.ideas;
     ideasFor = key;
   } catch (err) {
@@ -418,7 +539,10 @@ async function generate(): Promise<void> {
       prompt: promptEl.value,
       variants: Number(variantsEl.value),
       format: formatEl.value,
+      resolution: resolutionEl.value,
       keepStyle: styleEl.checked,
+      mode,
+      engines: chosenEngines().map((e) => e.id),
     });
     await refresh();
   } catch (err) {
@@ -433,7 +557,8 @@ generateEl.onclick = () => void generate();
 promptEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) void generate();
 });
-for (const el of [promptEl, variantsEl, formatEl, styleEl]) el.addEventListener('input', saveDraft);
+promptEl.addEventListener('input', saveDraft);
+for (const el of [variantsEl, formatEl, resolutionEl, styleEl]) el.addEventListener('input', renderForm);
 searchEl.oninput = () => {
   search = searchEl.value;
   renderLibrary();
@@ -446,7 +571,48 @@ function elapsed(item: ProposalItem): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+function engineLabel(item: ProposalItem): string {
+  const id = item.engine ?? 'codex';
+  return state.engines.find((e) => e.id === id)?.label ?? id;
+}
+
+/** Finished proposals a bulk delete would remove: failed ones, or everything finished without a star. */
+function removable(batches: Batch[], scope: 'failed' | 'unstarred'): number {
+  return batches.reduce(
+    (sum, b) => sum + b.items.filter((i) => i.status === 'error' || (scope === 'unstarred' && i.status === 'done' && !i.starred)).length,
+    0,
+  );
+}
+
+async function cleanup(scope: 'failed' | 'unstarred', batch?: Batch): Promise<void> {
+  const count = removable(batch ? [batch] : state.batches, scope);
+  if (count === 0) return;
+  const what = scope === 'failed' ? 'nieudane propozycje' : 'propozycje bez gwiazdki (razem z nieudanymi)';
+  const where = batch ? 'z tej serii' : 'ze wszystkich serii';
+  if (!confirm(`Usunąć ${what} ${where}? Zniknie ${count} pozycji razem z plikami na dysku. Tego nie da się cofnąć.`)) return;
+  await mutate('/cleanup', { scope, batch: batch?.id });
+}
+
+function renderToolbar(): void {
+  const failed = removable(state.batches, 'failed');
+  const unstarred = removable(state.batches, 'unstarred');
+  const total = state.batches.reduce((sum, b) => sum + b.items.length, 0);
+  const buttons: HTMLElement[] = [h('span', { class: 'hint' }, total === 0 ? '' : `${state.batches.length} serii · ${total} propozycji`)];
+  if (failed > 0) buttons.push(h('button', { class: 'small danger', onclick: () => void cleanup('failed') }, `Usuń nieudane (${failed})`));
+  if (unstarred > 0) {
+    buttons.push(
+      h(
+        'button',
+        { class: 'small danger', title: 'Zostają tylko propozycje z gwiazdką i te, które jeszcze się rysują', onclick: () => void cleanup('unstarred') },
+        `Usuń bez gwiazdki (${unstarred})`,
+      ),
+    );
+  }
+  toolbarEl.replaceChildren(...buttons);
+}
+
 function renderResults(): void {
+  renderToolbar();
   if (state.batches.length === 0) {
     resultsEl.replaceChildren(
       h('div', { class: 'empty-state' }, 'Tu pojawią się wygenerowane propozycje. Wybierz referencję, kliknij podpowiedź i „Generuj propozycje”.'),
@@ -459,6 +625,8 @@ function renderResults(): void {
 function renderBatch(batch: Batch): HTMLElement {
   const busy = batch.items.some((i) => i.status === 'queued' || i.status === 'running');
   const act = (action: string): void => void mutate('/batch', { batch: batch.id, action });
+  const unstarred = removable([batch], 'unstarred');
+  const kept = batch.items.length - unstarred;
   return h(
     'div',
     { class: 'batch' },
@@ -473,7 +641,7 @@ function renderBatch(batch: Batch): HTMLElement {
         h(
           'div',
           { class: 'when' },
-          `${new Date(batch.created).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${state.formats[batch.format] ?? batch.format} · concepts/propozycje/${batch.id}/`,
+          `${batch.mode === 'skorka' ? 'skórka · ' : ''}${new Date(batch.created).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${state.formats[batch.format] ?? batch.format} · concepts/propozycje/${batch.id}/`,
         ),
       ),
       h(
@@ -481,15 +649,22 @@ function renderBatch(batch: Batch): HTMLElement {
         { class: 'tools' },
         h('button', { class: 'small', title: 'Wczytaj opis i referencje do formularza', onclick: () => reuse(batch) }, 'Użyj ponownie'),
         busy && h('button', { class: 'small', onclick: () => act('cancel') }, 'Anuluj'),
+        unstarred > 0 &&
+          kept > 0 &&
+          h(
+            'button',
+            { class: 'small danger', title: 'Usuwa z tej serii wszystko, co skończone i bez gwiazdki', onclick: () => void cleanup('unstarred', batch) },
+            `Usuń bez gwiazdki (${unstarred})`,
+          ),
         h(
           'button',
           {
-            class: 'small',
+            class: 'small danger',
             onclick: () => {
-              if (confirm('Usunąć całą serię razem z plikami? Tego nie da się cofnąć.')) act('delete');
+              if (confirm(`Usunąć całą serię (${batch.items.length} propozycji) razem z plikami? Tego nie da się cofnąć.`)) act('delete');
             },
           },
-          'Usuń',
+          'Usuń serię',
         ),
       ),
     ),
@@ -511,22 +686,31 @@ function renderItem(batch: Batch, item: ProposalItem): HTMLElement {
           { class: 'wait' },
           item.status === 'error'
             ? h('div', { class: 'error' }, item.error ?? 'Nie udało się.')
-            : h('div', {}, h('div', { class: 'spinner' }), item.status === 'queued' ? 'W kolejce' : `Codex rysuje… ${elapsed(item)}`),
+            : h('div', {}, h('div', { class: 'spinner' }), item.status === 'queued' ? 'W kolejce' : `${engineLabel(item)} rysuje… ${elapsed(item)}`),
         ),
       ),
       h(
         'div',
         { class: 'bar' },
+        h('span', { class: 'engine' }, engineLabel(item)),
         item.status === 'error' && h('button', { class: 'small', onclick: () => act('retry') }, 'Ponów'),
-        h('button', { class: 'small', onclick: () => act('delete') }, item.status === 'error' ? 'Usuń' : 'Anuluj'),
+        h('button', { class: 'small' + (item.status === 'error' ? ' danger' : ''), onclick: () => act('delete') }, item.status === 'error' ? 'Usuń' : 'Anuluj'),
       ),
     );
   }
   const id = `propozycje/${batch.id}/${item.file}`;
   const isRef = selected.includes(id);
+  const remove = (): void => {
+    const star = item.starred ? ' Ma gwiazdkę.' : '';
+    if (confirm(`Usunąć propozycję ${item.n} (${engineLabel(item)}) z dysku?${star} Tego nie da się cofnąć.`)) {
+      selected = selected.filter((s) => s !== id);
+      act('delete');
+    }
+  };
   return h(
     'div',
     { class: 'item' + (item.starred ? ' starred' : '') },
+    h('button', { class: 'del', title: 'Usuń tę propozycję', ariaLabel: `Usuń propozycję ${item.n}`, onclick: remove }, '×'),
     h(
       'button',
       {
@@ -535,7 +719,7 @@ function renderItem(batch: Batch, item: ProposalItem): HTMLElement {
         onclick: () =>
           openLightbox(batch.prompt, [
             ...batch.refs.map((r) => ({ src: img(r), caption: 'referencja: ' + refLabel(r) })),
-            { src: img(id), caption: `propozycja ${item.n}` + (item.note ? ` · ${item.note}` : '') },
+            { src: img(id), caption: `propozycja ${item.n} · ${engineLabel(item)}` + (item.note ? ` · ${item.note}` : '') },
           ]),
       },
       h('img', { src: img(id), loading: 'lazy', alt: `Propozycja ${item.n}` }),
@@ -549,21 +733,9 @@ function renderItem(batch: Batch, item: ProposalItem): HTMLElement {
         item.starred ? '★ Ulubiona' : '☆ Ulubiona',
       ),
       h('button', { class: 'small' + (isRef ? ' on' : ''), title: 'Pracuj dalej na tym obrazie', onclick: () => toggleRefFromResult(id) }, isRef ? 'Referencja ✓' : 'Jako referencja'),
-      h(
-        'button',
-        {
-          class: 'small',
-          onclick: () => {
-            if (confirm('Usunąć tę propozycję z dysku? Tego nie da się cofnąć.')) {
-              selected = selected.filter((s) => s !== id);
-              act('delete');
-            }
-          },
-        },
-        'Usuń',
-      ),
+      h('button', { class: 'small danger', onclick: remove }, 'Usuń'),
     ),
-    item.note && h('div', { class: 'note' }, item.note),
+    h('div', { class: 'note' }, h('span', { class: 'engine' }, engineLabel(item)), item.note ? ' ' + item.note : ''),
   );
 }
 
@@ -578,7 +750,11 @@ function reuse(batch: Batch): void {
   promptEl.value = batch.prompt;
   formatEl.value = batch.format;
   styleEl.checked = batch.keepStyle;
-  variantsEl.value = String(Math.min(state.limits.variants, Math.max(1, batch.items.length)));
+  mode = batch.mode === 'skorka' ? 'skorka' : 'koncept';
+  const used = [...new Set(batch.items.map((i) => i.engine ?? 'codex'))];
+  if (used.length > 0) engines = used;
+  if (batch.resolution && state.resolutions.includes(batch.resolution)) resolutionEl.value = batch.resolution;
+  variantsEl.value = String(Math.min(state.limits.variants, Math.max(1, Math.ceil(batch.items.length / Math.max(1, used.length)))));
   renderLibrary();
   renderForm();
   promptEl.focus();
@@ -646,7 +822,7 @@ window.addEventListener('keydown', (e) => {
 function renderResultsIfChanged(): void {
   const busy = state.batches.some((b) => b.items.some((i) => i.status === 'running'));
   // While something is running the cards show a ticking clock, so they are redrawn every poll.
-  const key = JSON.stringify(state.batches) + selected.join('|') + (busy ? Date.now() : '');
+  const key = JSON.stringify(state.batches) + selected.join('|') + state.engines.length + (busy ? Date.now() : '');
   if (key === lastResultsKey) return;
   lastResultsKey = key;
   renderResults();
@@ -655,8 +831,9 @@ function renderResultsIfChanged(): void {
 async function refresh(): Promise<void> {
   try {
     state = await api<ServerState>('/state');
-    statusEl.textContent = state.codex ? 'Codex gotowy' : 'Nie znaleziono polecenia `codex` w PATH';
-    statusEl.className = 'status' + (state.codex ? '' : ' bad');
+    statusEl.textContent =
+      (state.codex ? 'Codex gotowy' : 'brak polecenia `codex` w PATH') + ' · ' + (state.wavespeed ? 'WaveSpeed gotowy' : 'brak klucza WAVESPEED w .env');
+    statusEl.className = 'status' + (state.codex || state.wavespeed ? '' : ' bad');
   } catch {
     statusEl.textContent = 'Brak połączenia z serwerem deweloperskim';
     statusEl.className = 'status bad';
@@ -677,8 +854,13 @@ async function refresh(): Promise<void> {
     renderLibrary();
   }
   renderResultsIfChanged();
+  const enginesKey = JSON.stringify(state.engines);
+  if (enginesKey !== lastEnginesKey && formatEl.options.length > 0) renderForm();
+  lastEnginesKey = enginesKey;
   if (formatEl.options.length === 0) {
     for (const [id, label] of Object.entries(state.formats)) formatEl.append(h('option', { value: id }, label));
+    for (const r of state.resolutions) resolutionEl.append(h('option', { value: r }, r));
+    if (draft.resolution && state.resolutions.includes(draft.resolution)) resolutionEl.value = draft.resolution;
     for (let n = 1; n <= state.limits.variants; n++) variantsEl.append(h('option', { value: String(n) }, String(n)));
     variantsEl.value = draft.variants && Number(draft.variants) <= state.limits.variants ? draft.variants : '2';
     if (draft.format && draft.format in state.formats) formatEl.value = draft.format;
