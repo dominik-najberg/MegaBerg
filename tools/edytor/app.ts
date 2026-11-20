@@ -803,7 +803,14 @@ function renderLightbox(): void {
       h(
         'div',
         { class: 'stage' },
-        ...lightbox.images.map((i) => h('figure', {}, h('img', { src: i.src, alt: i.caption }), h('figcaption', {}, i.caption))),
+        ...lightbox.images.map((i, n, all) =>
+          h(
+            'figure',
+            { class: all.length > 1 && n === all.length - 1 ? 'result' : '' },
+            h('div', { class: 'frame' }, h('img', { src: i.src, alt: i.caption })),
+            h('figcaption', {}, i.caption),
+          ),
+        ),
       ),
     ),
   );

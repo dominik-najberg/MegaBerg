@@ -490,7 +490,8 @@ label.row {
   inset: 0;
   background: rgba(5, 3, 10, 0.94);
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   z-index: 10;
 }
 
@@ -509,28 +510,62 @@ label.row {
   white-space: nowrap;
 }
 
+/*
+ * Tracks are minmax(0, 1fr), never plain 1fr: an image's automatic minimum size would otherwise
+ * stretch its column to the picture's full width and push the other pictures off the screen.
+ */
 .lightbox .stage {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   gap: 12px;
   padding: 0 16px 16px;
   min-height: 0;
+  min-width: 0;
 }
 
 .lightbox figure {
   margin: 0;
   min-height: 0;
+  min-width: 0;
   display: grid;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
+/* The picture is taken out of the flow, so its own size can never drive the layout. */
+.lightbox figure .frame {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+}
+
 .lightbox figure img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  min-height: 0;
   object-fit: contain;
+}
+
+.lightbox figure.result figcaption {
+  color: var(--gold-hi);
+}
+
+/* A window taller than wide: pictures go one under another, the proposal on top. */
+@media (max-aspect-ratio: 1/1) {
+  .lightbox .stage {
+    grid-auto-flow: row;
+    grid-auto-rows: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .lightbox figure.result {
+    order: -1;
+  }
 }
 
 .lightbox figcaption {

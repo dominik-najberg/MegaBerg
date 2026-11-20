@@ -183,6 +183,8 @@ class Editor {
    */
   private attempts = new WeakMap<ProposalItem, number>();
   private ideasBusy = false;
+  /** Modification time of each batch's meta.json as this server last read or wrote it. */
+  private stamps = new Map<string, number>();
 
   constructor(
     private readonly root: string,
@@ -196,31 +198,67 @@ class Editor {
 
   /** Batches from earlier sessions. Anything still marked as in progress died with the old server. */
   private load(): void {
-    if (!existsSync(this.outDir)) return;
-    for (const dir of readdirSync(this.outDir, { withFileTypes: true })) {
-      if (!dir.isDirectory()) continue;
-      const metaPath = join(this.outDir, dir.name, 'meta.json');
-      if (!existsSync(metaPath)) continue;
-      try {
-        const batch = JSON.parse(readFileSync(metaPath, 'utf8')) as Batch;
-        if (batch.id !== dir.name || !Array.isArray(batch.items)) continue;
-        for (const item of batch.items) {
-          if (item.status === 'queued' || item.status === 'running') {
-            item.status = 'error';
-            item.error = 'Przerwane: serwer został zatrzymany w trakcie generowania.';
-          }
+    this.sync(true);
+  }
+
+  /**
+   * Brings the in-memory list in line with concepts/propozycje/ on disk. More than one dev server can
+   * serve the editor (the game's own and a preview), and each has to see the batches the other made:
+   * a batch this server is not working on is re-read whenever its meta.json changes, and dropped when
+   * its directory is gone.
+   */
+  private sync(initial = false): void {
+    const seen = new Set<string>();
+    if (existsSync(this.outDir)) {
+      for (const dir of readdirSync(this.outDir, { withFileTypes: true })) {
+        if (!dir.isDirectory()) continue;
+        const metaPath = join(this.outDir, dir.name, 'meta.json');
+        let stamp: number;
+        try {
+          stamp = statSync(metaPath).mtimeMs;
+        } catch {
+          continue;
         }
-        this.batches.set(batch.id, batch);
-      } catch {
-        // A broken meta.json is skipped, the images stay on disk.
+        seen.add(dir.name);
+        const known = this.batches.get(dir.name);
+        if (known && (this.stamps.get(dir.name) === stamp || this.working(known))) continue;
+        try {
+          const batch = JSON.parse(readFileSync(metaPath, 'utf8')) as Batch;
+          if (batch.id !== dir.name || !Array.isArray(batch.items)) continue;
+          if (initial) {
+            for (const item of batch.items) {
+              if (item.status === 'queued' || item.status === 'running') {
+                item.status = 'error';
+                item.error = 'Przerwane: serwer został zatrzymany w trakcie generowania.';
+              }
+            }
+          }
+          this.batches.set(batch.id, batch);
+          this.stamps.set(batch.id, stamp);
+        } catch {
+          // A broken or half-written meta.json is skipped, the images stay on disk.
+        }
       }
     }
+    for (const batch of [...this.batches.values()]) {
+      if (!seen.has(batch.id) && !this.working(batch)) {
+        this.batches.delete(batch.id);
+        this.stamps.delete(batch.id);
+      }
+    }
+  }
+
+  /** Whether this server has a run or a queued job for the batch. */
+  private working(batch: Batch): boolean {
+    return batch.items.some((i) => this.running.has(i)) || this.queue.some((job) => job.batch === batch);
   }
 
   private save(batch: Batch): void {
     const dir = join(this.outDir, batch.id);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'meta.json'), JSON.stringify(batch, null, 2) + '\n');
+    const metaPath = join(dir, 'meta.json');
+    writeFileSync(metaPath, JSON.stringify(batch, null, 2) + '\n');
+    this.stamps.set(batch.id, statSync(metaPath).mtimeMs);
   }
 
   // ---------------------------------------------------------------- library
@@ -260,6 +298,7 @@ class Editor {
     const route = url.pathname.slice(API.length);
     try {
       if (req.method === 'GET' && route === '/state') {
+        this.sync();
         send(res, 200, {
           refs: this.library(),
           batches: [...this.batches.values()].sort((a, b) => b.created - a.created),
@@ -718,6 +757,7 @@ class Editor {
   // ---------------------------------------------------------------- actions
 
   private find(input: Record<string, unknown>): { batch: Batch; item?: ProposalItem } {
+    this.sync();
     const batch = this.batches.get(String(input.batch ?? ''));
     if (!batch) throw new HttpError(404, 'Nie ma takiej serii.');
     const item = batch.items.find((i) => i.n === Number(input.n));
@@ -797,6 +837,7 @@ class Editor {
   private cleanup(input: Record<string, unknown>): { deleted: number } {
     const scope = input.scope;
     if (scope !== 'failed' && scope !== 'unstarred') throw new HttpError(400, 'Nieznany zakres sprzątania.');
+    this.sync();
     const only = input.batch === undefined ? undefined : String(input.batch);
     if (only !== undefined && !this.batches.has(only)) throw new HttpError(404, 'Nie ma takiej serii.');
     let deleted = 0;
