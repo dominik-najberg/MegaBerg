@@ -6,7 +6,7 @@ import type { CharacterDef } from './data/types';
 import { RUN_LENGTH } from './data/waves';
 import { Bot, type BotSkill } from './debug/bot';
 import { DebugTools } from './debug/tools';
-import { applyRun, buyShopItem, isUnlocked, unlockedPassiveIds, unlockedWeaponIds } from './meta/progress';
+import { applyRun, buyShopItem, buySilver, isUnlocked, runPool, togglePool, type PoolKind } from './meta/progress';
 import { browserStorage, SaveStore } from './meta/save';
 import { Gfx, type Quality } from './render/gfx';
 import { emptyInput } from './sim/player';
@@ -57,6 +57,7 @@ export class Game {
         start: (id) => this.startRun(id),
         choose: (i) => this.choose(i),
         reroll: () => this.reroll(),
+        banish: (i: number) => this.banish(i),
         cancelChoice: () => this.cancelChoice(),
         resume: () => this.resume(),
         restart: () => this.startRun(this.character.id),
@@ -64,6 +65,7 @@ export class Game {
         toMenu: () => this.toMenu(),
         endless: () => this.continueEndless(),
         buy: (id) => this.buy(id),
+        toggle: (kind, id) => this.toggle(kind, id),
         option: (k, v) => this.setOption(k, v),
         resetSave: () => this.resetSave(),
         uiSound: (k) => this.audio.ui(k),
@@ -109,8 +111,9 @@ export class Game {
       seed: (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
       character: this.character,
       shop: save.shop,
-      weaponPool: unlockedWeaponIds(save),
-      passivePool: unlockedPassiveIds(save),
+      weaponPool: runPool(save, 'w'),
+      passivePool: runPool(save, 'b'),
+      itemPool: runPool(save, 'i'),
     });
     if (idle) w.spawner.disabled = true;
     return w;
@@ -167,7 +170,7 @@ export class Game {
   /** Ends the run now (death, victory or "Zakończ run") and shows the summary. */
   finishRun(): void {
     const summary = this.world.summary();
-    const res = this.bankRun() ?? { goldBanked: 0, goldBonus: 0, unlocked: [] };
+    const res = this.bankRun() ?? { goldBanked: 0, goldBonus: 0, silver: 0, unlocked: [] };
     this.state = 'end';
     this.input.exitLock();
     this.ui.setHud(false);
@@ -219,6 +222,16 @@ export class Game {
     }
   }
 
+  private banish(i: number): void {
+    if (this.state !== 'choice') return;
+    if (this.world.banish(i)) {
+      this.audio.ui('click');
+      this.ui.showChoice(this.world);
+    } else {
+      this.audio.ui('deny');
+    }
+  }
+
   private cancelChoice(): void {
     if (this.state !== 'choice') return;
     this.world.cancelChoice();
@@ -238,8 +251,21 @@ export class Game {
 
   // ------------------------------------------------------------------ meta
 
+  private toggle(kind: PoolKind, id: string): void {
+    if (togglePool(this.store.data, kind, id)) {
+      this.store.save();
+      this.audio.ui('click');
+    } else {
+      this.audio.ui('deny');
+    }
+    this.ui.save = this.store.data;
+    this.ui.showShop();
+  }
+
   private buy(id: string): void {
-    if (buyShopItem(this.store.data, id)) {
+    // Skarbiec ('item:<id>', 'toggler') is paid in silver, Chata upgrades in gold.
+    const ok = id === 'toggler' || id.startsWith('item:') ? buySilver(this.store.data, id) : buyShopItem(this.store.data, id);
+    if (ok) {
       this.store.save();
       this.audio.ui('buy');
     } else {

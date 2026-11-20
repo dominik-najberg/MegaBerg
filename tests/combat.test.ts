@@ -6,15 +6,15 @@ import { BLESSINGS } from '../src/data/blessings';
 import { BASE_STATS, type CharacterDef, type PassiveDef } from '../src/data/types';
 import { enemyDamageMul, enemyHpMul, phaseAt, RUN_LENGTH, WAVE_EVENTS, WAVES, xpForLevel } from '../src/data/waves';
 import { ENEMY_INDEX } from '../src/data/enemies';
-import { computeStats, critChance, damageAfterArmor, weaponDamage } from '../src/sim/stats';
+import { computeStats, damageAfterArmor, weaponDamage } from '../src/sim/stats';
 import { GameMap } from '../src/sim/terrain';
 import { World } from '../src/sim/world';
 
 describe('obrażenia', () => {
   it('mnoży bazę przez bonus broni, statystykę obrażeń i trafienie krytyczne', () => {
-    expect(weaponDamage(10, 0, 1, false)).toBe(10);
-    expect(weaponDamage(10, 0.3, 1.5, false)).toBeCloseTo(19.5);
-    expect(weaponDamage(10, 0.3, 1.5, true)).toBeCloseTo(39);
+    expect(weaponDamage(10, 0, 1, 1)).toBe(10);
+    expect(weaponDamage(10, 0.3, 1.5, 1)).toBeCloseTo(19.5);
+    expect(weaponDamage(10, 0.3, 1.5, 2)).toBeCloseTo(39);
   });
 
   it('pancerz odejmuje stałą wartość, ale cios zawsze zadaje co najmniej 1', () => {
@@ -23,19 +23,12 @@ describe('obrażenia', () => {
     expect(damageAfterArmor(10, 0)).toBe(10);
   });
 
-  it('szansa na krytyk rośnie ze szczęściem i ma górny limit', () => {
-    expect(critChance(0)).toBeCloseTo(0.05);
-    expect(critChance(1)).toBeCloseTo(0.15);
-    expect(critChance(100)).toBe(0.6);
-    expect(critChance(-5)).toBe(0);
-  });
-
   it('trafienie zabija wroga, liczy zabójstwo i zostawia bursztyn', () => {
     const w = new World(new GameMap(), { seed: 5 });
     w.spawner.disabled = true;
     const i = w.spawnEnemy(ENEMY_INDEX.chochlik as number, 3, 3);
     const hp = w.enemies.hp[i] as number;
-    w.crit = 0;
+    w.stats.critChance = 0;
     w.damageEnemy(i, hp - 1, 0, 1, 0, 0, null);
     expect(w.enemies.alive[i]).toBe(1);
     expect(w.kills).toBe(0);
@@ -77,8 +70,8 @@ describe('statystyki', () => {
     const wojmir = CHARACTER_BY_ID.wojmir as CharacterDef;
     const pas = PASSIVE_BY_ID.pas as PassiveDef;
     const s = computeStats(wojmir, { sila: 2, zdrowie: 1 }, [{ def: pas, level: 2, power: 2.3 }], [BLESSINGS[0]!]);
-    // 1 + 0.10 (postać) + 2*0.06 (Kuźnia) + 0.1*2.3 (pas) + 0.15 (Perun)
-    expect(s.damage).toBeCloseTo(1.6);
+    // 1 + 0.10 (postać) + 2*0.06 (Kuźnia) + pas*2.3 (księga) + 0.15 (Perun)
+    expect(s.damage).toBeCloseTo(1 + 0.1 + 0.12 + pas.perLevel * 2.3 + 0.15);
     expect(s.maxHp).toBe(112);
     expect(s.moveSpeed).toBeCloseTo(1.05);
   });
@@ -88,9 +81,10 @@ describe('statystyki', () => {
   });
 
   it('ogranicza skrajne wartości (odnowienie, szybkość, zdrowie)', () => {
-    const krzesiwo = PASSIVE_BY_ID.krzesiwo as PassiveDef;
-    const s = computeStats(null, {}, [{ def: krzesiwo, level: 5, power: 50 }], []);
+    const s = computeStats(null, { tempo: 5 }, [], [{ id: 'x', god: '', name: '', desc: '', icon: '', color: 0, mods: [{ stat: 'cooldown', add: -5 }] }]);
     expect(s.cooldown).toBe(0.35);
+    const krzesiwo = PASSIVE_BY_ID.krzesiwo as PassiveDef;
+    expect(computeStats(null, {}, [{ def: krzesiwo, level: 20, power: 200 }], []).attackSpeed).toBe(5);
     const low = computeStats({ ...(CHARACTER_BY_ID.wojmir as CharacterDef), mods: [{ stat: 'maxHp', add: -500 }] }, {}, [], []);
     expect(low.maxHp).toBe(20);
   });
@@ -133,11 +127,12 @@ describe('skalowanie', () => {
     expect(before.alive[1]).toBeGreaterThanOrEqual(300);
   });
 
-  it('każde zdarzenie fali wskazuje istniejącego wroga, a boss przychodzi w 10. minucie', () => {
+  it('każde zdarzenie fali wskazuje istniejącego wroga, a portal Leszego otwiera się w 10. minucie', () => {
     for (const ev of WAVE_EVENTS) expect(ENEMY_INDEX[ev.enemy]).toBeDefined();
     for (const p of WAVES) for (const id of Object.keys(p.mix)) expect(ENEMY_INDEX[id]).toBeDefined();
-    const boss = WAVE_EVENTS.find((e) => e.kind === 'boss');
-    expect(boss?.at).toBe(600);
+    const portal = WAVE_EVENTS.find((e) => e.kind === 'portal');
+    expect(portal?.at).toBe(600);
+    expect(WAVE_EVENTS.some((e) => e.kind === 'boss')).toBe(false);
     expect(WAVE_EVENTS.filter((e) => e.kind === 'mini').length).toBeGreaterThanOrEqual(2);
   });
 

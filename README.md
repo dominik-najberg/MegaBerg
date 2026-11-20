@@ -76,13 +76,35 @@ Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2
 ## Jak się w to gra
 
 - **Run trwa 10 minut.** Wrogowie nadchodzą falami według minutnika, coraz gęściej i coraz twardsi.
-  W 2:30 i 7:30 przylatuje Baba Jaga, w 5:00 wychodzi Południca, w 10:00 budzi się **Leszy**.
-  Pokonanie Leszego to zwycięstwo; potem można grać dalej w trybie nieskończonym.
+  W 2:30 i 7:30 przylatuje Baba Jaga, w 5:00 wychodzi Południca.
+- **Portal Leszego:** w 10:00 25–40 m od bohatera otwiera się zielony portal (widać go też na mapie).
+  Przytrzymaj przy nim `E`, a wyjdzie **Leszy**, a bór wokół ucichnie. Pokonanie Leszego to zwycięstwo;
+  potem można grać dalej w trybie nieskończonym. Kto zwleka, wchodzi w **nadgodzinę** (horda gęstnieje),
+  a od 12:00 w **falę końcową**: co 30 s wrogowie mają o 25% więcej zdrowia i obrażeń, aż wezwiesz Leszego.
 - **Bursztyny** wypadające z wrogów to doświadczenie. Awans zatrzymuje grę i daje wybór **1 z 3 kart**:
-  nowa broń, poziom broni albo pasywka. Karty mają rzadkość (zwykła, rzadka, epicka, legendarna):
-  lepsza rzadkość to silniejszy bonus. Maksymalnie 6 broni i 6 pasywek.
-- **Ewolucje:** broń na 5. poziomie plus odpowiednia pasywka zamienia się w potężniejszą formę
-  (przez skrzynię albo legendarną kartę przy awansie).
+  nowa broń, poziom broni albo **księga**. Karty mają rzadkość (zwykła, rzadka, epicka, legendarna):
+  lepsza rzadkość to silniejszy bonus. Maksymalnie **4 bronie** i 5 ksiąg.
+- **Księgi** podnoszą jedną statystykę na poziom (np. +10% obrażeń, +12% szybkości ataku, +4% szansy
+  na krytyk, +15 tarczy) i mają **do 20 poziomów**; tylko Księga Krzemieni (pocisk) i Księga Żar-ptaka
+  (skok) kończą się na 2. Na start dostępnych jest 12 ksiąg, kolejne odblokowują osiągnięcia związane ze
+  stylem gry (np. Księga Sokoła na 8. poziomie odblokowuje Księgę Wilczego Kła).
+- **Księga Czarnoboga** (po pokonaniu Leszego) to klątwa: więcej, silniejszych i szybszych wrogów,
+  ale też więcej doświadczenia i złota.
+- **Poziomy broni:** do **15. poziomu**. Poziomy 2–5 dają stałe ulepszenie danej broni (np. +1 sierp),
+  a każda karta broni losuje też **linie statów** tej broni (obrażenia, szybkość ataku, obszar, czas działania,
+  prędkość, odrzut, przebicie, odbicia, przeskoki pioruna). Liczba linii zależy od rzadkości: zwykła 1,
+  rzadka 2, epicka i legendarna 3 (silniejsze). Nowa broń dostaje jedną linię mniej.
+- **Ewolucje:** broń od 5. poziomu plus odpowiednia księga zamienia się w potężniejszą formę
+  (przez skrzynię albo legendarną kartę przy awansie). Ewolucja zachowuje poziom i wylosowane linie
+  i dalej rośnie do 15. poziomu.
+- **Skarby:** skrzynia daje gotową ewolucję, a jeśli jej nie ma, **skarb** (przedmiot). Skarbów nie
+  ogranicza liczba miejsc, kolejne kopie się sumują, a każdy ma rzadkość (szczęście daje rzadsze).
+  Na start w skrzyniach jest 12 skarbów, pięć kolejnych odblokowuje Skarbiec (niżej). Jedne dodają staty (Róg tura: +8% obrażeń, Pazur rysia: krytyk), inne działają przy trafieniu albo
+  zmieniają zasady: Kamień Peruna (piorun przy trafieniu), Krzemień iskrzący (wybuch), Kosa Marzanny
+  (natychmiastowe zabicie zwykłego wroga), Czaszka upiora (obrażenia za zabójstwa), Mech pustelnika
+  (obrażenia, gdy stoisz), Skrzydlate łapcie (szybkość ruchu w szybkość ataku), Sakiewka wędrowca
+  (złoto za marsz), Dzban kowala (wyższy poziom broni), Kowadło Swaroga (więcej linii na kartach broni),
+  Lustro wiedźmy (dłuższa nietykalność).
 - **Skrzynie** na mapie otwiera się za złote monety. Pierwsza kosztuje 10 złota, każda kolejna jest
   wyraźnie droższa (10, 18, 31, 54, 94…). **Trzy skrzynie stoją 20–25 m od startu** i widać je na mapie
   od pierwszej sekundy. Elitarni wrogowie (świecą na złoto) i mini-bossy zostawiają darmową skrzynię
@@ -96,8 +118,17 @@ Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2
 - **Monety** wypadają z wrogów: na początku runu z mniej więcej co czwartego, po 3,5 minuty z co
   szesnastego. **Monety z zabitych wrogów zbierają się same**: od razu lecą do bohatera, nie trzeba
   po nie wracać. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
-- **Kapliczki:** podejdź, przytrzymaj `E` i wybierz błogosławieństwo Peruna (obrażenia), Swaroga (ogień),
-  Welesa (szczęście i złoto) albo Mokoszy (leczenie). Każdy bóg błogosławi najwyżej dwa razy na run.
+- **Kapliczki** (cztery rodzaje, kolor poświaty i znacznika na mapie mówi, który):
+  - **bogów** (ciepłe światło): przytrzymaj `E` i wybierz błogosławieństwo Peruna (obrażenia), Swaroga (ogień),
+    Welesa (szczęście i złoto) albo Mokoszy (leczenie); każdy bóg błogosławi najwyżej dwa razy na run,
+  - **święty krąg** (niebieski): stój w kręgu 5 sekund (poza nim ładunek powoli spada) i wybierz 1 z 3 darów,
+  - **bursztynowa** (pomarańczowa): przytrzymaj `E`, a bursztyny z całej mapy polecą do ciebie,
+  - **ołtarz chciwości** (fioletowy): skarb i 30 złota za +15% klątwy do końca runu.
+- **Klątwa** (ołtarz chciwości, Księga Czarnoboga): więcej, twardszych i szybszych wrogów, ale też więcej
+  doświadczenia i złota.
+- **Przelosowanie i wygnanie:** na karcie awansu `R` przelosowuje karty: najpierw za darmo (Kości wróżebne
+  z Chaty), potem za złoto (8, 12, 18…). „Wygnaj” pod nową bronią lub księgą usuwa ją z puli do końca runu
+  (12, 18, 27… złota) i dobiera inną kartę.
 - **Leczenie:** z wrogów rzadko wypada chleb ze smalcem albo dzban miodu. Jedzenie czeka na ziemi,
   dopóki masz pełne zdrowie.
 - **Czerwone kręgi na ziemi** to zapowiedź ataku obszarowego. Wyjdź z kręgu albo podskocz w chwili uderzenia
@@ -111,48 +142,61 @@ Wymaga zalogowanego polecenia `codex` w `PATH`. Jedna propozycja to zwykle 1–2
   ścieżki, wodę, drzewa oraz znaczniki: kapliczki (jasne, dopóki mają błogosławieństwo), zamknięte skrzynie,
   ogniska i odkryte miejsca z nazwami. Bossa widać na mapie zawsze, także w nieodkrytej części.
 - **Złoto**, które zostanie w sakiewce na koniec runu, trafia do **Chaty**: stałe ulepszenia między runami.
-- **Osiągnięcia** odblokowują postacie, bronie i pasywki albo dają złoto.
+- **Srebro** zdobywa każdy run (minuta przetrwania = 1, każde 400 zabitych = 1, zwycięstwo = 10; więcej
+  ze Srebrną skrzynką z Chaty). Wydaje się je w **Skarbcu** w Chacie: pięć skarbów (Skrzydlate łapcie,
+  Lustro wiedźmy, Dzban kowala, Kowadło Swaroga, Kosa Marzanny) najpierw odblokowuje osiągnięcie związane
+  ze stylem gry, a potem kupuje się je za srebro i od tej chwili wypadają ze skrzyń.
+- **Rózga wróżbity** (30 srebra) pozwala wyłączać w Chacie bronie, księgi i skarby, których nie chcesz
+  widzieć na kartach i w skrzyniach (zawsze zostaje co najmniej 4 bronie, 6 ksiąg i 6 skarbów).
+- **Osiągnięcia** odblokowują postacie, bronie i księgi albo dają złoto.
 
 Pierwszy run ma prawo skończyć się porażką. Po kilku ulepszeniach z Chaty Leszy jest do pokonania.
 
 ## Treść
 
-**Bronie (10 bazowych, każda z 5 poziomami, i 10 ewolucji)**
+**Bronie (10 bazowych i 10 ewolucji; 5 poziomów stałych, dalej linie statów do 15.)**
 
-| Broń | Działanie | Pasywka do ewolucji | Ewolucja |
+| Broń | Działanie | Księga do ewolucji | Ewolucja |
 |---|---|---|---|
-| Złote sierpy | krążą wokół bohatera | Pas siłacza | Żniwa Mokoszy |
-| Ogień Swarożyca | kule ognia do najbliższego wroga | Krzesiwo | Krąg Swaroga |
-| Grom Peruna | piorun w losowych wrogów | Dębowy amulet | Gniew Gromowładcy |
-| Ciupaga | szeroki zamach z odrzutem | Lipowa tarcza | Topór Peruna |
-| Wianek z ziół | aura raniąca i spowalniająca | Garnek miodu | Kwiat Paproci |
-| Proca z krzemieniami | odbijające się pociski | Sakwa z krzemieniami | Gwiezdny Grad |
-| Kruki Welesa | przyzwane kruki | Podkowa | Stado Welesa |
-| Lodowy oddech Marzanny | stożek mrozu | Onuce szybkobiegacza | Zamieć Marzanny |
-| Włócznia Świętowita | przebija szereg wrogów | Serce tura | Cztery Oblicza |
-| Garniec dziegciu | płonąca kałuża smoły | Bursztynowy magnes | Smocza Smoła |
+| Złote sierpy | krążą wokół bohatera | Księga Siłacza | Żniwa Mokoszy |
+| Ogień Swarożyca | kule ognia do najbliższego wroga | Księga Krzesiwa | Krąg Swaroga |
+| Grom Peruna | piorun w losowych wrogów | Księga Dębu | Gniew Gromowładcy |
+| Ciupaga | szeroki zamach z odrzutem | Księga Lipowej Tarczy | Topór Peruna |
+| Wianek z ziół | aura raniąca i spowalniająca | Księga Pszczół | Kwiat Paproci |
+| Proca z krzemieniami | odbijające się pociski | Księga Krzemieni | Gwiezdny Grad |
+| Kruki Welesa | przyzwane kruki | Księga Welesa | Stado Welesa |
+| Lodowy oddech Marzanny | stożek mrozu | Księga Wędrowca | Zamieć Marzanny |
+| Włócznia Świętowita | przebija szereg wrogów | Księga Tura | Cztery Oblicza |
+| Garniec dziegciu | płonąca kałuża smoły | Księga Bursztynu | Smocza Smoła |
 
-**Pasywki (12):** Pas siłacza (obrażenia), Krzesiwo (szybkość ataku), Dębowy amulet (obszar),
-Onuce szybkobiegacza (ruch), Serce tura (zdrowie), Garnek miodu (regeneracja), Bursztynowy magnes (zbieranie),
-Podkowa (szczęście), Lipowa tarcza (pancerz), Sakwa z krzemieniami (pociski), Pióro Żar-ptaka (skok w powietrzu),
-Zielnik wiedźmy (doświadczenie).
+**Księgi (22, do 20 poziomów):** Siłacza (obrażenia), Krzesiwa (szybkość ataku), Dębu (obszar),
+Wędrowca (ruch), Tura (zdrowie), Pszczół (regeneracja), Bursztynu (zbieranie), Welesa (szczęście),
+Lipowej Tarczy (pancerz), Krzemieni (pociski, 2 poziomy), Zielarki (doświadczenie), Sokoła (szansa na krytyk).
+Odblokowywane osiągnięciami: Żar-ptaka (skok w powietrzu, 2 poziomy), Wilczego Kła (obrażenia krytyczne),
+Czarnoboga (klątwa), Strzygi (kradzież życia), Głogu (ciernie), Mgły (unik), Grodu (tarcza),
+Mokoszy (czas działania), Strzyboga (szybkość pocisków), Dzika (odrzut).
 
 **Wrogowie (8):** chochlik (szybki, słaby), utopiec (wolny, wytrzymały, z bagien), kruk (lata),
 błędny ognik (kamikaze), strzyga (skacze), wilkołak (szarżuje), bies (rzuca pociskami), licho (teleportuje się).
 **Mini-bossy:** Baba Jaga w moździerzu, Południca z kosą. **Boss:** Leszy (3 fazy).
 
-**Postacie (4):** Wojmir (sierpy), Dobrosława (wianek, regeneracja), Bogumił (ciupaga, zdrowie i pancerz),
-Jagna (kruki, szczęście). Trzy ostatnie odblokowuje się osiągnięciami.
+**Postacie (7):** każda ma broń startową, stałe bonusy i **pasywkę rosnącą z poziomem** w runie.
+Wojmir (sierpy; +0,6% obrażeń na poziom), Dobrosława (wianek; regeneracja i zasięg zbierania),
+Bogumił (ciupaga; zdrowie i pancerz), Jagna (kruki; szansa na krytyk), Radogost (proca; obrażenia rosną
+ze złotem w sakiewce), Strzeżymir (włócznia; szybkość ruchu zamienia się w obrażenia), Mszczuj
+(oddech Marzanny; kradzież życia). Wszystkie poza Wojmirem odblokowuje się osiągnięciami; trzy ostatnie
+stylem gry: 400 złota w jednym runie, +60% szybkości ruchu w runie, 300 zdrowia z kradzieży życia w runie.
 
-**Chata:** 13 stałych ulepszeń (obrażenia, zdrowie, szybkość, pancerz, regeneracja, zasięg zbierania,
-szczęście, złoto, doświadczenie, odnowienie, obszar, przelosowania kart, wskrzeszenie).
+**Chata:** 14 stałych ulepszeń za złoto (obrażenia, zdrowie, szybkość, pancerz, regeneracja, zasięg zbierania,
+szczęście, złoto, doświadczenie, odnowienie, obszar, przelosowania kart, srebro, wskrzeszenie), a za srebro
+Skarbiec (5 skarbów) i Rózga wróżbity.
 
 ## Struktura kodu
 
 ```
 src/
   core/      pętla o stałym kroku 60 Hz z interpolacją, wejście, RNG z ziarnem, siatka przestrzenna
-  data/      CAŁA treść gry jako dane: bronie, pasywki, wrogowie, postacie, fale, sklep, osiągnięcia
+  data/      CAŁA treść gry jako dane: bronie, księgi (passives.ts), wrogowie, postacie, fale, sklep, osiągnięcia
   sim/       czysta symulacja (bez Three.js i DOM): świat, gracz, AI, bronie, karty, spawner, pule SoA
   render/    Three.js: niebo, teren (tekstury), scenografia w kafelkach z LOD, bohater, wrogowie
              (InstancedMesh), efekty, cząsteczki, postprocessing (bloom, gradacja barw)

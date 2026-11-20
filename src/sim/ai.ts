@@ -566,8 +566,8 @@ export function updateEnemies(w: World, dt: number): void {
         const top = (e.y[i] as number) + oy + def.height * (e.elite[i] ? 1.35 : 1);
         const feet = p.onGround ? pGround : p.y;
         if (feet < top && feet + p.height > bottom) {
-          w.hurtPlayer((e.dmg[i] as number) * contactMul);
           e.atk[i] = 1.0;
+          w.hurtPlayer((e.dmg[i] as number) * contactMul, i);
         }
       }
     }

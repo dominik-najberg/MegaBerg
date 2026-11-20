@@ -32,6 +32,16 @@ export interface Spot {
   rot: number;
 }
 
+/** god: blessing of a god; circle: stand inside to charge it; amber: pulls every gem; greed: curse for loot. */
+export type ShrineKind = 'god' | 'circle' | 'amber' | 'greed';
+
+/** Kinds of the eight shrines in placement order (six by the trails, two deep in the woods). */
+export const SHRINE_KINDS: ShrineKind[] = ['god', 'circle', 'god', 'amber', 'god', 'circle', 'greed', 'god'];
+
+export interface ShrineSpot extends Spot {
+  kind: ShrineKind;
+}
+
 export type LandmarkKind = 'circle' | 'oak' | 'hut' | 'idol' | 'barrow' | 'lake';
 
 /** A named place worth walking to; shown on the map once discovered. */
@@ -84,7 +94,7 @@ export class GameMap {
   readonly obstacles: Obstacle[] = [];
   readonly puddles: Puddle[] = [];
   readonly bonfires: Spot[] = [];
-  readonly shrines: Spot[] = [];
+  readonly shrines: ShrineSpot[] = [];
   readonly chestSpots: Spot[] = [];
   readonly landmarks: Landmark[] = [];
   /** Trail polylines (centre -> landmark), used to put shrines and fires by the wayside. */
@@ -363,7 +373,7 @@ export class GameMap {
     const addShrine = (x: number, z: number, faceX: number, faceZ: number): boolean => {
       if (!this.free(x, z, 1.2, 3) || this.pathAt(x, z) > 0.2) return false;
       const rot = Math.atan2(faceX - x, faceZ - z);
-      this.shrines.push({ x, z, rot });
+      this.shrines.push({ x, z, rot, kind: SHRINE_KINDS[this.shrines.length] ?? 'god' });
       this.obstacles.push({ x, z, r: 0.9, kind: 'shrine', scale: 1, rot });
       return true;
     };

@@ -14,6 +14,12 @@ export interface Options {
 export interface SaveData {
   version: number;
   gold: number;
+  /** Silver (meta currency, stage 7): earned by every run, spent in the Skarbiec. */
+  silver: number;
+  /** Skarbiec purchases: 'item:<id>' for treasures, 'toggler' for Rózga wróżbity. */
+  bought: string[];
+  /** Ids switched off with Rózga wróżbity: 'w:<weapon>', 'b:<book>', 'i:<item>'. */
+  disabled: string[];
   shop: Record<string, number>;
   achievements: string[];
   stats: {
@@ -42,6 +48,9 @@ export function defaultSave(): SaveData {
   return {
     version: 1,
     gold: 0,
+    silver: 0,
+    bought: [],
+    disabled: [],
     shop: {},
     achievements: [],
     stats: { runs: 0, wins: 0, kills: 0, gold: 0, bestTime: 0, bestLevel: 0 },
@@ -60,6 +69,10 @@ export function sanitizeSave(raw: unknown): SaveData {
   if (!raw || typeof raw !== 'object') return d;
   const r = raw as Record<string, unknown>;
   d.gold = Math.floor(num(r.gold, 0, 0));
+  d.silver = Math.floor(num(r.silver, 0, 0));
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  d.bought = strings(r.bought);
+  d.disabled = strings(r.disabled);
   if (r.shop && typeof r.shop === 'object') {
     for (const [k, v] of Object.entries(r.shop as Record<string, unknown>)) {
       const lvl = Math.floor(num(v, 0, 0, 99));

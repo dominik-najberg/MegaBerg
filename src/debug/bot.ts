@@ -9,6 +9,9 @@ export type BotSkill = 'novice' | 'good';
  * 'good' kites, dodges telegraphs, collects loot and uses chests/shrines;
  * 'novice' mostly chases gems and reacts late, like a first-time player.
  */
+/** How much less the bot values a niche book (only when it does not unlock an evolution). */
+const BOOK_PENALTY: Record<string, number> = { sokol: 1, dzik: 2.5, strzybog: 2, glog: 1.5, mokosz: 1, mgla: 0.5, magnes: 0.5, pioro: 1.5 };
+
 export class Bot {
   readonly input: InputState = emptyInput();
   private wanderA = 0;
@@ -160,7 +163,8 @@ export class Bot {
     if (good) {
       if (threat < 0.25) {
         for (const s of w.shrines) {
-          if (s.used) continue;
+          // The careful player leaves the greed altar alone, as with the curse book.
+          if (s.used || s.kind === 'greed') continue;
           const dx = s.x - p.x;
           const dz = s.z - p.z;
           const d = Math.hypot(dx, dz);
@@ -170,6 +174,21 @@ export class Bot {
           ax += (dx / d) * wgt;
           az += (dz / d) * wgt;
         }
+      }
+    }
+
+    // Leszy's portal: the run is decided there, so it outweighs everything but immediate danger.
+    const po = w.portal;
+    if (po && !po.used) {
+      const dx = po.x - p.x;
+      const dz = po.z - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 2.8) inp.interact = true;
+      if (d > 0.01) {
+        // The longer the portal waits, the harder the bot pushes toward it (overtime only gets worse).
+        const wgt = (good ? 3 : 1.5) * (1 + Math.max(0, w.time - 600) / 20);
+        ax += (dx / d) * wgt;
+        az += (dz / d) * wgt;
       }
     }
 
@@ -255,8 +274,12 @@ export class Bot {
         if (card.isNew) return (w.weapons.length < 4 ? 9 : 5) + rar;
         return 7 + rar;
       case 'passive': {
+        // A careful player leaves the curse book alone; the bot measures the game without it.
+        if (card.id === 'czarnobog') return 1.5;
         const synergy = w.weapons.some((x) => x.def.evolution?.passive === card.id);
-        return (card.isNew ? (synergy ? 7.5 : 5.5) : 6) + rar;
+        // Niche books are worth less to a general build than damage, speed and survival.
+        const niche = synergy ? 0 : (BOOK_PENALTY[card.id] ?? 0) + (card.id === 'kiel' && w.stats.critChance < 0.15 ? 2 : 0);
+        return (card.isNew ? (synergy ? 7.5 : 5.5) : 6) + rar - niche;
       }
       case 'heal':
         return w.player.hp < w.stats.maxHp * 0.5 ? 4 : 1;

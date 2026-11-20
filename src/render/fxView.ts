@@ -222,6 +222,7 @@ function beamMaterial(color: number): THREE.MeshBasicMaterial {
 }
 
 const MAGNET_COLOR = 0xff5060;
+const PORTAL_COLOR = 0x5aff8a;
 const GIFT_COLOR = 0x7dffd0;
 const MAX_MAGNETS = 16;
 
@@ -295,6 +296,9 @@ export class FxView {
   private readonly fireflyMat: THREE.ShaderMaterial;
   private emitAcc = 0;
   private time = 0;
+  /** Leszy's portal: a slowly turning ring of leaves and light in a wide green pillar. */
+  private readonly portalView: THREE.Group;
+  private readonly portalRing: THREE.Mesh;
 
   constructor(
     private readonly map: GameMap,
@@ -302,6 +306,21 @@ export class FxView {
     private readonly glowTex: THREE.Texture,
   ) {
     const g = this.group;
+    // --- Leszy's portal
+    this.portalView = new THREE.Group();
+    this.portalRing = new THREE.Mesh(
+      new THREE.TorusGeometry(2.1, 0.22, 10, 40),
+      new THREE.MeshBasicMaterial({ color: PORTAL_COLOR, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false }),
+    );
+    this.portalRing.position.y = 2.6;
+    const portalBeam = new THREE.Mesh(this.beamGeo, beamMaterial(PORTAL_COLOR));
+    portalBeam.scale.set(5, 1.4, 5);
+    const portalGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: PORTAL_COLOR, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.55, fog: false }));
+    portalGlow.position.y = 2.6;
+    portalGlow.scale.setScalar(7);
+    this.portalView.add(this.portalRing, portalBeam, portalGlow);
+    this.portalView.visible = false;
+    g.add(this.portalView);
     // --- loot
     this.gems = instanced(new THREE.OctahedronGeometry(0.2, 0), new THREE.MeshLambertMaterial({ emissive: 0xc86a08, flatShading: true }), MAX_GEMS, true);
     this.coins = instanced(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 8), new THREE.MeshLambertMaterial({ color: 0xffd040, emissive: 0x9a6a00, flatShading: true }), MAX_PICKUPS);
@@ -551,6 +570,13 @@ void main() {
         sp.burst(e.x, e.y + 1.1, e.z, 14, 6, 0.4, 0.34, 0xff3a2a, 8, 1);
         this.addShake(0.75);
         break;
+      case Ev.Dodge:
+        sp.burst(e.x, e.y + 1.1, e.z, 8, 4, 0.3, 0.26, 0xe8f4ff, 0, 2);
+        break;
+      case Ev.ShieldHit:
+        sp.burst(e.x, e.y + 1.1, e.z, 12, 5, 0.35, 0.3, 0x7ec8ff, 4, 1);
+        this.addShake(0.3);
+        break;
       case Ev.Lightning:
         this.bolt(e.a, e.b, e.c, e.x, e.y, e.z, e.d);
         sp.burst(e.x, e.y + 0.4, e.z, 10, 8, 0.3, 0.3, 0xd8ecff, 10, 3);
@@ -593,7 +619,7 @@ void main() {
       }
       case Ev.Bonus: {
         // The bonus drops out of thin air: a ring on the ground and sparks rising along the pillar.
-        const color = e.a ? GIFT_COLOR : MAGNET_COLOR;
+        const color = e.a === 2 ? PORTAL_COLOR : e.a ? GIFT_COLOR : MAGNET_COLOR;
         this.boom(e.x, e.y + 0.8, e.z, 4.5, color, 0.6);
         for (let k = 0; k < 36; k++) {
           const a = Math.random() * TAU;
@@ -801,6 +827,16 @@ void main() {
     const emit = this.emitAcc >= 1 / 45;
     if (emit) this.emitAcc = 0;
 
+    // Leszy's portal
+    const po = world.portal;
+    this.portalView.visible = po !== null && !po.used;
+    if (po && !po.used) {
+      this.portalView.position.set(po.x, po.y, po.z);
+      this.portalRing.rotation.y = time * 0.8;
+      this.portalRing.scale.setScalar(1 + Math.sin(time * 3) * 0.05 + po.progress * 0.25);
+      if (emit) sp.emit(po.x + (Math.random() - 0.5) * 3, po.y + Math.random() * 1.5, po.z + (Math.random() - 0.5) * 3, 0, 2 + Math.random() * 3, 0, 1.2, 0.3, PORTAL_COLOR, 0, 0.4);
+    }
+
     // gems
     {
       const g = world.gems;
@@ -915,7 +951,7 @@ void main() {
         if (world.dead) break;
         const kind = w.def.kind;
         if (kind === 'orbit' && w.active > 0) {
-          const fade = w.stats.cooldown <= 0 ? 1 : Math.min(1, w.active * 4, (w.stats.duration - w.active) * 5 + 0.2);
+          const fade = w.stats.cooldown <= 0 ? 1 : Math.min(1, w.active * 4, (w.span - w.active) * 5 + 0.2);
           const size = (w.def.evolved ? 1.35 : 1.1) * (0.4 + 0.6 * fade);
           for (let k = 0; k < w.fxCount && nb < 40; k++) {
             const a = w.angle + (k * TAU) / w.fxCount;

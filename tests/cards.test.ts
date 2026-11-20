@@ -3,8 +3,10 @@ import { Rng } from '../src/core/rng';
 import { PASSIVE_BY_ID, PASSIVES } from '../src/data/passives';
 import { RARITIES, RARITY_ORDER, rarityWeights, rollRarity } from '../src/data/rarity';
 import type { Rarity } from '../src/data/types';
-import { WEAPON_BY_ID, weaponMaxLevel, WEAPONS, weaponStatsAt } from '../src/data/weapons';
-import { applyCard, canEvolve, chestCards, levelUpCards, type Card } from '../src/sim/cards';
+import { WEAPON_BY_ID, weaponMaxLevel, weaponMilestones, WEAPONS, weaponStatsAt } from '../src/data/weapons';
+import { ITEM_BY_ID, ITEMS } from '../src/data/items';
+import { EVOLVE_LEVEL } from '../src/data/weaponLines';
+import { applyCard, canEvolve, chestCards, levelUpCards, rollLines, type Card } from '../src/sim/cards';
 import { GameMap } from '../src/sim/terrain';
 import { MAX_PASSIVES, MAX_WEAPONS, World } from '../src/sim/world';
 
@@ -95,24 +97,44 @@ describe('losowanie kart awansu', () => {
     expect(w.gold).toBe(gold + 30);
   });
 
-  it('karta broni podnosi poziom i dodaje bonus z rzadkości', () => {
+  it('karta broni podnosi poziom i dodaje wylosowane linie statów', () => {
     const w = world(5);
     const def = WEAPON_BY_ID.sierpy!;
-    applyCard(w, { kind: 'weapon', id: 'sierpy', rarity: 'legendary', isNew: false, level: 2, name: '', text: '', icon: '', color: 0 });
+    const lines = [
+      { stat: 'damage' as const, value: 0.156 },
+      { stat: 'area' as const, value: 0.13 },
+    ];
+    applyCard(w, { kind: 'weapon', id: 'sierpy', rarity: 'legendary', isNew: false, level: 2, name: '', text: '', icon: '', color: 0, lines });
     const inst = w.findWeapon('sierpy')!;
     expect(inst.level).toBe(2);
-    expect(inst.bonus).toBeCloseTo(RARITIES.legendary.weaponBonus);
-    expect(inst.stats).toEqual(weaponStatsAt(def, 2));
-    for (let i = 0; i < 10; i++) applyCard(w, { kind: 'weapon', id: 'sierpy', rarity: 'common', isNew: false, level: 0, name: '', text: '', icon: '', color: 0 });
+    expect(inst.bonus).toBeCloseTo(0.156);
+    expect(inst.stats.area).toBeCloseTo(weaponStatsAt(def, 2).area * 1.13);
+    expect(inst.stats.count).toBe(weaponStatsAt(def, 2).count);
+    for (let i = 0; i < 30; i++) applyCard(w, { kind: 'weapon', id: 'sierpy', rarity: 'common', isNew: false, level: 0, name: '', text: '', icon: '', color: 0 });
     expect(inst.level).toBe(weaponMaxLevel(def));
+    expect(weaponMaxLevel(def)).toBe(15);
+  });
+
+  it('linie na karcie są różne, ich liczba zależy od rzadkości, a nowa broń ma jedną mniej', () => {
+    const w = world(5);
+    for (const [rarity, n] of [['common', 1], ['rare', 2], ['epic', 3], ['legendary', 3]] as const) {
+      const lines = rollLines(w.rng, WEAPON_BY_ID.ogien!, 2, rarity, false);
+      expect(lines).toHaveLength(n);
+      expect(new Set(lines.map((l) => l.stat)).size).toBe(n);
+      expect(rollLines(w.rng, WEAPON_BY_ID.ogien!, 1, rarity, true)).toHaveLength(n - 1);
+    }
+    // Wieczna orbita (Żniwa Mokoszy) nie losuje szybkości ataku ani czasu działania.
+    for (let i = 0; i < 50; i++) {
+      for (const l of rollLines(w.rng, WEAPON_BY_ID.zniwa!, 6, 'legendary', false)) expect(['attackSpeed', 'duration']).not.toContain(l.stat);
+    }
   });
 
   it('karta pasywki skaluje bonus rzadkością i odświeża statystyki', () => {
     const w = world(6);
     const base = w.stats.damage;
     applyCard(w, { kind: 'passive', id: 'pas', rarity: 'epic', isNew: true, level: 1, name: '', text: '', icon: '', color: 0 });
-    expect(w.stats.damage).toBeCloseTo(base + 0.1 * RARITIES.epic.power);
-    // Pasywki całkowitoliczbowe ignorują rzadkość.
+    expect(w.stats.damage).toBeCloseTo(base + PASSIVE_BY_ID.pas!.perLevel * RARITIES.epic.power);
+    // Księgi całkowitoliczbowe ignorują rzadkość.
     applyCard(w, { kind: 'passive', id: 'sakwa', rarity: 'legendary', isNew: true, level: 1, name: '', text: '', icon: '', color: 0 });
     expect(w.stats.projectiles).toBe(1);
   });
@@ -121,8 +143,9 @@ describe('losowanie kart awansu', () => {
     const w = world(6);
     w.player.hp = 50;
     applyCard(w, { kind: 'passive', id: 'serce', rarity: 'common', isNew: true, level: 1, name: '', text: '', icon: '', color: 0 });
-    expect(w.stats.maxHp).toBe(120);
-    expect(w.player.hp).toBe(70);
+    const gain = PASSIVE_BY_ID.serce!.perLevel;
+    expect(w.stats.maxHp).toBe(100 + gain);
+    expect(w.player.hp).toBe(50 + gain);
   });
 });
 
@@ -140,11 +163,15 @@ describe('ewolucje', () => {
     expect(passives.size).toBe(evos.length);
   });
 
-  it('wymaga maksymalnego poziomu broni i posiadania pasywki', () => {
+  it('wymaga poziomu ewolucji broni i posiadania księgi', () => {
     const w = world(7);
     const inst = w.findWeapon('sierpy')!;
     expect(canEvolve(w, inst)).toBe(false);
-    inst.level = weaponMaxLevel(inst.def);
+    inst.level = EVOLVE_LEVEL - 1;
+    w.passives.push({ def: PASSIVE_BY_ID.pas!, level: 1, power: 1 });
+    expect(canEvolve(w, inst)).toBe(false);
+    w.passives.length = 0;
+    inst.level = EVOLVE_LEVEL;
     expect(canEvolve(w, inst)).toBe(false);
     w.passives.push({ def: PASSIVE_BY_ID.pas!, level: 1, power: 1 });
     expect(canEvolve(w, inst)).toBe(true);
@@ -153,7 +180,7 @@ describe('ewolucje', () => {
   it('skrzynia w pierwszej kolejności daje gotową ewolucję, a karta ją wykonuje', () => {
     const w = world(8);
     const inst = w.findWeapon('sierpy')!;
-    inst.level = weaponMaxLevel(inst.def);
+    inst.level = EVOLVE_LEVEL;
     inst.bonus = 0.3;
     inst.dealt = 1234;
     w.passives.push({ def: PASSIVE_BY_ID.pas!, level: 1, power: 1 });
@@ -163,22 +190,31 @@ describe('ewolucje', () => {
     expect(cards[0]!.rarity).toBe('legendary');
     applyCard(w, cards[0]!);
     expect(inst.def.id).toBe('zniwa');
+    expect(inst.level).toBe(EVOLVE_LEVEL);
     expect(inst.slot).toBe(0);
     expect(inst.bonus).toBe(0.3);
     expect(inst.dealt).toBe(1234);
     expect(w.evolved).toBe(1);
-    // Po ewolucji bazowa broń nie wraca do puli, a ewolucja nie jest proponowana ponownie.
+    // Po ewolucji bazowa broń nie wraca do puli, a ewolucja nie jest proponowana ponownie;
+    // ewoluowana broń dalej dostaje poziomy z liniami statów.
+    let evolvedLevels = 0;
     for (let i = 0; i < 100; i++) {
       for (const c of levelUpCards(w, 3)) {
-        expect(c.id === 'sierpy' || c.id === 'zniwa').toBe(false);
+        expect(c.id).not.toBe('sierpy');
+        expect(c.kind).not.toBe('evolve');
+        if (c.id === 'zniwa') {
+          expect(c.isNew).toBe(false);
+          evolvedLevels++;
+        }
       }
     }
+    expect(evolvedLevels).toBeGreaterThan(0);
   });
 
   it('gotowa ewolucja pojawia się także wśród kart awansu jako legendarna', () => {
     const w = world(11);
     const inst = w.findWeapon('sierpy')!;
-    inst.level = weaponMaxLevel(inst.def);
+    inst.level = EVOLVE_LEVEL;
     w.passives.push({ def: PASSIVE_BY_ID.pas!, level: 1, power: 1 });
     let seen = 0;
     for (let i = 0; i < 60; i++) {
@@ -192,23 +228,28 @@ describe('ewolucje', () => {
     expect(seen).toBeGreaterThan(20);
   });
 
-  it('skrzynia bez ewolucji ulepsza coś posiadanego, minimum rzadką kartą', () => {
+  it('skrzynia bez ewolucji daje skarb, a jego rzadkość to rzadkość przedmiotu', () => {
     const w = world(12);
-    for (let i = 0; i < 50; i++) {
+    // Pełna pula (skarby ze Skarbca też), żeby wypadały wszystkie rzadkości.
+    for (const it of ITEMS) w.itemPool.add(it.id);
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
       const c = chestCards(w)[0]!;
-      expect(c.kind).toBe('weapon');
-      expect(c.id).toBe('sierpy');
-      expect(c.rarity).not.toBe('common');
+      expect(c.kind).toBe('item');
+      expect(c.rarity).toBe(ITEM_BY_ID[c.id]!.rarity);
+      seen.add(c.rarity);
     }
+    expect(seen.size).toBe(4);
   });
 });
 
 describe('dane broni', () => {
-  it('każda broń bazowa ma 5 poziomów, a statystyki kumulują się', () => {
+  it('każda broń bazowa ma 5 ręcznych poziomów (dalej linie do 15.), a statystyki kumulują się', () => {
     const base = WEAPONS.filter((w) => !w.evolved);
     expect(base.length).toBeGreaterThanOrEqual(8);
     for (const w of base) {
-      expect(weaponMaxLevel(w)).toBe(5);
+      expect(weaponMilestones(w)).toBe(5);
+      expect(weaponMaxLevel(w)).toBe(15);
       for (const l of w.levels) expect(l.note.length).toBeGreaterThan(0);
     }
     const s = WEAPON_BY_ID.sierpy!;
@@ -224,5 +265,27 @@ describe('dane broni', () => {
     expect(PASSIVES.length).toBeGreaterThanOrEqual(8);
     expect(new Set(PASSIVES.map((p) => p.id)).size).toBe(PASSIVES.length);
     expect(new Set(WEAPONS.map((w) => w.id)).size).toBe(WEAPONS.length);
+  });
+});
+
+describe('linie statów: bez pustych ulepszeń', () => {
+  it('broń strzelająca już najszybciej jak się da nie losuje szybkości ataku', () => {
+    const w = new World(map, { seed: 21 });
+    const inst = w.findWeapon('sierpy')!;
+    inst.level = 8;
+    w.stats.attackSpeed = 5;
+    w.stats.cooldown = 0.35;
+    w.refreshWeapon(inst);
+    w.passivePool.clear();
+    w.weaponPool.clear();
+    let seen = 0;
+    for (let i = 0; i < 80; i++) {
+      for (const c of levelUpCards(w, 3)) {
+        if (c.kind !== 'weapon') continue;
+        seen++;
+        for (const l of c.lines ?? []) expect(l.stat).not.toBe('attackSpeed');
+      }
+    }
+    expect(seen).toBeGreaterThan(50);
   });
 });

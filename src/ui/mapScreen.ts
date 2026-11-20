@@ -28,6 +28,9 @@ function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCo
  * Three layers: `unknown` (dark, hatched parchment), `base` (the complete map, drawn once),
  * `revealed` (base masked by the fog; rebuilt only when the fog changes). Markers are drawn live.
  */
+/** Map marker colours of active shrines by kind (see the aura tints in src/render/props.ts). */
+const SHRINE_MAP_COLOR = { god: '#f4d98a', circle: '#7ec8ff', amber: '#ffb040', greed: '#c070ff' } as const;
+
 export class MapScreen {
   private readonly root: HTMLElement;
   private readonly canvas: HTMLCanvasElement;
@@ -460,12 +463,12 @@ export class MapScreen {
       ctx.fill();
       ctx.stroke();
     }
-    // Shrines: lit while they still have a blessing to give.
+    // Shrines: lit (in the colour of their kind) while they still have something to give.
     for (const s of world.shrines) {
       if (!fog.seen(s.x, s.z)) continue;
       const x = X(s.x);
       const y = X(s.z);
-      ctx.fillStyle = s.used ? '#9a8f7c' : '#f4d98a';
+      ctx.fillStyle = s.used ? '#9a8f7c' : SHRINE_MAP_COLOR[s.kind];
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1.4 * u;
       ctx.beginPath();
@@ -566,6 +569,26 @@ export class MapScreen {
       ctx.stroke();
     }
 
+    // Leszy's portal is felt from afar too.
+    const po = world.portal;
+    if (po && !po.used) {
+      const x = X(po.x);
+      const y = X(po.z);
+      const pulse = 0.5 + 0.5 * Math.sin(this.clock * 4);
+      ctx.strokeStyle = `rgba(60, 220, 110, ${0.8 - pulse * 0.4})`;
+      ctx.lineWidth = 2 * u;
+      ctx.beginPath();
+      ctx.arc(x, y, (8 + pulse * 6) * u, 0, TAU);
+      ctx.stroke();
+      ctx.fillStyle = '#3ad870';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 1.4 * u;
+      ctx.beginPath();
+      ctx.arc(x, y, 5 * u, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+
     // The hero: sight cone along the camera, arrow on top.
     const p = world.player;
     const px = X(p.x);
@@ -616,7 +639,7 @@ export class MapScreen {
     const text = `Odkryto ${pct}% boru  •  miejsca: ${found}/${map.landmarks.length}`;
     if (this.info.dataset.t !== text) {
       this.info.dataset.t = text;
-      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-gift"></i>dar boru</span><span><i class="mk mk-magnet"></i>magnes</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><b>${text}</b>`;
+      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-gift"></i>dar boru</span><span><i class="mk mk-magnet"></i>magnes</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><span><i class="mk mk-portal"></i>portal</span><b>${text}</b>`;
     }
   }
 }

@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { fbm, hash2, TAU } from '../core/math';
 import { Rng } from '../core/rng';
-import { PLAY_RADIUS, type GameMap } from '../sim/terrain';
+import { PLAY_RADIUS, type GameMap, type ShrineKind } from '../sim/terrain';
 import { model, tex, type ModelName } from './assets';
 import { GeoBuilder, normalsUp, propMaterial, propUniforms, windByHeight, writeMatrix } from './geo';
 
 const WHITE = 0xe9e2d0;
 const RED = 0xb3261e;
+
+/** Aura colour of each shrine kind: warm candlelight for gods, blue circle, amber, violet greed. */
+const SHRINE_TINT: Record<ShrineKind, number> = { god: 0xffc670, circle: 0x7ec8ff, amber: 0xffa020, greed: 0xc040ff };
 
 /** Wayside shrine: carved post, little roofed box, embroidered towel, candles. */
 function shrineGeo(): THREE.BufferGeometry {
@@ -454,7 +457,7 @@ export class PropsView {
         g.add(f.group);
         this.flames.push(f);
       }
-      this.addShrineAura(g);
+      this.addShrineAura(g, s.kind);
       this.group.add(g);
       this.shrineFlames.push(g);
       this.sources.push({
@@ -474,15 +477,18 @@ export class PropsView {
    * and a few motes drifting upwards. All of it lives in the candle group, so it goes out together with the
    * candles once the blessing is taken.
    */
-  private addShrineAura(g: THREE.Group): void {
+  private addShrineAura(g: THREE.Group, kind: ShrineKind): void {
+    const tint = SHRINE_TINT[kind];
     const glow = (opacity: number): THREE.SpriteMaterial =>
-      new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffc670, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity, fog: false });
+      new THREE.SpriteMaterial({ map: this.glowTex, color: tint, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity, fog: false });
     const ground = new THREE.Mesh(
       shrineGroundGeo,
-      new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffb860, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3 }),
+      new THREE.MeshBasicMaterial({ map: this.glowTex, color: tint, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: kind === 'circle' ? 0.42 : 0.3 }),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0.22;
+    // A Święty krąg shows how far its circle reaches.
+    if (kind === 'circle') ground.scale.setScalar(CIRCLE_GROUND_SCALE);
     g.add(ground);
     const halo = new THREE.Sprite(glow(0.3));
     halo.position.y = 3.3;
@@ -578,6 +584,8 @@ export class PropsView {
 
 const SHRINE_MOTES = 7;
 const shrineGroundGeo = new THREE.PlaneGeometry(11, 11);
+/** Scale of the ground glow of a Święty krąg, so it covers the 5 m circle (CIRCLE_RADIUS). */
+const CIRCLE_GROUND_SCALE = 1.5;
 
 export function makeGlowTexture(): THREE.Texture {
   const c = document.createElement('canvas');

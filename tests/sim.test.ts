@@ -310,8 +310,9 @@ describe('symulacja runu', () => {
     const inp = emptyInput();
     inp.interact = true;
     const picked: string[] = [];
-    for (let k = 0; k < w.shrines.length; k++) {
-      const s = w.shrines[k]!;
+    const gods = w.shrines.filter((s) => s.kind === 'god');
+    expect(gods.length).toBe(4);
+    for (const s of gods) {
       w.player.x = s.x + 1.5;
       w.player.z = s.z + 1.5;
       for (let i = 0; i < 90 && !w.choice; i++) w.step(DT, inp);
@@ -320,7 +321,7 @@ describe('symulacja runu', () => {
       w.choose(0);
       expect(s.used).toBe(true);
     }
-    expect(w.shrinesUsed).toBe(w.shrines.length);
+    expect(w.shrinesUsed).toBe(gods.length);
     const perun = picked.filter((id) => id === 'perun').length;
     expect(perun).toBe(2);
   });
@@ -578,7 +579,7 @@ describe('dary boru: magnes i darmowa skrzynia', () => {
 
   it('dary nie zmieniają przebiegu fal: ten sam seed daje tych samych wrogów z darami i bez', () => {
     const end = GIFT_FIRST[1] + 10;
-    const run = (bonuses: boolean): string => {
+    const run = (bonuses: boolean): { sig: string; magnets: number } => {
       const w = new World(map, { seed: 9 });
       w.bonuses.disabled = !bonuses;
       const inp = emptyInput();
@@ -592,16 +593,18 @@ describe('dary boru: magnes i darmowa skrzynia', () => {
       // porównanie ma sens tylko wtedy, gdy run naprawdę trwał i oba dary się pojawiły
       expect(w.dead).toBe(false);
       expect(w.damageTaken).toBe(0);
-      const magnet = Array.from(w.pickups.kind.subarray(0, w.pickups.n)).some((kind, i) => w.pickups.alive[i] === 1 && kind === PickupKind.Magnet);
-      expect(magnet).toBe(bonuses);
+      // A kill can also drop a magnet (rarely), so count them: the timed bonus adds exactly one.
+      const magnets = Array.from(w.pickups.kind.subarray(0, w.pickups.n)).filter((kind, i) => w.pickups.alive[i] === 1 && kind === PickupKind.Magnet).length;
       expect(w.chests.some((c) => c.gift)).toBe(bonuses);
       const e = w.enemies;
       let sig = `${e.count}/${w.kills}`;
       for (let i = 0; i < e.n; i++) if (e.alive[i]) sig += `|${e.type[i]}:${e.x[i]!.toFixed(2)}:${e.z[i]!.toFixed(2)}`;
-      return sig;
+      return { sig, magnets };
     };
     const withGifts = run(true);
-    expect(withGifts.split('|').length).toBeGreaterThan(20);
-    expect(withGifts).toBe(run(false));
+    const without = run(false);
+    expect(withGifts.sig.split('|').length).toBeGreaterThan(20);
+    expect(withGifts.sig).toBe(without.sig);
+    expect(withGifts.magnets).toBe(without.magnets + 1);
   });
 });

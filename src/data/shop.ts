@@ -16,6 +16,7 @@ export const SHOP: ShopItemDef[] = [
   { id: 'tempo', name: 'Osełka', desc: 'Krótszy czas odnowienia broni.', icon: 'flint', stat: 'cooldown', perLevel: -0.03, maxLevel: 5, baseCost: 80, costMul: 1.65, fmt: (v) => `-${pct(-v)} odnowienia` },
   { id: 'obszar', name: 'Święty dąb', desc: 'Większy obszar działania broni.', icon: 'amulet', stat: 'area', perLevel: 0.04, maxLevel: 5, baseCost: 60, costMul: 1.6, fmt: (v) => `+${pct(v)} obszaru` },
   { id: 'przelosowanie', name: 'Kości wróżebne', desc: 'Przelosowania kart przy awansie.', icon: 'dice', stat: 'rerolls', perLevel: 1, maxLevel: 3, baseCost: 90, costMul: 1.8, fmt: (v) => `+${Math.round(v)} przelosowanie` },
+  { id: 'srebrnik', name: 'Srebrna skrzynka', desc: 'Więcej srebra z każdego runu.', icon: 'coin', stat: 'silverGain', perLevel: 0.15, maxLevel: 5, baseCost: 70, costMul: 1.6, fmt: (v) => `+${pct(v)} srebra` },
   { id: 'odrodzenie', name: 'Żywa woda', desc: 'Raz na run wskrzesza bohatera z połową zdrowia.', icon: 'water', stat: 'revives', perLevel: 1, maxLevel: 1, baseCost: 450, costMul: 1, fmt: () => '+1 wskrzeszenie' },
 ];
 

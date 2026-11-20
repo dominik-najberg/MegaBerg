@@ -55,6 +55,10 @@ export const Ev = {
   Discover: 33,
   /** A timed bonus appeared near the hero: a = 0 magnet, 1 gift chest */
   Bonus: 34,
+  /** The hero dodged a hit (evasion). */
+  Dodge: 35,
+  /** The shield took a whole hit; HP untouched. */
+  ShieldHit: 36,
 } as const;
 
 export interface GameEvent {

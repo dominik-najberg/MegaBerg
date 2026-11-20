@@ -237,6 +237,12 @@ export class AudioSys {
         [0, 2, 4, 7, 9].forEach((d, i) => this.tone('triangle', degFreq(d, 1), degFreq(d, 1), 0.34, 0.2, i * 0.07));
         this.tone('sine', degFreq(7, 2), degFreq(7, 2), 0.7, 0.1, 0.35);
         break;
+      case Ev.Dodge:
+        if (this.ok('dodge', 0.1)) this.hiss('highpass', 3000, 1200, 0.12, 0.18);
+        break;
+      case Ev.ShieldHit:
+        if (this.ok('shield', 0.1)) this.tone('triangle', 660, 440, 0.15, 0.2);
+        break;
       case Ev.PlayerHit:
         if (this.ok('hurt', 0.1)) {
           this.tone('sawtooth', 320, 90, 0.2, 0.3);

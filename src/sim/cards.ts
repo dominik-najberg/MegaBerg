@@ -1,10 +1,15 @@
 import { PASSIVE_BY_ID, PASSIVES } from '../data/passives';
-import { RARITIES, RARITY_ORDER, rollRarity } from '../data/rarity';
+import { RARITIES, RARITY_ORDER, rarityWeights, rollRarity } from '../data/rarity';
 import type { PassiveDef, Rarity, WeaponDef } from '../data/types';
-import { WEAPON_BY_ID, weaponMaxLevel, WEAPONS, weaponStatsAt } from '../data/weapons';
+import type { Rng } from '../core/rng';
+import { EVOLVE_LEVEL, formatLines, lineOptions, LINES_PER_RARITY, lineValue, type WeaponLine } from '../data/weaponLines';
+import { ITEM_BY_ID, ITEMS, type ItemDef } from '../data/items';
+import { WEAPON_BY_ID, weaponMilestones, WEAPONS, weaponStatsAt } from '../data/weapons';
+import { attackInterval, statCapped } from './stats';
+import { minInterval } from './weapons';
 import { MAX_PASSIVES, MAX_WEAPONS, type WeaponInst, type World } from './world';
 
-export type CardKind = 'weapon' | 'passive' | 'evolve' | 'gold' | 'heal';
+export type CardKind = 'weapon' | 'passive' | 'evolve' | 'item' | 'gold' | 'heal';
 
 export interface Card {
   kind: CardKind;
@@ -18,21 +23,38 @@ export interface Card {
   text: string;
   icon: string;
   color: number;
+  /** Rolled stat lines of a weapon card. */
+  lines?: WeaponLine[];
 }
 
-/** True when the weapon is at max level and its evolution passive is owned. */
+/** True when the weapon has reached EVOLVE_LEVEL and its evolution book is owned. */
 export function canEvolve(w: World, inst: WeaponInst): boolean {
   const evo = inst.def.evolution;
-  if (!evo || inst.level < weaponMaxLevel(inst.def)) return false;
+  if (!evo || inst.level < EVOLVE_LEVEL) return false;
   return w.findPassive(evo.passive) !== undefined && WEAPON_BY_ID[evo.into] !== undefined;
 }
 
-function weaponCard(def: WeaponDef, inst: WeaponInst | undefined, rarity: Rarity): Card {
+/** Rolls distinct stat lines for a weapon card; a new weapon gets one line fewer. `exclude` drops lines that would do nothing. */
+export function rollLines(rng: Rng, def: WeaponDef, level: number, rarity: Rarity, isNew: boolean, exclude: readonly string[] = [], extra = 0): WeaponLine[] {
+  const options = lineOptions(def.kind, weaponStatsAt(def, level)).filter((l) => !exclude.includes(l));
+  const n = Math.min(options.length, LINES_PER_RARITY[rarity] - (isNew ? 1 : 0) + extra);
+  const lines: WeaponLine[] = [];
+  for (let k = 0; k < n; k++) {
+    const stat = options.splice(rng.int(options.length), 1)[0] as WeaponLine['stat'];
+    lines.push({ stat, value: lineValue(stat, rarity) });
+  }
+  return lines;
+}
+
+function weaponCard(w: World, def: WeaponDef, inst: WeaponInst | undefined, rarity: Rarity): Card {
   const level = inst ? inst.level + 1 : 1;
-  let text = inst ? (def.levels[level - 2]?.note ?? '') : def.desc;
-  const bonus = RARITIES[rarity].weaponBonus;
-  if (bonus > 0) text += ` (+${Math.round(bonus * 100)}% obrażeń tej broni)`;
-  return { kind: 'weapon', id: def.id, rarity, isNew: !inst, level, name: def.name, text, icon: def.icon, color: def.color };
+  // Attack speed does nothing once the weapon already fires at the engine's minimum interval.
+  const capped = inst && inst.stats.cooldown > 0 && inst.stats.cooldown * attackInterval(w.stats) <= minInterval(def.kind) + 1e-9;
+  // Kowadło Swaroga: one more line per copy.
+  const lines = rollLines(w.rng, def, level, rarity, !inst, capped ? ['attackSpeed'] : [], w.fx.swarogAnvil);
+  const milestone = inst && level <= weaponMilestones(def) ? (def.levels[level - 2]?.note ?? '') : '';
+  const text = [inst ? milestone : def.desc, formatLines(lines)].filter((t) => t).join('. ') + (lines.length ? '.' : '');
+  return { kind: 'weapon', id: def.id, rarity, isNew: !inst, level, name: def.name, text, icon: def.icon, color: def.color, lines };
 }
 
 function passiveCard(def: PassiveDef, level: number, rarity: Rarity): Card {
@@ -54,6 +76,20 @@ const FILLERS: Card[] = [
   { kind: 'heal', id: 'miod', rarity: 'rare', isNew: false, level: 9999, name: 'Dzban miodu', text: 'Leczy do pełna.', icon: 'honey', color: 0xf0b030 },
 ];
 
+/**
+ * Weight of the next level of an owned book. Lower than a weapon level (3): books go up to level 20
+ * and would otherwise keep pushing weapon cards out, delaying evolutions.
+ */
+export const BOOK_UPGRADE_WEIGHT = 1.6;
+/** Weight of a book level in a chest (weapon level: 3). */
+export const CHEST_BOOK_WEIGHT = 1;
+/** Weight of one new book on a level-up card while the pool is small. */
+export const NEW_BOOK_WEIGHT = 1.6;
+/** Total weight shared by all new books when the pool is large. */
+export const NEW_BOOK_BUDGET = 16;
+/** Weight of a new book that is the evolution partner of an owned weapon. */
+export const EVOLUTION_BOOK_WEIGHT = 2.6;
+
 interface Candidate {
   weight: number;
   make: (rarity: Rarity) => Card;
@@ -66,31 +102,38 @@ function candidates(w: World): Candidate[] {
   for (const inst of w.weapons) {
     if (canEvolve(w, inst)) {
       out.push({ weight: 7, fixed: 'legendary', make: () => evolveCard(inst) });
-    } else if (inst.level < weaponMaxLevel(inst.def)) {
-      out.push({ weight: 3, make: (r) => weaponCard(inst.def, inst, r) });
+    } else if (inst.level < w.weaponCap()) {
+      out.push({ weight: 3, make: (r) => weaponCard(w, inst.def, inst, r) });
     }
   }
   for (const p of w.passives) {
-    if (p.level < p.def.maxLevel) out.push({ weight: 2.4, make: (r) => passiveCard(p.def, p.level + 1, r) });
+    if (p.level < p.def.maxLevel && !statCapped(w.stats, p.def.stat)) out.push({ weight: BOOK_UPGRADE_WEIGHT, make: (r) => passiveCard(p.def, p.level + 1, r) });
   }
   if (w.weapons.length < MAX_WEAPONS) {
     const weight = w.weapons.length < 3 ? 4 : 2;
     for (const def of WEAPONS) {
-      if (def.evolved || !w.weaponPool.has(def.id) || w.findWeapon(def.id)) continue;
+      if (def.evolved || !w.weaponPool.has(def.id) || w.findWeapon(def.id) || w.banished.has(def.id)) continue;
       // Do not offer the base form again after it has been evolved.
       if (def.evolution && ownedEvolved.has(def.evolution.into)) continue;
-      out.push({ weight, make: (r) => weaponCard(def, undefined, r) });
+      out.push({ weight, make: (r) => weaponCard(w, def, undefined, r) });
     }
   }
   if (w.passives.length < MAX_PASSIVES) {
-    for (const def of PASSIVES) {
-      if (!w.passivePool.has(def.id) || w.findPassive(def.id)) continue;
-      // Passives that unlock an evolution of an owned weapon are a bit more likely.
+    const fresh = PASSIVES.filter((def) => w.passivePool.has(def.id) && !w.findPassive(def.id) && !w.banished.has(def.id) && !statCapped(w.stats, def.stat));
+    // The many books share one budget, so a large pool does not crowd weapons out of the cards.
+    const each = Math.min(NEW_BOOK_WEIGHT, NEW_BOOK_BUDGET / Math.max(1, fresh.length));
+    for (const def of fresh) {
+      // Books that unlock an evolution of an owned weapon are clearly more likely.
       const synergy = w.weapons.some((x) => x.def.evolution?.passive === def.id);
-      out.push({ weight: synergy ? 2.6 : 1.6, make: (r) => passiveCard(def, 1, r) });
+      out.push({ weight: synergy ? EVOLUTION_BOOK_WEIGHT : each, make: (r) => passiveCard(def, 1, r) });
     }
   }
   return out;
+}
+
+/** Only new weapons and books can be banished from the pool. */
+export function canBanish(card: Card): boolean {
+  return card.isNew && (card.kind === 'weapon' || card.kind === 'passive');
 }
 
 /** Draws `n` distinct level-up cards. Falls back to gold / food when nothing is left to upgrade. */
@@ -106,25 +149,37 @@ export function levelUpCards(w: World, n: number): Card[] {
   return cards.slice(0, n);
 }
 
-/** Chest reward: an evolution if one is ready, otherwise an upgrade of something owned at boosted rarity. */
+/** Luck bonus of the rarity roll for chest items. */
+export const CHEST_LUCK = 0.6;
+
+export function itemCard(w: World, def: ItemDef): Card {
+  const owned = w.itemCount(def.id);
+  const text = owned > 0 ? `${def.desc} (masz już ${owned}).` : def.desc;
+  return { kind: 'item', id: def.id, rarity: def.rarity, isNew: owned === 0, level: owned + 1, name: def.name, text, icon: def.icon, color: def.color };
+}
+
+/** Rolls one item for a chest: rarity first (boosted by luck), then an item of that rarity from the pool. */
+export function rollItem(w: World): ItemDef | undefined {
+  const pool = ITEMS.filter((i) => w.itemPool.has(i.id));
+  if (pool.length === 0) return undefined;
+  // Only rarities the pool actually has can be rolled; otherwise a missing rarity would funnel every
+  // such roll into the one item of the rarity below it.
+  const weights = rarityWeights(w.stats.luck + CHEST_LUCK).map((wt, r) => (pool.some((i) => i.rarity === RARITY_ORDER[r]) ? wt : 0));
+  const rarity = RARITY_ORDER[Math.max(0, w.rng.weighted(weights))];
+  const of = pool.filter((i) => i.rarity === rarity);
+  return of[w.rng.int(of.length)] ?? pool[w.rng.int(pool.length)];
+}
+
+/** Chest reward: an evolution if one is ready, otherwise one item (Skarb). */
 export function chestCards(w: World): Card[] {
   for (const inst of w.weapons) {
     if (canEvolve(w, inst)) return [evolveCard(inst)];
   }
-  const pool: Candidate[] = [];
-  for (const inst of w.weapons) {
-    if (inst.level < weaponMaxLevel(inst.def)) pool.push({ weight: 3, make: (r) => weaponCard(inst.def, inst, r) });
-  }
-  for (const p of w.passives) {
-    if (p.level < p.def.maxLevel) pool.push({ weight: 2, make: (r) => passiveCard(p.def, p.level + 1, r) });
-  }
-  if (pool.length === 0) {
+  const item = rollItem(w);
+  if (!item) {
     return [{ kind: 'gold', id: 'zloto', rarity: 'rare', isNew: false, level: 60, name: 'Garniec złota', text: '+60 złota.', icon: 'coin', color: 0xffd040 }];
   }
-  const c = pool[w.rng.weighted(pool.map((x) => x.weight))] as Candidate;
-  let rarity = rollRarity(w.rng, w.stats.luck + 1.2);
-  if (rarity === 'common') rarity = 'rare';
-  return [c.make(rarity)];
+  return [itemCard(w, item)];
 }
 
 /** Applies a card to the world's inventory. */
@@ -135,11 +190,17 @@ export function applyCard(w: World, card: Card): void {
       let inst = w.findWeapon(card.id);
       if (!inst) {
         inst = w.addWeapon(card.id) ?? undefined;
-      } else if (inst.level < weaponMaxLevel(inst.def)) {
+      } else if (inst.level < w.weaponCap()) {
         inst.level++;
-        inst.stats = weaponStatsAt(inst.def, inst.level);
+      } else {
+        break;
       }
-      if (inst) inst.bonus += r.weaponBonus;
+      if (!inst) break;
+      for (const l of card.lines ?? []) {
+        if (l.stat === 'damage') inst.bonus += l.value;
+        else inst.lines[l.stat] = (inst.lines[l.stat] ?? 0) + l.value;
+      }
+      w.refreshWeapon(inst);
       break;
     }
     case 'passive': {
@@ -158,6 +219,9 @@ export function applyCard(w: World, card: Card): void {
       w.refreshStats();
       break;
     }
+    case 'item':
+      if (ITEM_BY_ID[card.id]) w.addItem(card.id);
+      break;
     case 'evolve': {
       const inst = w.findWeapon(card.id);
       if (inst) w.evolveWeapon(inst);

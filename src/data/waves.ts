@@ -32,8 +32,27 @@ export const WAVE_EVENTS: WaveEvent[] = [
   { at: 375, kind: 'swarm', enemy: 'ognik', count: 18, text: 'Błędne ogniki tańczą nad bagnem!' },
   { at: 450, kind: 'mini', enemy: 'jaga', text: 'Baba Jaga wraca po zemstę!' },
   { at: 525, kind: 'swarm', enemy: 'wilkolak', count: 10, text: 'Wataha wilkołaków wyje do księżyca!' },
-  { at: RUN_LENGTH, kind: 'boss', enemy: 'leszy', text: 'Leszy, strażnik boru, przebudził się!' },
+  { at: RUN_LENGTH, kind: 'portal', enemy: 'leszy', text: 'Otworzył się portal Leszego! Znajdź go i wezwij strażnika boru [E].' },
 ];
+
+/**
+ * Overtime (stage 6 of docs/MEGABONK-ANALIZA.md, numbers from a Codex consultation): from RUN_LENGTH the
+ * portal waits for the hero and the horde thickens until the boss is summoned.
+ */
+export const OVERTIME_PHASE: WavePhase = { from: RUN_LENGTH, alive: [260, 320], rate: 13, mix: { chochlik: 3, utopiec: 3.5, kruk: 2.5, ognik: 2, strzyga: 3, wilkolak: 2.5, bies: 1.8, licho: 1.6 } };
+/** Spawn rate at the end of the overtime ramp. */
+export const OVERTIME_RATE_END = 16;
+/** Seconds of overtime before the final wave. */
+export const OVERTIME = 120;
+/** Final wave: enemy health and damage grow by this factor every FINAL_WAVE_STEP seconds. */
+export const FINAL_WAVE_MUL = 1.25;
+export const FINAL_WAVE_STEP = 30;
+
+/** Extra enemy health / damage multiplier of the final wave at time t (1 before it starts). */
+export function finalWaveMul(t: number): number {
+  const start = RUN_LENGTH + OVERTIME;
+  return t < start ? 1 : Math.pow(FINAL_WAVE_MUL, 1 + Math.floor((t - start) / FINAL_WAVE_STEP));
+}
 
 /** First elite spawn and interval between elites (seconds). */
 export const ELITE_FIRST = 80;
@@ -43,7 +62,7 @@ export const ELITE_HP_MUL = 8;
 /** Enemy health multiplier at run time t (seconds). */
 export function enemyHpMul(t: number): number {
   const m = t / 60;
-  return 1 + Math.pow(m, 1.55) * 0.37;
+  return 1 + Math.pow(m, 1.55) * 0.52;
 }
 
 /** Enemy damage multiplier at run time t (seconds). */

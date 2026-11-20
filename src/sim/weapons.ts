@@ -1,10 +1,18 @@
 import { angleLerp, TAU, wrapAngle } from '../core/math';
-import type { WeaponStats } from '../data/types';
+import type { WeaponKind, WeaponStats } from '../data/types';
 import { Ev } from './events';
 import { ProjKind, WEAPON_SLOTS } from './pools';
+import { attackInterval } from './stats';
 import type { Raven, WeaponInst, World } from './world';
 
 const PICKS = new Int32Array(32);
+/** Shortest interval between attacks of a weapon kind (seconds); faster attack speed does nothing below it. */
+export function minInterval(kind: WeaponKind): number {
+  return kind === 'summon' ? 0.15 : 0.12;
+}
+
+/** Longest distance a projectile moves between two collision checks (metres). */
+const PROJ_SUBSTEP = 0.6;
 
 function fireProjectile(
   w: World,
@@ -64,7 +72,7 @@ function updateRavens(w: World, inst: WeaponInst, count: number, dmg: number, dt
     ravens.push({ x: p.x, y: p.y + 2.5, z: p.z, px: p.x, py: p.y + 2.5, pz: p.z, yaw: 0, state: 0, target: -1, cd: 0.3 + ravens.length * 0.2, phase: ravens.length * 2.1 });
   }
   if (ravens.length > count) ravens.length = count;
-  const cd = Math.max(0.15, st.cooldown * w.stats.cooldown);
+  const cd = Math.max(minInterval('summon'), st.cooldown * attackInterval(w.stats));
   for (let k = 0; k < ravens.length; k++) {
     const r = ravens[k] as Raven;
     r.px = r.x;
@@ -142,8 +150,10 @@ export function updateWeapons(w: World, dt: number): void {
     const inst = w.weapons[wi] as WeaponInst;
     const st = inst.stats;
     const dmg = st.damage * (1 + inst.bonus) * s.damage;
-    const cd = Math.max(0.12, st.cooldown * s.cooldown);
+    const cd = Math.max(minInterval(inst.def.kind), st.cooldown * attackInterval(s));
     const area = st.area * s.area;
+    const dur = st.duration * s.duration;
+    const pspeed = st.speed * s.projectileSpeed;
     const slot = inst.slot;
     switch (inst.def.kind) {
       case 'orbit': {
@@ -158,7 +168,8 @@ export function updateWeapons(w: World, dt: number): void {
         } else {
           inst.timer -= dt;
           if (inst.timer <= 0) {
-            inst.active = st.duration;
+            inst.active = dur;
+            inst.span = dur;
             w.events.emit(Ev.Shoot, p.x, p.y, p.z, 0);
           }
         }
@@ -198,7 +209,7 @@ export function updateWeapons(w: World, dt: number): void {
           const spread = full ? TAU / count : count > 1 ? (st.arc > 0 ? st.arc : 0.32) / (count - 1) : 0;
           for (let k = 0; k < count; k++) {
             const a = full ? aim + k * spread : aim + (k - (count - 1) / 2) * spread;
-            fireProjectile(w, ProjKind.Bolt, inst, a, dmg, st.speed, st.duration, st.area * Math.sqrt(s.area), st.pierce);
+            fireProjectile(w, ProjKind.Bolt, inst, a, dmg, pspeed, dur, st.area * Math.sqrt(s.area), st.pierce);
           }
           w.events.emit(Ev.Shoot, p.x, p.y, p.z, 1);
         }
@@ -249,7 +260,8 @@ export function updateWeapons(w: World, dt: number): void {
           const aim = t >= 0 ? Math.atan2((e.x[t] as number) - p.x, (e.z[t] as number) - p.z) : p.yaw;
           sweep(w, inst, aim, dmg, area);
           inst.queue = st.count - 1;
-          inst.qT = 0.2;
+          // Follow-up swings fit inside the attack interval, so high attack speed never cuts them off.
+          inst.qT = Math.min(0.2, cd / Math.max(1, st.count));
           inst.angle = aim + Math.PI;
         }
         if (inst.queue > 0) {
@@ -258,7 +270,7 @@ export function updateWeapons(w: World, dt: number): void {
             sweep(w, inst, inst.angle, dmg, area);
             inst.angle += Math.PI / 2;
             inst.queue--;
-            inst.qT = 0.2;
+            inst.qT = Math.min(0.2, cd / Math.max(1, st.count));
           }
         }
         break;
@@ -286,7 +298,7 @@ export function updateWeapons(w: World, dt: number): void {
           const aim = Math.atan2((e.x[t] as number) - p.x, (e.z[t] as number) - p.z);
           for (let k = 0; k < count; k++) {
             const a = aim + (k - (count - 1) / 2) * 0.22;
-            fireProjectile(w, ProjKind.Bounce, inst, a, dmg, st.speed, st.duration, st.area, st.bounces);
+            fireProjectile(w, ProjKind.Bounce, inst, a, dmg, pspeed, dur, st.area, st.bounces);
           }
           w.events.emit(Ev.Shoot, p.x, p.y, p.z, 2);
         }
@@ -328,7 +340,8 @@ export function updateWeapons(w: World, dt: number): void {
               break;
             }
             inst.angle = Math.atan2((e.x[t] as number) - p.x, (e.z[t] as number) - p.z);
-            inst.active = st.duration;
+            inst.active = dur;
+            inst.span = dur;
             inst.qT = 0;
             w.events.emit(Ev.Shoot, p.x, p.y, p.z, 3);
           }
@@ -408,62 +421,71 @@ export function updateProjectiles(w: World, dt: number): void {
       const gy = map.heightAt(tx, tz);
       pr.y[i] = (pr.sy[i] as number) + (gy - (pr.sy[i] as number)) * t + Math.sin(Math.PI * t) * 3.2;
       if ((pr.life[i] as number) <= 0) {
-        w.addZone(tx, tz, pr.radius[i] as number, st.duration, pr.dmg[i] as number, slot);
+        w.addZone(tx, tz, pr.radius[i] as number, st.duration * w.stats.duration, pr.dmg[i] as number, slot);
         w.damageCircle(tx, tz, pr.radius[i] as number, pr.dmg[i] as number, slot, 2, st);
         pr.free(i);
       }
       continue;
     }
 
-    const x = (pr.x[i] as number) + (pr.vx[i] as number) * dt;
-    const z = (pr.z[i] as number) + (pr.vz[i] as number) * dt;
-    pr.x[i] = x;
-    pr.z[i] = z;
-    pr.y[i] = map.heightAt(x, z) + 1.1;
     if ((pr.life[i] as number) <= 0) {
       pr.free(i);
       continue;
     }
-    const n = w.collect(x, z, pr.radius[i] as number);
-    const speed = Math.hypot(pr.vx[i] as number, pr.vz[i] as number) || 1;
-    const dirX = (pr.vx[i] as number) / speed;
-    const dirZ = (pr.vz[i] as number) / speed;
-    for (let k = 0; k < n; k++) {
-      const j = w.bufA[k] as number;
-      if (j === pr.last[i] || !e.alive[j]) continue;
-      if (kind === ProjKind.Bolt && st.pierce > 0) {
-        const hi = j * WEAPON_SLOTS + slot;
-        if (w.time - (e.hitT[hi] as number) < 0.3) continue;
-        e.hitT[hi] = w.time;
-      }
-      const ex = e.x[j] as number;
-      const ez = e.z[j] as number;
-      w.damageEnemy(j, pr.dmg[i] as number, slot, dirX, dirZ, st.knockback, st);
-      pr.last[i] = j;
-      if (st.explode > 0) {
-        const r = st.explode * w.stats.area;
-        w.damageCircle(x, z, r, (pr.dmg[i] as number) * 0.6, slot, 3, st);
-        w.events.emit(Ev.Explosion, x, pr.y[i] as number, z, r, inst.def.color);
-      }
-      if (kind === ProjKind.Bounce) {
-        pr.left[i] = (pr.left[i] as number) - 1;
-        const nj = (pr.left[i] as number) >= 0 ? w.nearest(ex, ez, 11, j) : -1;
-        if (nj < 0) {
-          pr.free(i);
-        } else {
-          const dx = (e.x[nj] as number) - x;
-          const dz = (e.z[nj] as number) - z;
-          const d = Math.hypot(dx, dz) || 1;
-          pr.vx[i] = (dx / d) * speed;
-          pr.vz[i] = (dz / d) * speed;
-          pr.life[i] = st.duration;
+    // Fast projectiles move in substeps, so a high projectile-speed stat never skips over an enemy.
+    // At base speeds (< PROJ_SUBSTEP × 60 m/s) this is a single step, exactly as before.
+    const steps = Math.max(1, Math.ceil((Math.hypot(pr.vx[i] as number, pr.vz[i] as number) * dt) / PROJ_SUBSTEP));
+    const sdt = dt / steps;
+    let flying = true;
+    for (let sub = 0; sub < steps && flying; sub++) {
+      const x = (pr.x[i] as number) + (pr.vx[i] as number) * sdt;
+      const z = (pr.z[i] as number) + (pr.vz[i] as number) * sdt;
+      pr.x[i] = x;
+      pr.z[i] = z;
+      pr.y[i] = map.heightAt(x, z) + 1.1;
+      const n = w.collect(x, z, pr.radius[i] as number);
+      const speed = Math.hypot(pr.vx[i] as number, pr.vz[i] as number) || 1;
+      const dirX = (pr.vx[i] as number) / speed;
+      const dirZ = (pr.vz[i] as number) / speed;
+      for (let k = 0; k < n; k++) {
+        const j = w.bufA[k] as number;
+        if (j === pr.last[i] || !e.alive[j]) continue;
+        if (kind === ProjKind.Bolt && st.pierce > 0) {
+          const hi = j * WEAPON_SLOTS + slot;
+          if (w.time - (e.hitT[hi] as number) < 0.3) continue;
+          e.hitT[hi] = w.time;
         }
-        break;
-      }
-      pr.left[i] = (pr.left[i] as number) - 1;
-      if ((pr.left[i] as number) < 0) {
-        pr.free(i);
-        break;
+        const ex = e.x[j] as number;
+        const ez = e.z[j] as number;
+        w.damageEnemy(j, pr.dmg[i] as number, slot, dirX, dirZ, st.knockback, st);
+        pr.last[i] = j;
+        if (st.explode > 0) {
+          const r = st.explode * w.stats.area;
+          w.damageCircle(x, z, r, (pr.dmg[i] as number) * 0.6, slot, 3, st);
+          w.events.emit(Ev.Explosion, x, pr.y[i] as number, z, r, inst.def.color);
+        }
+        if (kind === ProjKind.Bounce) {
+          pr.left[i] = (pr.left[i] as number) - 1;
+          const nj = (pr.left[i] as number) >= 0 ? w.nearest(ex, ez, 11, j) : -1;
+          if (nj < 0) {
+            pr.free(i);
+          } else {
+            const dx = (e.x[nj] as number) - x;
+            const dz = (e.z[nj] as number) - z;
+            const d = Math.hypot(dx, dz) || 1;
+            pr.vx[i] = (dx / d) * speed;
+            pr.vz[i] = (dz / d) * speed;
+            pr.life[i] = st.duration * w.stats.duration;
+          }
+          flying = false;
+          break;
+        }
+        pr.left[i] = (pr.left[i] as number) - 1;
+        if ((pr.left[i] as number) < 0) {
+          pr.free(i);
+          flying = false;
+          break;
+        }
       }
     }
   }

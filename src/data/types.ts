@@ -10,16 +10,40 @@ export interface Stats {
   /** Multipliers (1 = base). */
   moveSpeed: number;
   damage: number;
-  /** Cooldown multiplier, lower = faster attacks. */
+  /** Cooldown multiplier, lower = faster attacks. Kept for existing sources; see `attackSpeed`. */
   cooldown: number;
+  /** Attack speed multiplier (1 = base). Weapon interval = base × cooldown / attackSpeed. */
+  attackSpeed: number;
   area: number;
   pickup: number;
   xpGain: number;
   goldGain: number;
   /** Extra projectiles / blades / ravens. */
   projectiles: number;
-  /** 0 = base. Raises card rarity, crit chance and drop rates. */
+  /** 0 = base. Raises card rarity and drop rates. */
   luck: number;
+  /** Chance of a critical hit per weapon hit. Above 1 every hit crits and the rest is the chance of an overcrit. */
+  critChance: number;
+  /** Damage multiplier of a crit (2 = double). An overcrit adds the bonus part again. */
+  critDamage: number;
+  /** Multiplier of weapon active time and projectile / zone lifetime. */
+  duration: number;
+  /** Multiplier of projectile flight speed. */
+  projectileSpeed: number;
+  /** Multiplier of knockback dealt by weapons. */
+  knockback: number;
+  /** Chance per weapon hit to heal 1 HP. Above 1 every hit heals 1 and the rest is the chance of a second HP. */
+  lifesteal: number;
+  /** Flat damage dealt back to an enemy that hits the hero in melee (scaled by `damage`). */
+  thorns: number;
+  /** Raw evasion; the chance to dodge a hit is evasion / (1 + evasion). */
+  evasion: number;
+  /** Shield points absorbing damage before HP; recharge after a while without damage. */
+  shield: number;
+  /** Curse: 0 = base. Raises enemy count, health, damage and speed, and XP and gold gained. */
+  curse: number;
+  /** Silver (meta currency) multiplier. Not used yet. */
+  silverGain: number;
   extraJumps: number;
   revives: number;
   rerolls: number;
@@ -41,12 +65,24 @@ export const BASE_STATS: Readonly<Stats> = {
   moveSpeed: 1,
   damage: 1,
   cooldown: 1,
+  attackSpeed: 1,
   area: 1,
   pickup: 1,
   xpGain: 1,
   goldGain: 1,
   projectiles: 0,
   luck: 0,
+  critChance: 0.05,
+  critDamage: 2,
+  duration: 1,
+  projectileSpeed: 1,
+  knockback: 1,
+  lifesteal: 0,
+  thorns: 0,
+  evasion: 0,
+  shield: 0,
+  curse: 0,
+  silverGain: 1,
   extraJumps: 0,
   revives: 0,
   rerolls: 0,
@@ -119,6 +155,8 @@ export interface PassiveDef {
   perLevel: number;
   /** Formats one level of the bonus for the card text, e.g. "+10% obrażeń". */
   fmt: (v: number) => string;
+  /** Secondary bonuses per level, scaled by card rarity like `perLevel`. */
+  also?: StatMod[];
   /** Integer-valued passives ignore card rarity and always show this one. */
   fixedRarity?: Rarity;
   unlock?: string;
@@ -164,6 +202,8 @@ export interface CharacterDef {
   bonus: string;
   startWeapon: string;
   mods: StatMod[];
+  /** Passive that grows with the hero's level in a run (stage 5 of docs/MEGABONK-ANALIZA.md). */
+  passive: CharacterPassive;
   unlock?: string;
   look: {
     shirt: number;
@@ -174,6 +214,16 @@ export interface CharacterDef {
     build: number;
     style: 'wojmir' | 'dobroslawa' | 'bogumil' | 'jagna';
   };
+}
+
+export interface CharacterPassive {
+  name: string;
+  /** Polish text for the character card. */
+  desc: string;
+  /** Added once per level above 1. */
+  perLevel: StatMod[];
+  /** Special rule handled in the simulation. */
+  power?: 'goldPower' | 'speedPower';
 }
 
 export interface ShopItemDef {
@@ -210,7 +260,21 @@ export type AchievementCond =
   | { type: 'totalGold'; count: number }
   | { type: 'win' }
   | { type: 'winWith'; character: string }
-  | { type: 'shrines'; count: number };
+  | { type: 'shrines'; count: number }
+  /** A book (Księga) reached this level in one run. */
+  | { type: 'book'; book: string; level: number }
+  /** Gold collected in one run. */
+  | { type: 'runGold'; count: number }
+  /** Movement speed multiplier reached in one run. */
+  | { type: 'speed'; value: number }
+  /** HP healed by lifesteal in one run. */
+  | { type: 'lifesteal'; amount: number }
+  /** Weapons evolved in one run. */
+  | { type: 'evolveCount'; count: number }
+  /** Any weapon reached this level in one run. */
+  | { type: 'weaponLevel'; level: number }
+  /** Survived this long while taking at most `damage` in total. */
+  | { type: 'unhurt'; seconds: number; damage: number };
 
 export interface AchievementDef {
   id: string;
@@ -233,7 +297,7 @@ export interface WavePhase {
 
 export interface WaveEvent {
   at: number;
-  kind: 'mini' | 'boss' | 'swarm' | 'elite';
+  kind: 'mini' | 'boss' | 'swarm' | 'elite' | 'portal';
   enemy: string;
   count?: number;
   text?: string;

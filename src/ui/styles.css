@@ -191,6 +191,17 @@ kbd {
   transition: width 0.12s ease-out;
 }
 
+.shield-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 6px;
+  background: linear-gradient(180deg, #bfe6ff, #4a9ae0);
+  box-shadow: 0 0 6px rgba(126, 200, 255, 0.8);
+  transition: width 0.12s ease-out;
+  display: none;
+}
+
 .hp-text {
   position: absolute;
   inset: 0;
@@ -677,6 +688,26 @@ h4 {
   box-shadow: 0 0 18px rgba(255, 210, 90, 0.3);
 }
 
+/* With many heroes the sheet scrolls; the start button stays in view. */
+.chars + .row {
+  position: sticky;
+  bottom: -22px;
+  margin-bottom: -22px;
+  padding: 12px 0 22px;
+  background: linear-gradient(180deg, rgba(22, 14, 20, 0), rgba(22, 14, 20, 0.97) 35%);
+}
+
+.char-passive {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #d8cfe0;
+}
+
+.char-passive b {
+  color: var(--gold-hi);
+}
+
 .char.locked {
   cursor: default;
   opacity: 0.7;
@@ -965,6 +996,38 @@ h4 {
   flex-wrap: wrap;
   gap: 18px;
   justify-content: center;
+}
+
+.card-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.card-wrap .card {
+  flex: 1;
+}
+
+.banish {
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(30, 14, 30, 0.8);
+  color: #d8c8e8;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.banish:hover {
+  border-color: #c070ff;
+  color: #fff;
+}
+
+.banish.off,
+.btn.off {
+  opacity: 0.45;
 }
 
 .card {
@@ -1355,6 +1418,11 @@ h4 {
   border-radius: 50%;
 }
 
+.mk-portal {
+  background: #3ad870;
+  border-radius: 50%;
+}
+
 /* ------------------------------------------------------------ loading screen */
 
 .loading {
@@ -1419,4 +1487,61 @@ h4 {
   margin: 12px 0 0;
   color: var(--muted);
   font-size: 14px;
+}
+
+/* ---------------------------------------------------------------- Skarbiec, pools (stage 7) */
+
+.pill.silver {
+  color: #e6ebf2;
+  border-color: rgba(216, 221, 230, 0.5);
+}
+
+.shop-head {
+  margin: 22px 0 4px;
+  color: var(--gold-hi);
+  font-size: 18px;
+}
+
+.pool {
+  margin-top: 12px;
+}
+
+.pool h4 {
+  margin: 0 0 6px;
+}
+
+.pool h4 em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 14px;
+  background: rgba(20, 12, 18, 0.7);
+  color: #eee4d0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--gold-hi);
+}
+
+.chip.off {
+  opacity: 0.4;
+  text-decoration: line-through;
 }

@@ -333,3 +333,411 @@ bohatera, pięć monet doleciało samo, +10 złota, nic nie zostało na ziemi, k
 Zrzut: `docs/screenshots/12-monety-leca.png`.
 
 Review Codexem (`codex exec review --uncommitted`): bez uwag; testy i typy przechodzą, zbudowany `dist/` zgadza się ze źródłem.
+
+## Nowe statystyki (etap 1 z `docs/MEGABONK-ANALIZA.md`)
+
+Dodane do `Stats` (`src/data/types.ts`), z formułami w `src/sim/stats.ts`. Na razie nic poza
+rekompensatą za krytyk ich nie podnosi; korzystać z nich będą księgi, przedmioty i postacie z kolejnych etapów.
+
+| stat | baza | działanie |
+|---|---|---|
+| `attackSpeed` | 1 | odstęp ataku broni = baza × `cooldown` / `attackSpeed` |
+| `critChance` | 0,05 | szansa na krytyk przy trafieniu bronią; powyżej 1 każdy cios kryci, reszta to szansa na overcrit |
+| `critDamage` | 2 | mnożnik krytyka; overcrit dokłada premię jeszcze raz (1 + (cd − 1) × liczba krytyków) |
+| `duration` | 1 | czas aktywności sierpów i stożka, życie pocisków, kałuż i odbić |
+| `projectileSpeed` | 1 | prędkość pocisków (bełty, proca); kruki i obrót sierpów bez zmian |
+| `knockback` | 1 | mnożnik odrzutu z trafień bronią |
+| `lifesteal` | 0 | szansa na 1 HP na trafienie bronią; powyżej 100% pewne 1 HP i szansa na drugie |
+| `thorns` | 0 | obrażenia (× `damage`) dla wroga, który uderzył wręcz; liczone w `thornsDealt` |
+| `evasion` | 0 | szansa uniku = e / (1 + e) |
+| `shield` | 0 | punkty tarczy przed HP, po pancerzu; odnawia się po 3 s bez obrażeń, 50% maks. na sekundę |
+| `curse` | 0 | trudność za nagrody (niżej) |
+| `silverGain` | 1 | samo pole; waluty srebra jeszcze nie ma |
+
+**Szybkość ataku obok odnowienia, nie zamiast.** Odnowienie to dzisiejszy stat z pasywki, sklepu, postaci
+i błogosławieństwa, ma granice 0,35–2 i odejmowane procenty szybko by do nich dobiły. Szybkość ataku
+jest mnożnikiem: +7,5% na poziom księgi nigdy nie zbije odstępu do zera, tylko maleje coraz wolniej.
+Zamiana odnowienia na szybkość ataku zmieniałaby sens każdego istniejącego źródła i zapisanych zakupów
+w Chacie. Oba działają razem: odstęp = baza × odnowienie / szybkość ataku, szybkość ataku ma granice 0,25–5.
+
+**Krytyk nie wynika już ze szczęścia** (dawniej 5% + 10% szczęścia, maks. 60%). Szczęście zostaje
+od rzadkości kart i łupów. Żeby nic nie straciło siły, to, co obiecywało krytyk, dostaje go wprost:
+Jagna +2% (tyle dawało jej +20% szczęścia), podkowa +1,2% na poziom obok szczęścia (pole `also`
+w `PassiveDef`, skalowane rzadkością karty), Łaska Welesa +2,5%. Ołtarzyk Welesa w Chacie krytyka nie
+obiecywał i go traci (najwyżej 3%). Rzut na krytyk to nadal jedno losowanie na trafienie, a kradzież
+życia, unik i klątwa losują tylko, gdy są niezerowe, więc przy bazowych statach przebieg runu jest
+identyczny jak przed zmianą.
+
+**Unik z malejącymi zwrotami**: e / (1 + e), więc +10% surowego uniku daje 9%, 100% daje 50%, 300% daje 75%,
+a 100% nie da się osiągnąć. Uniknięty cios daje zwykłe pół sekundy nietykalności, inaczej tłum
+losowałby co klatkę i unik nic by nie znaczył.
+
+**Tarcza** bierze to, co przeszło przez pancerz; cios w całości na tarczy nie zadaje obrażeń HP ani nie
+liczy się do `damageTaken`. Odnowienie zależy od `hurtT` (czas od ostatniego trafienia), tego samego co
+efekty trafienia. W HUD jest niebieski pasek na pasku zdrowia i liczba „+N” obok zdrowia, widoczne
+tylko przy tarczy > 0. Pauza pokazuje szybkość ataku i krytyk zawsze, resztę nowych statów, gdy coś je podniosło.
+
+**Klątwa** (`curseEffects`): przy klątwie c zdrowie wrogów × (1 + c), liczba żywych wrogów i tempo
+pojawiania × (1 + c), obrażenia × (1 + 0,5c), szybkość × (1 + 0,25c), doświadczenie i złoto × (1 + c).
+Obrażenia i szybkość rosną słabiej, bo więcej wrogów już samo zwiększa obrażenia na sekundę;
+klątwa ma być wyborem „więcej i trudniej za więcej”, a nie szybką śmiercią. Liczby do strojenia,
+gdy pojawi się księga klątwy.
+
+Wpływ na balans (`npm run sim`, dobry bot, po 32 runy):
+
+| profil | przed | po |
+|---|---|---|
+| Wojmir bez Chaty | 19/32 | 19/32 (te same runy) |
+| Bogumił bez Chaty | 18/32 | 18/32 (te same runy) |
+| Jagna bez Chaty | 11/32 | 11/32 |
+| Wojmir z poziomem 4 ulepszeń | 31/32 | 29/32 |
+
+Spadek przy poziomie 4 to brak krytyka z Ołtarzyka Welesa (+2,4% przy poz. 4); mieści się w rozrzucie
+(ok. ±3 na 32 runach) i w celu ok. 94%.
+
+### Review Codexem (nowe statystyki)
+
+`codex exec review --uncommitted` znalazł trzy błędy, wszystkie poprawione, z testami w `tests/stats.test.ts`:
+
+- przy dużej szybkości ataku odstęp ciupagi spadał poniżej stałych 0,2 s między zamachami i każdy nowy
+  atak kasował drugi zamach (więcej szybkości = mniej obrażeń); odstęp zamachów mieści się teraz w odstępie ataku,
+- sierpy i stożek z czasem trwania > 1 dawały ujemne zanikanie w renderze; `WeaponInst.span` zapamiętuje
+  pełny czas bieżącej aktywacji i render liczy z niego,
+- ciernie zabijające Leszego przy śmiertelnym ciosie ustawiały naraz wygraną i śmierć; teraz wygrana kończy
+  obsługę ciosu.
+
+Po poprawkach wyniki bota bez zmian (19/32, 18/32, 11/32, 29/32).
+
+## Księgi zamiast pasywek (etap 2 z `docs/MEGABONK-ANALIZA.md`)
+
+Pasywki stały się **Księgami**: każda podnosi dokładnie jeden stat na poziom, ma do **20 poziomów**
+(`BOOK_MAX_LEVEL`), a slotów jest **5** (`MAX_PASSIVES`, wcześniej 6 pasywek po 5 poziomów).
+Księga Krzemieni (+1 pocisk) i Księga Żar-ptaka (+1 skok) zostały na 2 poziomach: pocisk na każdą broń
+na poziom przy 20 poziomach rozsadziłby balans.
+
+- **Nazwy w kodzie zostają** (`PassiveDef`, `w.passives`, karta `'passive'`, `evolution.passive`):
+  zmiana byłaby kosmetyczna na całym kodzie, a ids ksiąg trzymają pary ewolucji i odblokowania.
+  W UI i README wszędzie „Księga”.
+- **Stare id, nowe nazwy:** pas → Księga Siłacza, krzesiwo → Krzesiwa, amulet → Dębu, onuce → Wędrowca,
+  serce → Tura, miod → Pszczół, magnes → Bursztynu, podkowa → Welesa, tarcza → Lipowej Tarczy,
+  sakwa → Krzemieni, pioro → Żar-ptaka, zielnik → Zielarki. Pary ewolucji bez zmian.
+- **Nowe księgi** na statach z etapu 1: Sokoła (szansa na krytyk, +4%), Wilczego Kła (obrażenia
+  krytyczne, +15%), Czarnoboga (klątwa, +8%), Strzygi (kradzież życia, +5%), Głogu (ciernie, +8),
+  Mgły (unik, +10%), Grodu (tarcza, +15), Mokoszy (czas działania, +10%), Strzyboga (szybkość pocisków,
+  +15%), Dzika (odrzut, +25%). Nowe ikony w `src/ui/icons.ts`: eye, fang, thorn, cloud, palisade,
+  hourglass, wind, tusk.
+- **Księga Krzesiwa daje szybkość ataku** (+12% na poziom) zamiast −7% odnowienia: zgodnie z decyzją
+  z etapu 1, a przy 20 poziomach odnowienie i tak dobiłoby do granicy 0,35. Przy +8% bot wygrywał
+  wyraźnie rzadziej (Wojmir 14/32, Bogumił 13/32): dawne odejmowanie od odnowienia rośnie szybciej niż
+  liniowo (5 poziomów rzadkich: −45% odnowienia = ×1,8 szybciej), więc odpowiednik liniowy musi być większy.
+- **Księga Welesa to czyste szczęście.** Krytyk z podkowy z etapu 1 zniknął, bo krytyk ma teraz własną
+  księgę. Najbardziej odczuła to Jagna (kruki ewoluują z Księgą Welesa): 42/128 → 27/128 nawet z +6% kryt. Zamiast
+  łamać zasadę „jeden stat”, Jagna dostała +12% szansy na krytyk zamiast +2% (z wariantów +12% kryt.,
+  +40% szczęścia, +6% kryt. i +50% obr. kryt., +6% kryt. i +12% szybkości ataku wybrany najprostszy,
+  który wraca do poziomu sprzed zmian: 44/128).
+- **Pula startowa jest mała, reszta przez osiągnięcia** (jak tomy w Megabonku). Przy wszystkich
+  22 księgach w puli rdzeniowe księgi pojawiały się rzadziej i Jagna spadała do 10/64. Na start:
+  12 dawnych ksiąg i Księga Sokoła. Osiągnięcia związane ze stylem gry (nowy warunek `book`: księga na
+  danym poziomie w jednym runie; `RunSummary.books`): Sokoła 8 → Wilczego Kła, Lipowej Tarczy 6 → Grodu,
+  Tura 8 → Głogu, Wędrowca 6 → Mgły, Dębu 8 → Mokoszy, Krzemieni 2 → Strzyboga, 1500 wrogów w runie →
+  Strzygi, 5000 wrogów łącznie → Dzika, pokonanie Leszego → Czarnoboga (klątwa dopiero, gdy gracz umie
+  wygrać). Partnerzy ewolucji są zawsze w puli startowej (test).
+- **Wagi kart** (`src/sim/cards.ts`): poziom posiadanej księgi 1,6 (było 2,4; broń 3), w skrzyni 1
+  (było 2). Księgi mają 20 poziomów, więc przy starych wagach ciągle wypierały karty broni i opóźniały
+  ewolucje. Nowe księgi dzielą jeden budżet wagi (`NEW_BOOK_BUDGET` = 16, najwyżej 1,6 na księgę),
+  żeby duża pula nie zalewała kart; księga-partner ewolucji posiadanej broni nadal 2,6.
+  Rzadkość mnoży poziom księgi jak wcześniej (×1 / 1,3 / 1,7 / 2,3).
+- **Bot** (`src/debug/bot.ts`) omija Księgę Czarnoboga i niżej ceni księgi niszowe (Dzika, Strzyboga,
+  Głogu, Mokoszy, Mgły, Bursztynu, Żar-ptaka, Sokoła; Wilczego Kła, póki krytyk < 15%), chyba że to
+  partner ewolucji. Bez tego brał je na równi z obrażeniami i wynik mierzył słabą grę, nie balans.
+- `npm run sim` ma nowy argument `books=id,id` (ograniczenie puli ksiąg), użyty do szukania przyczyn.
+
+Wpływ na balans (`npm run sim`, dobry bot; „przed” to stan po etapie 1, który przy bazowych statach
+daje te same runy co HEAD):
+
+| profil | przed | po |
+|---|---|---|
+| Wojmir bez Chaty, 64 runy | 25/64 | 29/64 |
+| Bogumił bez Chaty, 64 runy | 32/64 | 38/64 |
+| Dobrosława bez Chaty, 64 runy | 27/64 | 23/64 |
+| Jagna bez Chaty, 128 runów | 42/128 | 44/128 |
+| Wojmir z poziomem 2 ulepszeń, 64 runy | 49/64 | 45/64 |
+| Wojmir z poziomem 4 ulepszeń, 64 runy | 61/64 | 57/64 |
+| początkujący bez Chaty, 32 runy | 0/32, 3:04 | 0/32, 2:56 |
+
+Po 32 runy (te same ziarna co w etapie 1): Wojmir 19 → 17, Bogumił 18 → 18, Jagna 11 → 7,
+Wojmir z poz. 4 29 → 26. Rozrzut przy 32 runach to ok. ±3–4, dlatego Jagnę mierzono na 128.
+Z ulepszeniami wychodzi o ok. 4 wygrane na 64 mniej (pięć runów z poz. 4 kończy się limitem 12 minut
+z żywym Leszym, nie śmiercią); to w granicach 1–1,5 odchylenia, zostawione do strojenia razem z etapem 3
+(poziomy broni), który i tak przestawi krzywą siły.
+
+### Review Codexem (księgi)
+
+`codex exec review --uncommitted` (etapy 1 i 2 razem) znalazł dwa błędy, oba poprawione, z testami
+w `tests/books.test.ts`:
+
+- przy dużej szybkości pocisków (Księga Strzyboga) pocisk przelatywał przez wroga między klatkami;
+  pociski poruszają się teraz krokami najwyżej 0,6 m (`PROJ_SUBSTEP`), przy bazowych prędkościach
+  (do 28 m/s) to nadal jeden krok, więc runy bota bez zmian (17/32, te same runy),
+- przy 20 poziomach Księga Wędrowca dobijała do limitu szybkości ruchu 2,2, a dalsze poziomy niczego nie
+  dawały; limity są w `STAT_CAPS` (`src/sim/stats.ts`), a księga statu na limicie nie trafia już na
+  karty awansu ani do skrzyń.
+
+## Poziomy broni z liniami statów (etap 3 z `docs/MEGABONK-ANALIZA.md`)
+
+Konsultacja z Codexem (`codex exec`, dwa warianty: same losowe linie albo hybryda). Wybrana **hybryda**,
+jak radził Codex: ręcznie pisane poziomy 2–5 zostają, bo nadają broniom charakter (drugi zamach, +1 sierp,
+wybuchające kule), a każda karta broni dolosowuje **linie statów** (`src/data/weaponLines.ts`).
+
+- **4 sloty broni** (`MAX_WEAPONS`, było 6), **cap 15** (`WEAPON_MAX_LEVEL`). Poziomy 6–15 to same linie.
+- **Linie** zależą od rodzaju broni (`KIND_LINES`): obrażenia, szybkość ataku, obszar, czas działania,
+  prędkość, odrzut, a całkowite +1 przebicie / odbicie / przeskok pioruna tylko tam, gdzie mają sens.
+  Linie na jednej karcie są różne. Wieczna orbita (Żniwa Mokoszy, odnowienie 0) nie losuje szybkości ataku
+  ani czasu działania, bo nic by nie dały (rada Codexa). **Liczba pocisków nie jest linią**: zostaje w
+  kamieniach milowych i Księdze Krzemieni, bo mnoży wszystko inne.
+- **Rzadkość**: liczba linii 1 / 2 / 3 / 3, siła ×1 / 1 / 1,1 / 1,3 (całkowite linie bez mnożnika).
+  Nowa broń dostaje jedną linię mniej. Dawny bonus rzadkości (+8/16/30% obrażeń broni) zniknął; linia
+  obrażeń trafia do tego samego `WeaponInst.bonus`, reszta do `WeaponInst.lines`, a statystyki broni to
+  `applyLines(weaponStatsAt(...), lines)` (`World.refreshWeapon`), więc kamienie milowe i ewolucja
+  nie kasują linii.
+- **Ewolucja od 5. poziomu** (`EVOLVE_LEVEL`) z księgą, jak dotąd. Ewolucja **zachowuje poziom i linie**
+  (jeden licznik poziomu, rada Codexa) i dalej rośnie liniami do 15. W HUD broń ewoluowana ma „★” przed poziomem.
+- Wartości linii strojone botem. Pierwsze (+12% obrażeń, +8% szybkości ataku, +10% obszaru) dawały za
+  łatwą grę; wybrane 0,7 z nich: +8,5% obrażeń, +5,5% szybkości ataku, +7% obszaru, +8,5% czasu
+  działania i prędkości, +18% odrzutu.
+
+Wpływ na balans (`npm run sim`, dobry bot, po 64 runy; „przed” to koniec etapu 2):
+
+| profil | przed | pierwsze linie | wariant 0,6 | 1/1/2/2 linii | **wybrane (0,7)** |
+|---|---|---|---|---|---|
+| Wojmir bez Chaty | 29 | 32 | 21 | 8 | **22** |
+| Bogumił bez Chaty | 38 | 43 | 31 | 28 | **32** |
+| Dobrosława bez Chaty | 23 | 36 | 14 | 10 | **19** |
+| Jagna bez Chaty | ok. 22* | 36 | 16 | 8 | **17** |
+| Wojmir z poz. 2 ulepszeń | 45 | 50 | 36 | 38 | **40** |
+| Wojmir z poz. 4 ulepszeń | 57 | 64 | 56 | 54 | **58** |
+
+\* Jagna na końcu etapu 2: 44/128. Bez ulepszeń średnio ok. 35% (cel ok. 30%), z poz. 4 91% (cel 90%+).
+Początkujący bez Chaty: 0/32, średnio 3:20 (było 2:56). `npm run build` przechodzi.
+
+### Review Codexem (poziomy broni)
+
+Dwie uwagi, obie poprawione, z testami:
+
+- osiągnięcie „1500 wrogów w jednym runie” (Księga Strzygi) liczyło `kills`, które tryb nieskończony
+  zeruje do osobnego rozliczenia; jest nowe pole `runKills` (cały run) w `World` i `RunSummary`,
+  a warunek `runKills` sprawdza je,
+- linia szybkości ataku była losowana także wtedy, gdy broń już strzela z minimalnym odstępem silnika
+  (0,12 s, kruki 0,15 s; `minInterval` w `src/sim/weapons.ts`); taka broń jej już nie dostaje.
+
+## Skarby ze skrzyń (etap 4 z `docs/MEGABONK-ANALIZA.md`)
+
+Skrzynia daje najpierw gotową ewolucję (jak dotąd), a w pozostałych przypadkach **jeden skarb**
+(`src/data/items.ts`) zamiast ulepszenia posiadanej broni lub księgi. Skarbów nie ogranicza liczba miejsc,
+kopie się sumują (`World.items`, licznik efektów `World.fx`), każdy ma stałą rzadkość.
+
+- **Losowanie**: najpierw rzadkość (`rollRarity` ze szczęściem + 0,6, `CHEST_LUCK`; zwykłe są możliwe,
+  wcześniej skrzynia zawsze dawała co najmniej rzadką kartę), potem losowy skarb tej rzadkości z puli
+  (`World.itemPool`, gotowe pod odblokowania w etapie 7). Brak skarbu danej rzadkości: niższa rzadkość.
+- **17 skarbów.** Siedem dodaje staty na kopię (Róg tura, Żelazny kołpak, Plaster miodu, Bursztynowy sznur,
+  Pazur rysia, Wilcza skóra, Czara Mokoszy). Dziesięć ma efekty, a siła rośnie z liczbą kopii:
+  Krzemień iskrzący (6% na wybuch 50% ciosu), Kamień Peruna (8% na piorun 80% ciosu), Kosa Marzanny
+  (0,5% na zabicie zwykłego wroga; bossy i mini-bossy odporne), Czaszka upiora (+0,05% obrażeń za
+  zabójstwo, do +40% na kopię), Mech pustelnika (do +30% obrażeń po sekundzie stania), Skrzydlate łapcie
+  (60% premii do szybkości ruchu idzie w szybkość ataku), Sakiewka wędrowca (1 złota za 30 m),
+  Dzban kowala (cap poziomu broni +5, każdy kolejny +2: `World.weaponCap()`), Kowadło Swaroga (+1 linia
+  na każdej karcie broni), Lustro wiedźmy (+0,25 s nietykalności po ciosie).
+- Szanse przy trafieniu mają wspólny sufit 60% (`PROC_CHANCE_CAP`). Obrażenia z efektów idą przez
+  `SLOT_PROC`: bez krytyka, bez kradzieży życia i bez kolejnych efektów (żadnych łańcuchów), liczone
+  osobno (`procDealt`). Wszystkie losowania odbywają się tylko przy posiadanym skarbie, więc bez skarbów
+  przebieg runu się nie zmienia.
+- UI: karta „Skarb” z liczbą posiadanych kopii, rząd skarbów w HUD (ramka w kolorze rzadkości, liczba kopii),
+  sekcja „Skarby” w pauzie. Nowe ikony: horn, helmet, honeycomb, beads, claw, pelt, cup, moss, mirror, anvil.
+
+Wpływ na balans (`npm run sim`, dobry bot, po 64 runy; „przed” to koniec etapu 3):
+
+| profil | przed | po |
+|---|---|---|
+| Wojmir bez Chaty | 22 | 23 |
+| Bogumił bez Chaty | 32 | 34 |
+| Dobrosława bez Chaty | 19 | 18 |
+| Jagna bez Chaty | 17 | 21 |
+| Wojmir z poz. 2 ulepszeń | 40 | 48 |
+| Wojmir z poz. 4 ulepszeń | 58 | 61 |
+| początkujący (32 runy) | 0, 3:20 | 0, 2:51 |
+
+Bez ulepszeń średnio ok. 37%, z poz. 4 95%. Ewolucji jest mniej (Wojmir średnio 3,1 → 1,9 na run), bo skrzynie
+nie podnoszą już poziomów broni; ich siłę przejęły skarby. `npm run build` przechodzi.
+
+### Review Codexem (skarby)
+
+- **Poważny błąd:** wybuch Krzemienia i piorun Kamienia Peruna szły przez `damageCircle`, który zbiera cele
+  do `bufB`, a ten sam bufor iteruje właśnie atak obszarowy, który wywołał efekt (piorun broni, wybuchy,
+  kałuże). Część wrogów dostawała podwójnie, część wcale. Efekty mają teraz własny bufor `bufC`
+  (`World.procCircle`); test sprawdza, że efekt nie rusza `bufA` ani `bufB` (z dawnym kodem nie przechodzi).
+- HUD nie zdejmował „MAX” z broni po zdobyciu Dzbana kowala; klucz odświeżania obejmuje teraz `weaponCap()`.
+
+Po poprawce (64 runy): Wojmir 26, Bogumił 31, Dobrosława 22, Jagna 20, z poz. 2 48, z poz. 4 60
+(średnio ok. 39% bez ulepszeń, 94% z poz. 4).
+
+## Pasywki postaci i nowi bohaterowie (etap 5 z `docs/MEGABONK-ANALIZA.md`)
+
+Każda postać ma teraz **pasywkę rosnącą z poziomem** w runie (`CharacterDef.passive`: nazwa, opis,
+`perLevel` dodawane raz na każdy poziom powyżej 1. w `computeStats`, opcjonalna reguła `power`).
+Awans od razu odświeża statystyki (`World.gainXp`). Karta postaci pokazuje pasywkę.
+
+| postać | pasywka | broń | odblokowanie |
+|---|---|---|---|
+| Wojmir | Hart woja: +0,6% obrażeń / poz. | sierpy | od początku |
+| Dobrosława | Zielna mądrość: +0,03 zdrowia/s i +2% zasięgu zbierania / poz. | wianek | 5 minut (bez zmian) |
+| Bogumił | Kowalska skóra: +1,5 zdrowia i +0,03 pancerza / poz. | ciupaga | 1000 wrogów (bez zmian) |
+| Jagna | Wiedźmie oko: +0,3% szansy na krytyk / poz. | kruki | Baba Jaga (bez zmian) |
+| **Radogost** | Pełna sakwa: +1% obrażeń za 10 złota w sakiewce (do +30%), +1% złota / poz. | proca | 400 złota w jednym runie (warunek `runGold`) |
+| **Strzeżymir** | Pęd: 1% szybkości ponad bazę = +0,5% obrażeń, +0,5% obrażeń / poz. | włócznia | +60% szybkości ruchu w runie (warunek `speed`) |
+| **Mszczuj** | Krew za krew: +4% kradzieży życia, +0,5% / poz. | oddech Marzanny | 300 zdrowia z kradzieży życia w runie (warunek `lifesteal`, `RunSummary.lifestealHealed`) |
+
+Nowi bohaterowie wyglądają jak istniejące sylwetki (`look.style`) w innych barwach: osobne modele to
+praca graficzna na później. Pełna sakwa działa jak mnożnik w `damageEnemy` (`World.goldPower`), więc
+Radogost wybiera między wydaniem złota na skrzynię a siłą ciosu. Przy siedmiu postaciach ekran wyboru
+się przewija; przyciski są przyklejone do dołu arkusza.
+
+**Balans.** Same pasywki dawały za łatwą grę (64 runy: Wojmir 34, Bogumił 34, Dobrosława 29, Jagna 28,
+Radogost 41, Mszczuj 41, z poz. 4 64/64). Najpierw osłabione wartości z pierwszego projektu (Wojmir
+1% → 0,6%, Jagna 0,5% → 0,3%, Radogost bez +10% szczęścia i z limitem 30% zamiast 50%, Mszczuj 8% + 1%
+→ 4% + 0,5%), co dawało średnio ok. 46% bez ulepszeń. Ponieważ etapy 1–5 razem dodały graczowi siły,
+dodatkowo **zdrowie wrogów** rośnie odrobinę szybciej: `1 + minuta^1,55 × 0,37` → `× 0,42`
+(`src/data/waves.ts`, ok. +13% pod koniec runu).
+
+| 64 runy | koniec etapu 4 | pasywki (1. projekt) | osłabione pasywki | **wybrane: + zdrowie wrogów** |
+|---|---|---|---|---|
+| Wojmir | 26 | 34 | 22 | **19** |
+| Bogumił | 31 | 34 | 36 | **28** |
+| Dobrosława | 22 | 29 | 29 | **26** |
+| Jagna | 20 | 28 | 31 | **18** |
+| Radogost | – | 41 | 42 | **31** |
+| Strzeżymir | – | 30 | 30 | **31** |
+| Mszczuj | – | 41 | 27 | **26** |
+| Wojmir z poz. 2 | 48 | 53 | 45 | **43** |
+| Wojmir z poz. 4 | 60 | 64 | 62 | **58** |
+
+Wojmir bez ulepszeń 30% (cel ok. 30%), z poz. 4 91% (cel 90%+); średnia postaci ok. 40%.
+Początkujący: 1/32, 2:49. `npm run build` przechodzi.
+
+### Review Codexem (postacie)
+
+- Strzeżymir miał się odblokowywać Księgą Wędrowca na 10. poziomie, ale przy ulepszeniach z Chaty
+  i epickich kartach szybkość dobija do limitu 2,2 wcześniej, a księga statu na limicie znika z kart:
+  warunek bywał nieosiągalny. Teraz warunek to „+60% szybkości ruchu w jednym runie” (`speed`,
+  `RunSummary.peakMoveSpeed`), osiągalny każdą drogą (księga, Chata, skarby).
+- Złoto do odblokowania Radogosta liczyło `goldCollected`, które tryb nieskończony zeruje; jest pole
+  `runGold` z całego runu (jak `runKills`). Test obejmuje oba przypadki.
+
+## Portal, nadgodzina, kapliczki, przelosowanie i wygnanie (etap 6 z `docs/MEGABONK-ANALIZA.md`)
+
+**Portal Leszego.** Konsultacja z Codexem (`codex exec`): portal w 10:00, gracz sam wybiera chwilę walki
+(przytrzymanie `E` 1,5 s), **bez automatycznego bossa** (wybór walki to sens portalu) i **bez premii za
+zwlekanie** (gęstsze fale same dają więcej XP i złota). Przyjęte w całości poza liczbami gęstości:
+
+- zdarzenie `portal` zamiast `boss` w 10:00 (`WAVE_EVENTS`), portal na wolnym miejscu 25–40 m od bohatera,
+  z wolną linią marszu (żadnego drzewa ani kamienia po drodze); zielony pierścień w słupie światła,
+  znacznik na mapie;
+- **nadgodzina** 10:00–12:00: żywych wrogów 260 → 320, tempo 13 → 16 (`OVERTIME_PHASE`); Codex proponował
+  300 → 340 i 13 → 18, ale bot ginął wtedy w drodze do portalu;
+- **fala końcowa** od 12:00: zdrowie i obrażenia wrogów ×1,25 co 30 s (`finalWaveMul`), aż do wezwania;
+- gdy Leszy wychodzi, zwykli wrogowie dalej niż 22 m od bohatera znikają (bez łupów i zabójstw):
+  „bór cichnie przed strażnikiem”. Bez tego walka z bossem toczyła się w hordzie z nadgodziny;
+- `npm run sim` ma domyślny limit 15 minut (było 12), bo run trwa teraz dłużej;
+- bot idzie do portalu od razu, z siłą rosnącą co sekundę zwłoki.
+
+Pierwsza wersja (portal 35–55 m od środka mapy, bez ciszy, gęstość wg Codexa) dała Wojmirowi 6/64,
+a z poz. 4 43/64. Bot ginął w nadgodzinie albo utykał na drzewach w drodze do portalu: 16 z 64 runów
+z poz. 4 skończyło się limitem czasu bez wezwanego Leszego. Stąd portal bliżej bohatera, z wolną linią
+marszu, i cisza.
+
+**Kapliczki** (`SHRINE_KINDS` w `src/sim/terrain.ts`; osiem miejsc jak dotąd): cztery kapliczki bogów
+(Perun, Swaróg, Weles, Mokosz po dwa razy, czyli najwyżej cztery błogosławieństwa zamiast ośmiu),
+dwa **święte kręgi** (5 s w kręgu o promieniu 5 m, poza nim ładunek spada o 0,5 s/s; wybór 1 z 3 darów
+z `CIRCLE_BOONS`; naładowanego kręgu nie da się zostawić na później), **kapliczka bursztynowa**
+(przyciąga wszystkie bursztyny) i **ołtarz chciwości** (skarb i 30 złota za +15% klątwy do końca runu).
+Kolor poświaty i znacznika na mapie mówi, jaka to kapliczka. Bot omija ołtarz chciwości, tak jak księgę klątwy.
+
+**Klątwa** była już w statach (etap 1) i Księdze Czarnoboga (etap 2); ołtarz chciwości to trzecie źródło.
+
+**Przelosowanie i wygnanie za złoto.** Darmowe przelosowania z Kości wróżebnych zostają; po nich kolejne
+kosztują 8 złota ×1,5 za każde (`REROLL_COST`). „Wygnaj” pod nową bronią lub księgą usuwa ją z puli do
+końca runu za 12 złota ×1,5 za każde (`BANISH_COST`) i dobiera kartę na jej miejsce. Ulepszeń posiadanych
+rzeczy i ewolucji wygnać się nie da. Bot z nich nie korzysta.
+
+Wpływ na balans (`npm run sim`, dobry bot, po 64 runy; „przed” to koniec etapu 5):
+
+| profil | przed | pierwsza wersja | **ostatecznie** |
+|---|---|---|---|
+| Wojmir | 19 | 6 | **16** |
+| Bogumił | 28 | 14 | **32** |
+| Dobrosława | 26 | 14 | **28** |
+| Jagna | 18 | 12 | **17** |
+| Radogost | 31 | 21 | **33** |
+| Strzeżymir | 31 | 13 | **22** |
+| Mszczuj | 26 | 8 | **34** |
+| Wojmir z poz. 2 | 43 | 32 | **42** |
+| Wojmir z poz. 4 | 58 | 43 | **59** |
+
+Wojmir bez ulepszeń 25%, średnia postaci ok. 41%, z poz. 4 92%. Początkujący 1/32, 2:51.
+`npm run build` przechodzi.
+
+### Review Codexem (portal i kapliczki)
+
+- Leszy wezwany w fali końcowej przejmował na stałe jej mnożniki zdrowia i obrażeń (np. w 12:40 +56%),
+  bo mnożniki liczone na początku klatki trafiały do jego statystyk. Teraz po wezwaniu są przeliczane
+  od razu (`updateEnemyScaling`); test porównuje zdrowie Leszego z wartością bez fali.
+- Osiągnięcie Księgi Mgły („Księga Wędrowca na 6. poziomie”) też mogło stać się nieosiągalne na limicie
+  szybkości (np. dwa dary kręgu z szybkością plus Chata). Warunek to teraz „+35% szybkości ruchu w jednym
+  runie” (`speed`), tak jak u Strzeżymira.
+
+## Srebro, Skarbiec i Rózga wróżbity (etap 7 z `docs/MEGABONK-ANALIZA.md`)
+
+- **Srebro** (`SaveData.silver`): każdy run daje `⌊(minuty + zabici/400 + 10 za zwycięstwo) × mnożnik srebra⌋`
+  (`silverFor`, `RunResult.silver`, ekran końca runu). Wygrany run to ok. 30–40 srebra, przegrany w 7. minucie
+  ok. 10. Mnożnik podnosi nowe ulepszenie Chaty „Srebrna skrzynka” (+15% na poziom, za złoto). Złoto i Chata
+  działają jak dotąd.
+- **Skarbiec**: pięć skarbów ma `unlock` (osiągnięcie stylu gry) i cenę w srebrze (`ItemDef.silver`).
+  Do skrzyń trafiają dopiero po kupnie (`unlockedItemIds`, `SaveData.bought`). Osiągnięcia: +50% szybkości
+  ruchu → Skrzydlate łapcie (20), 5 minut z najwyżej 150 straconego zdrowia → Lustro wiedźmy (15), broń na
+  15. poziomie → Dzban kowala (30), 3 ewolucje w runie → Kowadło Swaroga (40), 3000 wrogów w runie → Kosa
+  Marzanny (40). Nowe warunki: `evolveCount`, `weaponLevel`, `unhurt`. To ten sam dwuetapowy wzór co
+  w Megabonku (najpierw zrób coś, potem kup), ale tylko dla nowych skarbów: istniejące postacie, bronie
+  i księgi zostają odblokowane samym osiągnięciem, żeby nie zabrać graczom niczego z dotychczasowych zapisów.
+- **Rózga wróżbity** (30 srebra, Toggler z Megabonka): w Chacie pojawiają się przełączniki broni, ksiąg
+  i skarbów (`SaveData.disabled`, `togglePool`, `runPool`). Pula nie spada poniżej 4 broni, 6 ksiąg
+  i 6 skarbów (`MIN_ENABLED`). Broń startowa postaci działa zawsze.
+- Zapis: nowe pola są sprawdzane w `sanitizeSave` (stare zapisy dostają 0 srebra i puste listy); wersja
+  zapisu bez zmian.
+
+**Balans.** Pula skarbów na start skurczyła się, a wśród legendarnych nie zostało nic. Losowanie najpierw
+rzadkości, potem skarbu spychało wtedy każdą wyrzuconą legendę na jedyny epicki skarb, Czarę Mokoszy
+(+40 zdrowia, +8% kradzieży życia), i bot wygrywał dużo częściej (Wojmir 41/64). Teraz losuje się tylko
+spośród rzadkości obecnych w puli (`rollItem`), a Czaszka upiora została w puli startowej. Mimo to
+skrzynie z mniejszej puli są mocniejsze (słabsze dla bota skarby, jak Dzban i Kowadło, wypadły), więc
+zdrowie wrogów rośnie znów odrobinę szybciej: `× 0,42` → `× 0,52` we wzorze z etapu 5.
+
+| 64 runy | koniec etapu 6 | Skarbiec (z błędem rzadkości) | poprawka rzadkości | zdrowie 0,47 | **zdrowie 0,52** |
+|---|---|---|---|---|---|
+| Wojmir | 16 | 41 | 29 | 24 | **20** |
+| Bogumił | 32 | 54 | 36 | 37 | **41** |
+| Dobrosława | 28 | 50 | 31 | 27 | **27** |
+| Jagna | 17 | 40 | 28 | 18 | **13** |
+| Radogost | 33 | 52 | 40 | 39 | **28** |
+| Strzeżymir | 22 | 40 | 29 | 25 | **24** |
+| Mszczuj | 34 | 33 | 31 | 36 | **38** |
+| Wojmir z poz. 2 | 42 | 55 | 50 | 46 | **43** |
+| Wojmir z poz. 4 | 59 | 64 | 64 | 61 | **60** |
+
+Wojmir bez ulepszeń 31%, z poz. 4 94%; średnia postaci ok. 43%. Rozrzut między postaciami jest duży
+(Jagna 20%, Bogumił 64%) i to zadanie do strojenia postaci, nie mechaniki meta. Początkujący 0/32, 2:32.
+Kariera (`npm run sim -- career=12`, 4 kariery): pierwsza wygrana średnio w 2,8. runie. `npm run build` przechodzi.
+
+### Review Codexem (srebro)
+
+Tryb nieskończony płacił srebrem drugi raz za minuty sprzed zwycięstwa (`time` nie jest zerowany przy
+przejściu w tryb nieskończony). `World.bankedTime` zapamiętuje czas już rozliczony przy zwycięstwie,
+a `silverFor` liczy tylko resztę; test w `tests/meta.test.ts`.

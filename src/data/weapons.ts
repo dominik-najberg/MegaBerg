@@ -1,4 +1,5 @@
 import type { WeaponDef, WeaponStats } from './types';
+import { WEAPON_MAX_LEVEL } from './weaponLines';
 
 const ZERO: WeaponStats = {
   damage: 0,
@@ -301,14 +302,20 @@ export const WEAPONS: WeaponDef[] = [
 
 export const WEAPON_BY_ID: Record<string, WeaponDef> = Object.fromEntries(WEAPONS.map((w) => [w.id, w]));
 
-export function weaponMaxLevel(def: WeaponDef): number {
+/** Highest level of any weapon (milestones end at 5; the rest are rolled stat lines). */
+export function weaponMaxLevel(_def: WeaponDef): number {
+  return WEAPON_MAX_LEVEL;
+}
+
+/** Last level that has a hand-written milestone. */
+export function weaponMilestones(def: WeaponDef): number {
   return def.levels.length + 1;
 }
 
 /** Stats of a weapon at a given level (1-based): base overridden by every level up to it. */
 export function weaponStatsAt(def: WeaponDef, level: number): WeaponStats {
   const s: WeaponStats = { ...ZERO, ...def.base };
-  const max = Math.min(level, weaponMaxLevel(def));
+  const max = Math.min(level, weaponMilestones(def));
   for (let l = 2; l <= max; l++) {
     const lv = def.levels[l - 2];
     if (!lv) break;

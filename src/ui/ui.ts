@@ -1,14 +1,17 @@
 import { ACHIEVEMENTS } from '../data/achievements';
+import { ITEM_BY_ID, ITEMS } from '../data/items';
+import { PASSIVE_BY_ID } from '../data/passives';
 import { BLESSING_MAX } from '../data/blessings';
 import { CHARACTERS } from '../data/characters';
 import { ENEMIES } from '../data/enemies';
 import { RARITIES } from '../data/rarity';
 import { SHOP, shopCost } from '../data/shop';
 import type { EnemyDef } from '../data/types';
-import { WEAPON_BY_ID, weaponMaxLevel } from '../data/weapons';
-import { isUnlocked, type RunResult } from '../meta/progress';
+import { WEAPON_BY_ID } from '../data/weapons';
+import { isUnlocked, MIN_ENABLED, poolIds, runPool, TOGGLER_PRICE, type PoolKind, type RunResult } from '../meta/progress';
 import type { SaveData } from '../meta/save';
-import type { Card } from '../sim/cards';
+import { canBanish, type Card } from '../sim/cards';
+import { dodgeChance } from '../sim/stats';
 import type { RunSummary, World } from '../sim/world';
 import { hex, icon } from './icons';
 
@@ -16,6 +19,8 @@ export interface UIActions {
   start(characterId: string): void;
   choose(index: number): void;
   reroll(): void;
+  toggle(kind: PoolKind, id: string): void;
+  banish(i: number): void;
   cancelChoice(): void;
   resume(): void;
   restart(): void;
@@ -49,8 +54,10 @@ export class UI {
   private readonly timer: HTMLElement;
   private readonly hpFill: HTMLElement;
   private readonly hpText: HTMLElement;
+  private readonly shieldFill: HTMLElement;
   private readonly weapons: HTMLElement;
   private readonly passives: HTMLElement;
+  private readonly items: HTMLElement;
   private readonly kills: HTMLElement;
   private readonly gold: HTMLElement;
   private readonly dashFill: HTMLElement;
@@ -88,9 +95,11 @@ export class UI {
     const tl = el('div', 'tl', this.hud);
     const hp = el('div', 'hp', tl);
     this.hpFill = el('div', 'hp-fill', hp);
+    this.shieldFill = el('div', 'shield-fill', hp);
     this.hpText = el('span', 'hp-text', hp);
     this.weapons = el('div', 'slots', tl);
     this.passives = el('div', 'slots small', tl);
+    this.items = el('div', 'slots small items', tl);
     const tr = el('div', 'tr', this.hud);
     this.kills = el('div', 'stat', tr);
     this.gold = el('div', 'stat', tr);
@@ -170,6 +179,12 @@ export class UI {
         break;
       case 'reroll':
         a.reroll();
+        break;
+      case 'toggle':
+        a.toggle(arg.slice(0, 1) as PoolKind, arg.slice(2));
+        break;
+      case 'banish':
+        a.banish(Number(arg));
         break;
       case 'cancel':
         a.cancelChoice();
@@ -355,6 +370,7 @@ export class UI {
         <p>${c.desc}</p>
         <div class="char-row">${icon(w?.icon ?? 'star', hex(w?.color ?? 0xffffff), 18)} ${w?.name ?? ''}</div>
         <div class="char-bonus">${c.bonus}</div>
+        <div class="char-passive"><b>${c.passive.name}:</b> ${c.passive.desc}</div>
       </div>`;
     }).join('');
     this.open(
@@ -385,12 +401,59 @@ export class UI {
         <button class="btn small${can ? ' primary' : ' disabled'}" data-act="buy" data-arg="${it.id}">${max ? 'Maks.' : `${icon('coin', '#ffd040', 14)} ${cost}`}</button>
       </div>`;
     }).join('');
+    const silverPill = `<span class="pill big silver">${icon('coin', '#d8dde6', 16)} ${s.silver} srebra</span>`;
+    const vault = ITEMS.filter((it) => it.silver)
+      .map((it) => {
+        const owned = s.bought.includes(`item:${it.id}`);
+        const open = isUnlocked(s, it.unlock);
+        const ach = ACHIEVEMENTS.find((a) => a.id === it.unlock);
+        const can = open && !owned && s.silver >= (it.silver ?? 0);
+        const btn = owned
+          ? '<button class="btn small disabled">W skrzyniach</button>'
+          : open
+            ? `<button class="btn small${can ? ' primary' : ' disabled'}" data-act="buy" data-arg="item:${it.id}">${icon('coin', '#d8dde6', 14)} ${it.silver}</button>`
+            : `<button class="btn small disabled">${icon('lock', '#8a8296', 14)}</button>`;
+        return `<div class="shop-item${owned ? ' maxed' : ''}">
+          <div class="shop-icon" style="--rc:${RARITIES[it.rarity].color}">${icon(it.icon, open ? hex(it.color) : '#6f6880', 30)}</div>
+          <div class="shop-body"><h4>${open ? it.name : '???'}</h4><p>${open ? it.desc : `Odblokuj: ${ach?.desc ?? ''}`}</p><div class="shop-eff">${RARITIES[it.rarity].name}</div></div>
+          ${btn}
+        </div>`;
+      })
+      .join('');
+    const hasToggler = s.bought.includes('toggler');
+    const toggler = `<div class="shop-item${hasToggler ? ' maxed' : ''}">
+        <div class="shop-icon">${icon('wand', '#d8dde6', 30)}</div>
+        <div class="shop-body"><h4>Rózga wróżbity</h4><p>Pozwala wyłączyć bronie, księgi i skarby, których nie chcesz widzieć na kartach i w skrzyniach.</p></div>
+        ${hasToggler ? '<button class="btn small disabled">Masz</button>' : `<button class="btn small${s.silver >= TOGGLER_PRICE ? ' primary' : ' disabled'}" data-act="buy" data-arg="toggler">${icon('coin', '#d8dde6', 14)} ${TOGGLER_PRICE}</button>`}
+      </div>`;
+    const chips = (kind: PoolKind, label: string, look: (id: string) => { name: string; icon: string; color: number }): string => {
+      const ids = poolIds(s, kind);
+      const on = runPool(s, kind).length;
+      const list = ids
+        .map((id) => {
+          const l = look(id);
+          const off = s.disabled.includes(`${kind}:${id}`);
+          return `<button class="chip${off ? ' off' : ''}" data-act="toggle" data-arg="${kind}:${id}" title="${off ? 'Wyłączone, kliknij, by włączyć' : 'Kliknij, by wyłączyć'}">${icon(l.icon, hex(l.color), 16)} ${l.name}</button>`;
+        })
+        .join('');
+      return `<div class="pool"><h4>${label} <em>${on} z ${ids.length} włączonych (min. ${MIN_ENABLED[kind]})</em></h4><div class="chips">${list}</div></div>`;
+    };
+    const pools = hasToggler
+      ? `<h3 class="shop-head">Pule (Rózga wróżbity)</h3>
+        ${chips('w', 'Bronie', (id) => WEAPON_BY_ID[id] as { name: string; icon: string; color: number })}
+        ${chips('b', 'Księgi', (id) => PASSIVE_BY_ID[id] as { name: string; icon: string; color: number })}
+        ${chips('i', 'Skarby', (id) => ITEM_BY_ID[id] as { name: string; icon: string; color: number })}`
+      : '';
     this.open(
       'shop',
       `<div class="sheet wide">
         <h2>Chata</h2>
-        <p class="lead">Złoto wyniesione z boru zamienia się w trwałe ulepszenia. <span class="pill big">${icon('coin', '#ffd040', 16)} ${s.gold}</span></p>
+        <p class="lead">Złoto wyniesione z boru zamienia się w trwałe ulepszenia, a srebro z każdego runu otwiera Skarbiec. <span class="pill big">${icon('coin', '#ffd040', 16)} ${s.gold}</span> ${silverPill}</p>
         <div class="shop">${items}</div>
+        <h3 class="shop-head">Skarbiec (srebro)</h3>
+        <p class="muted">Skarb odblokowany osiągnięciem kupisz tu za srebro; od tej chwili trafia do skrzyń.</p>
+        <div class="shop">${vault}${toggler}</div>
+        ${pools}
         <div class="row"><button class="btn" data-act="back">Wróć</button></div>
       </div>`,
       'dim',
@@ -447,12 +510,25 @@ export class UI {
     if (w) {
       const st = w.stats;
       const pct = (v: number): string => `${v >= 0 ? '+' : ''}${Math.round(v * 100)}%`;
-      const ws = w.weapons.map((x) => `<div class="b-item">${icon(x.def.icon, hex(x.def.color), 20)} ${x.def.name} <em>${x.def.evolved ? 'EWO' : `poz. ${x.level}`}</em></div>`).join('');
+      // Stats that are 0 / base for most builds are listed only once something raised them.
+      const opt: [string, boolean, string][] = [
+        ['Czas trwania', st.duration !== 1, pct(st.duration - 1)],
+        ['Szybkość pocisków', st.projectileSpeed !== 1, pct(st.projectileSpeed - 1)],
+        ['Odrzut', st.knockback !== 1, pct(st.knockback - 1)],
+        ['Kradzież życia', st.lifesteal > 0, `${Math.round(st.lifesteal * 100)}%`],
+        ['Ciernie', st.thorns > 0, st.thorns.toFixed(0)],
+        ['Unik', st.evasion > 0, `${Math.round(dodgeChance(st.evasion) * 100)}%`],
+        ['Tarcza', st.shield > 0, st.shield.toFixed(0)],
+        ['Klątwa', st.curse > 0, pct(st.curse)],
+      ];
+      const extra = opt.filter((o) => o[1]).map((o) => `<div class="b-stat"><span>${o[0]}</span><b>${o[2]}</b></div>`).join('');
+      const ws = w.weapons.map((x) => `<div class="b-item">${icon(x.def.icon, hex(x.def.color), 20)} ${x.def.name} <em>${x.def.evolved ? 'EWO ' : ''}poz. ${x.level}</em></div>`).join('');
       const ps = w.passives.map((x) => `<div class="b-item">${icon(x.def.icon, hex(x.def.color), 20)} ${x.def.name} <em>poz. ${x.level}</em></div>`).join('');
       const bs = w.blessings.map((x) => `<div class="b-item">${icon(x.icon, hex(x.color), 20)} ${x.name}</div>`).join('');
+      const is = w.items.map((x) => `<div class="b-item">${icon(x.def.icon, hex(x.def.color), 20)} ${x.def.name} <em>×${x.count}</em></div>`).join('');
       build = `<div class="build">
         <div><h4>Bronie</h4>${ws}</div>
-        <div><h4>Pasywki i błogosławieństwa</h4>${ps || '<div class="muted">brak</div>'}${bs}</div>
+        <div><h4>Księgi i błogosławieństwa</h4>${ps || '<div class="muted">brak</div>'}${bs}${is ? `<h4>Skarby</h4>${is}` : ''}</div>
         <div><h4>Statystyki</h4>
           <div class="b-stat"><span>Obrażenia</span><b>${pct(st.damage - 1)}</b></div>
           <div class="b-stat"><span>Odnowienie</span><b>${pct(st.cooldown - 1)}</b></div>
@@ -462,6 +538,9 @@ export class UI {
           <div class="b-stat"><span>Regeneracja</span><b>${st.regen.toFixed(1)}/s</b></div>
           <div class="b-stat"><span>Szczęście</span><b>${pct(st.luck)}</b></div>
           <div class="b-stat"><span>Zasięg zbierania</span><b>${pct(st.pickup - 1)}</b></div>
+          <div class="b-stat"><span>Szybkość ataku</span><b>${pct(st.attackSpeed - 1)}</b></div>
+          <div class="b-stat"><span>Krytyk</span><b>${Math.round(st.critChance * 100)}% × ${st.critDamage.toFixed(1)}</b></div>
+          ${extra}
         </div>
       </div>`;
     }
@@ -484,8 +563,8 @@ export class UI {
 
   private cardHtml(c: Card, i: number, key: boolean): string {
     const r = RARITIES[c.rarity];
-    const tag = c.kind === 'evolve' ? 'EWOLUCJA' : c.kind === 'gold' || c.kind === 'heal' ? 'Dar boru' : c.isNew ? 'NOWE' : `Poziom ${c.level}`;
-    const type = c.kind === 'weapon' || c.kind === 'evolve' ? 'Broń' : c.kind === 'passive' ? 'Pasywka' : 'Łup';
+    const tag = c.kind === 'evolve' ? 'EWOLUCJA' : c.kind === 'gold' || c.kind === 'heal' ? 'Dar boru' : c.isNew ? 'NOWE' : c.kind === 'item' ? `${c.level}. sztuka` : `Poziom ${c.level}`;
+    const type = c.kind === 'weapon' || c.kind === 'evolve' ? 'Broń' : c.kind === 'passive' ? 'Księga' : c.kind === 'item' ? 'Skarb' : 'Łup';
     return `<div class="card r-${c.rarity}" data-act="choose" data-arg="${i}" style="--rc:${r.color}">
       ${key ? `<div class="card-key">${i + 1}</div>` : ''}
       <div class="card-rarity">${r.name}</div>
@@ -508,12 +587,24 @@ export class UI {
     const ch = world.choice;
     if (!ch) return;
     if (ch.type === 'levelup') {
-      const cards = ch.cards.map((c, i) => this.cardHtml(c, i, true)).join('');
-      const rr = world.rerollsLeft > 0 ? `<button class="btn small" data-act="reroll">${icon('dice', '#e9c46a', 16)} Przelosuj (${world.rerollsLeft}) <kbd>R</kbd></button>` : '';
+      const bc = world.banishCost();
+      const cards = ch.cards
+        .map((c, i) => {
+          const ban = canBanish(c) ? `<button class="banish${world.gold >= bc ? '' : ' off'}" data-act="banish" data-arg="${i}" title="Usuń tę kartę z puli do końca runu">Wygnaj · ${bc} zł</button>` : '';
+          return `<div class="card-wrap">${this.cardHtml(c, i, true)}${ban}</div>`;
+        })
+        .join('');
+      const rc = world.rerollCost();
+      const rrLabel = world.rerollsLeft > 0 ? `Przelosuj (${world.rerollsLeft})` : `Przelosuj · ${rc} zł`;
+      const rr = `<button class="btn small${world.rerollsLeft > 0 || world.gold >= rc ? '' : ' off'}" data-act="reroll">${icon('dice', '#e9c46a', 16)} ${rrLabel} <kbd>R</kbd></button>`;
       this.open('choice', `<div class="choice"><h2>Awans! Poziom ${world.level}</h2><p class="lead">Wybierz jedną kartę</p><div class="cards">${cards}</div><div class="row">${rr}</div></div>`, 'dim levelup');
     } else if (ch.type === 'chest') {
       const cards = ch.cards.map((c, i) => this.cardHtml(c, i, false)).join('');
-      const head = ch.gift ? '<h2 class="gift">Dar boru</h2><p class="lead">Bór obdarza cię za darmo…</p>' : '<h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p>';
+      const head = ch.greed
+        ? '<h2>Ołtarz chciwości</h2><p class="lead">Złoto i skarb… za klątwę do końca runu.</p>'
+        : ch.gift
+          ? '<h2 class="gift">Dar boru</h2><p class="lead">Bór obdarza cię za darmo…</p>'
+          : '<h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p>';
       this.open('choice', `<div class="choice">${head}<div class="cards">${cards}</div><div class="row"><button class="btn primary" data-act="choose" data-arg="0">Weź <kbd>Enter</kbd></button></div></div>`, 'dim chest');
     } else {
       const opts = ch.options
@@ -522,10 +613,13 @@ export class UI {
           <div class="card-key">${i + 1}</div>
           <div class="card-rarity">${b.god}</div>
           <div class="card-icon" style="--ic:${hex(b.color)}">${icon(b.icon, hex(b.color), 54)}</div>
-          <h3>${b.name}</h3><p>${b.desc}</p>${this.blessLevelHtml(world, b.id)}</div>`,
+          <h3>${b.name}</h3><p>${b.desc}</p>${ch.circle ? '' : this.blessLevelHtml(world, b.id)}</div>`,
         )
         .join('');
-      this.open('choice', `<div class="choice"><h2>Kapliczka</h2><p class="lead">Któremu z bogów złożysz pokłon?</p><div class="cards">${opts}</div><div class="row"><button class="btn small" data-act="cancel">Odejdź <kbd>Esc</kbd></button></div></div>`, 'dim shrine');
+      const head = ch.circle ? '<h2>Święty krąg</h2><p class="lead">Krąg naładowany. Wybierz jego dar.</p>' : '<h2>Kapliczka</h2><p class="lead">Któremu z bogów złożysz pokłon?</p>';
+      // A charged circle cannot be left for later: its charge would be lost, so there is no "leave" button.
+      const leave = ch.circle ? '' : '<button class="btn small" data-act="cancel">Odejdź <kbd>Esc</kbd></button>';
+      this.open('choice', `<div class="choice">${head}<div class="cards">${opts}</div><div class="row">${leave}</div></div>`, 'dim shrine');
     }
   }
 
@@ -558,6 +652,7 @@ export class UI {
           <div><span>Zabójstwa</span><b>${run.kills}</b></div>
           <div><span>Poziom</span><b>${run.level}</b></div>
           <div><span>Złoto</span><b>${icon('coin', '#ffd040', 16)} ${result.goldBanked}${result.goldBonus ? ` <em>+${result.goldBonus}</em>` : ''}</b></div>
+          <div><span>Srebro</span><b>${icon('coin', '#d8dde6', 16)} ${result.silver}</b></div>
         </div>
         <h4>Obrażenia według broni</h4>
         <div class="dmg">${bars}${burn}</div>
@@ -611,7 +706,11 @@ export class UI {
     this.set('lvl', world.level, (v) => (this.xpLevel.textContent = `Poziom ${v}`));
     this.set('time', Math.floor(world.time), (v) => (this.timer.textContent = fmtTime(v as number)));
     this.set('hp', Math.round((p.hp / st.maxHp) * 300), (v) => (this.hpFill.style.width = `${(v as number) / 3}%`));
-    this.set('hpt', `${Math.ceil(p.hp)} / ${st.maxHp}`, (v) => (this.hpText.textContent = v as string));
+    this.set('hpt', `${Math.ceil(p.hp)} / ${st.maxHp}${st.shield > 0 ? `  +${Math.ceil(world.shield)}` : ''}`, (v) => (this.hpText.textContent = v as string));
+    this.set('shield', st.shield > 0 ? Math.round((world.shield / st.shield) * 300) : -1, (v) => {
+      this.shieldFill.style.display = (v as number) < 0 ? 'none' : 'block';
+      this.shieldFill.style.width = `${Math.max(0, v as number) / 3}%`;
+    });
     this.set('kills', world.kills, (v) => (this.kills.innerHTML = `${icon('skull', '#e8dfd0', 18)} ${v}`));
     this.set('gold', Math.floor(world.gold), (v) => (this.gold.innerHTML = `${icon('coin', '#ffd040', 18)} ${v}`));
     const dash = p.dashCd <= 0 ? 100 : Math.round((1 - p.dashCd / 1.5) * 100);
@@ -620,12 +719,12 @@ export class UI {
       this.dashFill.parentElement?.classList.toggle('ready', v === 100);
     });
 
-    const wkey = world.weapons.map((w) => `${w.def.id}${w.level}`).join(',');
+    const wkey = world.weapons.map((w) => `${w.def.id}${w.level}`).join(',') + `/${world.weaponCap()}`;
     this.set('weapons', wkey, () => {
       this.weapons.innerHTML = world.weapons
         .map((w) => {
-          const max = weaponMaxLevel(w.def);
-          const lvl = w.def.evolved ? '★' : w.level >= max ? 'MAX' : String(w.level);
+          const max = world.weaponCap();
+          const lvl = w.level >= max ? 'MAX' : `${w.def.evolved ? '★' : ''}${w.level}`;
           return `<div class="slot${w.def.evolved ? ' evo' : ''}" style="--c:${hex(w.def.color)}" title="${w.def.name}">${icon(w.def.icon, hex(w.def.color), 26)}<b>${lvl}</b></div>`;
         })
         .join('');
@@ -636,12 +735,22 @@ export class UI {
         world.passives.map((x) => `<div class="slot" style="--c:${hex(x.def.color)}" title="${x.def.name}">${icon(x.def.icon, hex(x.def.color), 18)}<b>${x.level}</b></div>`).join('') +
         world.blessings.map((b) => `<div class="slot bl" style="--c:${hex(b.color)}" title="${b.name}">${icon(b.icon, hex(b.color), 18)}</div>`).join('');
     });
+    const ikey = world.items.map((x) => `${x.def.id}${x.count}`).join(',');
+    this.set('items', ikey, () => {
+      this.items.innerHTML = world.items
+        .map((x) => `<div class="slot" style="--c:${RARITIES[x.def.rarity].color}" title="${x.def.name}: ${x.def.desc}">${icon(x.def.icon, hex(x.def.color), 18)}${x.count > 1 ? `<b>${x.count}</b>` : ''}</div>`)
+        .join('');
+    });
 
     // interaction prompt
     const pr = world.prompt;
     let ptxt = '';
     if (pr.kind === 'chest') ptxt = pr.affordable ? `Przytrzymaj [E], aby otworzyć skrzynię (${pr.cost} złota)` : `Skrzynia kosztuje ${pr.cost} złota`;
     else if (pr.kind === 'shrine') ptxt = 'Przytrzymaj [E], aby pokłonić się w kapliczce';
+    else if (pr.kind === 'circle') ptxt = 'Stój w świętym kręgu, aż się naładuje';
+    else if (pr.kind === 'amber') ptxt = 'Przytrzymaj [E]: kapliczka bursztynowa przyciągnie bursztyny z całego boru';
+    else if (pr.kind === 'greed') ptxt = 'Przytrzymaj [E]: ołtarz chciwości da skarb i złoto za klątwę (+15%)';
+    else if (pr.kind === 'portal') ptxt = 'Przytrzymaj [E], aby otworzyć portal i wezwać Leszego';
     this.set('prompt', ptxt, (v) => {
       this.prompt.classList.toggle('hidden', v === '');
       this.prompt.innerHTML = `<span>${v}</span><i></i>`;

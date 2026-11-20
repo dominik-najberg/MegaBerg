@@ -1,9 +1,10 @@
 import { TAU } from '../core/math';
 import { ENEMY_INDEX } from '../data/enemies';
 import type { WaveEvent } from '../data/types';
-import { ELITE_FIRST, ELITE_INTERVAL, ENDLESS_BOSS_EVERY, ENDLESS_MINI_EVERY, ENDLESS_PHASE, phaseAt, WAVE_EVENTS } from '../data/waves';
+import { ELITE_FIRST, ELITE_INTERVAL, ENDLESS_BOSS_EVERY, ENDLESS_MINI_EVERY, ENDLESS_PHASE, OVERTIME, OVERTIME_PHASE, OVERTIME_RATE_END, phaseAt, RUN_LENGTH, WAVE_EVENTS } from '../data/waves';
 import { Ev } from './events';
 import { MAX_ENEMIES } from './pools';
+import { curseEffects } from './stats';
 import { PLAY_RADIUS } from './terrain';
 import type { World } from './world';
 
@@ -22,6 +23,7 @@ export class Spawner {
   private sz = 0;
   /** Debug/perf: when > 0 the spawner keeps exactly this many chochliki+mix alive, ignoring waves. */
   forceAlive = 0;
+  private finalWaveTold = false;
   disabled = false;
 
   private pickSpot(w: World, ground: boolean): boolean {
@@ -83,8 +85,13 @@ export class Spawner {
   }
 
   private fire(w: World, ev: WaveEvent): void {
+    if (ev.kind === 'portal' && (w.endless || w.won || w.bossSummoned)) return;
     if (ev.text) w.announce.push(ev.text);
     const p = w.player;
+    if (ev.kind === 'portal') {
+      w.openPortal();
+      return;
+    }
     if (ev.kind === 'swarm') {
       const type = ENEMY_INDEX[ev.enemy];
       if (type === undefined) return;
@@ -122,6 +129,15 @@ export class Spawner {
     if (i >= 0) w.events.emit(Ev.BossSpawn, w.enemies.x[i] as number, w.enemies.y[i] as number, w.enemies.z[i] as number, type);
   }
 
+  /** Summons the boss through the open portal (spawns it beside the portal). */
+  summonBoss(w: World, x: number, z: number): void {
+    const type = ENEMY_INDEX.leszy;
+    if (type === undefined) return;
+    w.announce.push('Leszy, strażnik boru, wychodzi z portalu!');
+    const i = w.spawnEnemy(type, x, z);
+    if (i >= 0) w.events.emit(Ev.BossSpawn, w.enemies.x[i] as number, w.enemies.y[i] as number, w.enemies.z[i] as number, type);
+  }
+
   update(w: World, dt: number): void {
     if (this.disabled) return;
     const e = w.enemies;
@@ -136,6 +152,17 @@ export class Spawner {
       this.eventIdx++;
     }
     let { phase, progress } = phaseAt(w.time);
+    let rate = phase.rate;
+    if (!w.endless && w.time >= RUN_LENGTH && !w.bossSummoned) {
+      // Overtime: the horde thickens while the portal waits.
+      phase = OVERTIME_PHASE;
+      progress = Math.min(1, (w.time - RUN_LENGTH) / OVERTIME);
+      rate = OVERTIME_PHASE.rate + (OVERTIME_RATE_END - OVERTIME_PHASE.rate) * progress;
+      if (!this.finalWaveTold && w.time >= RUN_LENGTH + OVERTIME) {
+        this.finalWaveTold = true;
+        w.announce.push('Fala końcowa! Bór z każdą chwilą jest groźniejszy. Wezwij Leszego!');
+      }
+    }
     if (w.endless) {
       // After the boss the forest never rests: dense mixed hordes, recurring mini-bosses, Leszy returns.
       phase = ENDLESS_PHASE;
@@ -154,11 +181,12 @@ export class Spawner {
         this.fire(w, { at: w.time, kind: 'boss', enemy: 'leszy', text: 'Kolejny Leszy wychodzi z kniei!' });
       }
     }
-    const target = phase.alive[0] + (phase.alive[1] - phase.alive[0]) * progress;
+    const crowd = curseEffects(w.stats.curse).enemyCount;
+    const target = (phase.alive[0] + (phase.alive[1] - phase.alive[0]) * progress) * crowd;
     const alive = e.count;
     if (alive < target && alive < MAX_ENEMIES - 40) {
       const deficit = (target - alive) / target;
-      this.acc += phase.rate * (0.6 + deficit * 2.4) * dt;
+      this.acc += (w.endless ? phase.rate : rate) * crowd * (0.6 + deficit * 2.4) * dt;
       let guard = 0;
       while (this.acc >= 1 && guard++ < 12) {
         this.acc -= 1;

@@ -10,17 +10,15 @@ export interface RarityDef {
   luckScale: number;
   /** Multiplier of a passive level's bonus. */
   power: number;
-  /** Extra permanent damage bonus for the upgraded weapon. */
-  weaponBonus: number;
 }
 
 export const RARITY_ORDER: Rarity[] = ['common', 'rare', 'epic', 'legendary'];
 
 export const RARITIES: Record<Rarity, RarityDef> = {
-  common: { id: 'common', name: 'Zwykła', color: '#b9b2a3', weight: 60, luckScale: 0, power: 1, weaponBonus: 0 },
-  rare: { id: 'rare', name: 'Rzadka', color: '#4f9dff', weight: 27, luckScale: 1, power: 1.3, weaponBonus: 0.08 },
-  epic: { id: 'epic', name: 'Epicka', color: '#b45cff', weight: 10, luckScale: 2, power: 1.7, weaponBonus: 0.16 },
-  legendary: { id: 'legendary', name: 'Legendarna', color: '#ffb338', weight: 3, luckScale: 3, power: 2.3, weaponBonus: 0.3 },
+  common: { id: 'common', name: 'Zwykła', color: '#b9b2a3', weight: 60, luckScale: 0, power: 1 },
+  rare: { id: 'rare', name: 'Rzadka', color: '#4f9dff', weight: 27, luckScale: 1, power: 1.3 },
+  epic: { id: 'epic', name: 'Epicka', color: '#b45cff', weight: 10, luckScale: 2, power: 1.7 },
+  legendary: { id: 'legendary', name: 'Legendarna', color: '#ffb338', weight: 3, luckScale: 3, power: 2.3 },
 };
 
 /** Card rarity weights for a given luck value (0 = base). */

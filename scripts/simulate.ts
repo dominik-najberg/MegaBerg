@@ -1,6 +1,6 @@
 /**
  * Headless balance simulation: plays whole runs with the bot and prints how they went.
- * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [set=sila:2,zdrowie:1] [character=wojmir] [pool=all] [verbose=1]
+ * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [set=sila:2,zdrowie:1] [character=wojmir] [pool=all] [books=pas,serce] [verbose=1]
  *        npm run sim -- career=12 [skill=novice] [careers=4]
  *
  * `career=N` plays N runs in a row on one save file, the way a new player would: gold left in the purse
@@ -8,11 +8,12 @@
  * unlock weapons and pay gold. It answers "how fast does a player grow stronger", which single runs cannot.
  */
 import { CHARACTER_BY_ID } from '../src/data/characters';
+import { ITEMS } from '../src/data/items';
 import { PASSIVES } from '../src/data/passives';
 import { SHOP } from '../src/data/shop';
 import { WEAPONS } from '../src/data/weapons';
 import { Bot, type BotSkill } from '../src/debug/bot';
-import { applyRun, buyShopItem, unlockedPassiveIds, unlockedWeaponIds } from '../src/meta/progress';
+import { applyRun, buyShopItem, runPool } from '../src/meta/progress';
 import { defaultSave } from '../src/meta/save';
 import { shopCost } from '../src/data/shop';
 import { GameMap } from '../src/sim/terrain';
@@ -23,9 +24,11 @@ const runs = Number(args.runs ?? 6);
 const skill = (args.skill ?? 'good') as BotSkill;
 const shopLevel = Number(args.shop ?? 0);
 const character = CHARACTER_BY_ID[args.character ?? 'wojmir'];
-const maxMinutes = Number(args.maxMinutes ?? 12);
+const maxMinutes = Number(args.maxMinutes ?? 15);
 const all = args.pool === 'all';
 const verbose = args.verbose === '1';
+// Restrict the book pool, e.g. books=pas,krzesiwo,serce (for measuring what new books change).
+const books = args.books ? args.books.split(',') : undefined;
 
 const map = new GameMap();
 const shop: Record<string, number> = {};
@@ -49,7 +52,7 @@ if (args.career) {
     const save = defaultSave();
     let won = 0;
     for (let r = 0; r < length; r++) {
-      const w = new World(map, { seed: 5000 + c * 1009 + r * 77, character, shop: save.shop, weaponPool: unlockedWeaponIds(save), passivePool: unlockedPassiveIds(save) });
+      const w = new World(map, { seed: 5000 + c * 1009 + r * 77, character, shop: save.shop, weaponPool: runPool(save, 'w'), passivePool: runPool(save, 'b'), itemPool: runPool(save, 'i') });
       const bot = new Bot(skill);
       let chestAt = -1;
       while (!w.dead && !w.won && w.time < maxMinutes * 60) {
@@ -101,7 +104,8 @@ for (let r = 0; r < runs; r++) {
     character,
     shop,
     weaponPool: all ? WEAPONS.filter((x) => !x.evolved).map((x) => x.id) : undefined,
-    passivePool: all ? PASSIVES.map((x) => x.id) : undefined,
+    passivePool: books ?? (all ? PASSIVES.map((x) => x.id) : undefined),
+    itemPool: all ? ITEMS.map((x) => x.id) : undefined,
   });
   const bot = new Bot(skill);
   const dt = 1 / 60;

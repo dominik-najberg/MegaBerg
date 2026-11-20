@@ -1,5 +1,5 @@
 import { ENEMY_INDEX } from '../data/enemies';
-import { WEAPON_BY_ID, weaponMaxLevel, weaponStatsAt } from '../data/weapons';
+import { WEAPON_BY_ID, weaponMaxLevel } from '../data/weapons';
 import type { Game } from '../game';
 
 /**
@@ -55,7 +55,7 @@ export class DebugTools {
     const inst = w.findWeapon(id) ?? w.addWeapon(id);
     if (!inst) return;
     inst.level = Math.min(level ?? weaponMaxLevel(def), weaponMaxLevel(def));
-    inst.stats = weaponStatsAt(def, inst.level);
+    w.refreshWeapon(inst);
   }
 
   god(on = true): void {
