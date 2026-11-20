@@ -97,6 +97,7 @@ if (args.career) {
 }
 let wins = 0;
 let totalTime = 0;
+const tally = { rerolls: 0, paidRerolls: 0, banishes: 0, circles: 0 };
 const t0 = performance.now();
 for (let r = 0; r < runs; r++) {
   const w = new World(map, {
@@ -127,6 +128,7 @@ for (let r = 0; r < runs; r++) {
     }
   }
   const s = w.summary();
+  for (const key of Object.keys(tally) as (keyof typeof tally)[]) tally[key] += bot.tally[key];
   if (s.won) wins++;
   totalTime += s.time;
   const weapons = s.weapons.map((x) => `${x.name} ${Math.round(x.dealt / 1000)}k`).join(', ');
@@ -134,4 +136,6 @@ for (let r = 0; r < runs; r++) {
     `run ${r + 1}: ${s.won ? 'WYGRANA' : w.dead ? 'śmierć ' : 'limit  '} ${fmt(s.time)} lvl ${s.level} kills ${s.kills} gold ${s.goldCollected} evo ${s.evolved} peak ${peak} boss ${w.bossIdx >= 0 ? Math.round(((w.enemies.hp[w.bossIdx] as number) / (w.enemies.maxHp[w.bossIdx] as number)) * 100) + '%' : '-'} | ${weapons}`,
   );
 }
-console.log(`\n${skill}, shop ${shopLevel}, ${character?.name}: ${wins}/${runs} wygranych, średni czas ${fmt(totalTime / runs)}, sim ${(performance.now() - t0).toFixed(0)} ms`);
+const per = (v: number): string => (v / runs).toFixed(1);
+console.log(`\nna run: przelosowania ${per(tally.rerolls)} (płatne ${per(tally.paidRerolls)}), wygnania ${per(tally.banishes)}, święte kręgi ${per(tally.circles)}`);
+console.log(`${skill}, shop ${shopLevel}, ${character?.name}: ${wins}/${runs} wygranych, średni czas ${fmt(totalTime / runs)}, sim ${(performance.now() - t0).toFixed(0)} ms`);

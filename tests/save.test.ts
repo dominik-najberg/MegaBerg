@@ -4,9 +4,13 @@ import { CHARACTERS } from '../src/data/characters';
 import { SHOP_BY_ID, shopCost } from '../src/data/shop';
 import { WEAPONS } from '../src/data/weapons';
 import { PASSIVES } from '../src/data/passives';
-import { applyRun, buyShopItem, isUnlocked, unlockedCharacterIds, unlockedWeaponIds } from '../src/meta/progress';
-import { defaultSave, sanitizeSave, SAVE_KEY, SaveStore, type KeyValueStore } from '../src/meta/save';
-import type { RunSummary } from '../src/sim/world';
+import { CHARACTER_BY_ID } from '../src/data/characters';
+import { PASSIVE_BY_ID } from '../src/data/passives';
+import { applyRun, buyShopItem, grantFromTotals, isUnlocked, runPool, unlockedCharacterIds, unlockedPassiveIds, unlockedWeaponIds } from '../src/meta/progress';
+import { defaultSave, sanitizeSave, SAVE_KEY, SAVE_VERSION, SaveStore, type KeyValueStore } from '../src/meta/save';
+import { emptyInput } from '../src/sim/player';
+import { GameMap } from '../src/sim/terrain';
+import { World, type RunSummary } from '../src/sim/world';
 
 class MemoryStore implements KeyValueStore {
   readonly map = new Map<string, string>();
@@ -221,5 +225,90 @@ describe('meta-progresja', () => {
     }
     expect(CHARACTERS.filter((c) => !c.unlock)).toHaveLength(1);
     expect(CHARACTERS.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+/**
+ * A save written by the game before the Megabonk stages (commit 7104480): no silver, Skarbiec or Rózga
+ * fields, passive items instead of books (unlocked by achievements, not stored), version 1.
+ */
+const OLD_SAVE = {
+  version: 1,
+  gold: 734,
+  shop: { sila: 3, zdrowie: 2, szybkosc: 1, pancerz: 1, tempo: 2, przelosowanie: 1, odrodzenie: 1 },
+  achievements: ['survive3', 'survive5', 'kills1000', 'jaga', 'level15', 'kills3000', 'shrines3', 'poludnica', 'evolve', 'gold1000', 'leszy', 'winBogumil'],
+  stats: { runs: 41, wins: 6, kills: 5210, gold: 3120, bestTime: 642.5, bestLevel: 31 },
+  options: { master: 0.5, music: 0.3, sfx: 0.9, sensitivity: 1.4, damageNumbers: false, shake: true, quality: 1 },
+  character: 'jagna',
+};
+/** Passive items of the old format; each became the book with the same id. */
+const OLD_PASSIVES = ['pas', 'krzesiwo', 'amulet', 'onuce', 'serce', 'miod', 'magnes', 'podkowa', 'tarcza', 'sakwa', 'pioro', 'zielnik'];
+
+describe('stary zapis (sprzed ksiąg i srebra)', () => {
+  const mem = new MemoryStore();
+  const load = (): SaveStore => {
+    mem.setItem(SAVE_KEY, JSON.stringify(OLD_SAVE));
+    return new SaveStore(mem);
+  };
+
+  it('wczytuje się bez błędów i zachowuje złoto, Chatę, osiągnięcia, statystyki i opcje', () => {
+    const s = load();
+    expect(s.healthy).toBe(true);
+    expect(s.data.version).toBe(SAVE_VERSION);
+    expect(s.data.gold).toBe(734);
+    expect(s.data.shop).toEqual(OLD_SAVE.shop);
+    for (const id of Object.keys(OLD_SAVE.shop)) expect(SHOP_BY_ID[id]).toBeDefined();
+    expect(s.data.achievements).toEqual(OLD_SAVE.achievements);
+    expect(s.data.stats).toEqual(OLD_SAVE.stats);
+    expect(s.data.options).toEqual(OLD_SAVE.options);
+    expect(s.data.character).toBe('jagna');
+    expect(s.data.silver).toBe(0);
+    expect(s.data.bought).toEqual([]);
+    expect(s.data.disabled).toEqual([]);
+  });
+
+  it('zostawia odblokowane postacie i bronie', () => {
+    const d = load().data;
+    expect(unlockedCharacterIds(d)).toEqual(expect.arrayContaining(['wojmir', 'dobroslawa', 'bogumil', 'jagna']));
+    expect(unlockedWeaponIds(d)).toEqual(expect.arrayContaining(['sierpy', 'kruki', 'marzanna', 'wlocznia', 'dziegiec']));
+  });
+
+  it('dawne pasywki są księgami o tych samych id, z tymi samymi odblokowaniami', () => {
+    const d = load().data;
+    for (const id of OLD_PASSIVES) expect(PASSIVE_BY_ID[id]).toBeDefined();
+    // Pióro Żar-ptaka was unlocked by „Pobożny wędrowiec”; the save keeps the achievement, so the book stays.
+    expect(unlockedPassiveIds(d)).toEqual(expect.arrayContaining(OLD_PASSIVES));
+    expect(runPool(d, 'b')).toEqual(expect.arrayContaining(OLD_PASSIVES));
+    // A victory over Leszy now also opens the curse book; nothing the player had is taken away.
+    expect(unlockedPassiveIds(d)).toContain('czarnobog');
+    expect(unlockedPassiveIds(defaultSave())).not.toContain('pioro');
+  });
+
+  it('dopisuje osiągnięcia, które stare sumy już spełniają, tylko raz', () => {
+    const d = load().data;
+    const gold = d.gold;
+    expect(grantFromTotals(d).map((a) => a.id)).toEqual(['bookDzik']);
+    expect(unlockedPassiveIds(d)).toContain('dzik');
+    expect(d.gold).toBe(gold);
+    expect(grantFromTotals(d)).toEqual([]);
+    expect(d.achievements.filter((a) => a === 'bookDzik')).toHaveLength(1);
+    // A save that missed a gold-paying total achievement gets the reward once.
+    const fresh = defaultSave();
+    fresh.stats.gold = 1500;
+    expect(grantFromTotals(fresh).map((a) => a.id)).toEqual(['gold1000']);
+    expect(fresh.gold).toBe(200);
+    expect(grantFromTotals(fresh)).toEqual([]);
+    expect(fresh.gold).toBe(200);
+  });
+
+  it('nadaje się do gry, a po zapisie wczytuje się w nowym formacie bez zmian', () => {
+    const s = load();
+    const w = new World(new GameMap(), { seed: 3, character: CHARACTER_BY_ID[s.data.character], shop: s.data.shop, weaponPool: runPool(s.data, 'w'), passivePool: runPool(s.data, 'b'), itemPool: runPool(s.data, 'i') });
+    for (let i = 0; i < 120; i++) w.step(1 / 60, emptyInput());
+    applyRun(s.data, w.summary());
+    expect(s.save()).toBe(true);
+    const again = new SaveStore(mem);
+    expect(again.data).toEqual(s.data);
+    expect(again.data.version).toBe(SAVE_VERSION);
   });
 });

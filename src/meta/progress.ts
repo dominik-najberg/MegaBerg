@@ -166,6 +166,26 @@ export function applyRun(save: SaveData, run: RunSummary): RunResult {
   return { goldBanked: run.gold, goldBonus, silver, unlocked };
 }
 
+/**
+ * Grants achievements that the lifetime totals of a save already meet (total kills, total gold), for saves
+ * written before such an achievement existed: an old save with 5000 kills gets Księga Dzika at once instead
+ * of after the next run. Achievements that need a single run's details are never granted from totals.
+ * Idempotent; a gold reward is paid once, as in applyRun. Returns what was granted.
+ */
+export function grantFromTotals(save: SaveData): AchievementDef[] {
+  const granted: AchievementDef[] = [];
+  for (const a of ACHIEVEMENTS) {
+    if (save.achievements.includes(a.id)) continue;
+    const c = a.cond;
+    const met = (c.type === 'totalKills' && save.stats.kills >= c.count) || (c.type === 'totalGold' && save.stats.gold >= c.count);
+    if (!met) continue;
+    save.achievements.push(a.id);
+    if (a.gold) save.gold += a.gold;
+    granted.push(a);
+  }
+  return granted;
+}
+
 /** Buys the next level of a Chata upgrade. Returns false when maxed or too expensive. */
 export function buyShopItem(save: SaveData, id: string): boolean {
   const item = SHOP_BY_ID[id];

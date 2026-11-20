@@ -44,9 +44,18 @@ export interface KeyValueStore {
 
 export const SAVE_KEY = 'megaberg-slowianskie-bory-v1';
 
+/**
+ * Save format version. Still 1: saves from before the Megabonk stages (no silver, Skarbiec or Rózga,
+ * passive items instead of books) load as they are. The books kept the passive ids and unlocks are
+ * stored as achievements, so nothing needs remapping; `sanitizeSave` fills in the new fields and
+ * `grantFromTotals` (meta/progress) adds achievements the old totals already earned. Bump it with the
+ * first change that has to transform stored data.
+ */
+export const SAVE_VERSION = 1;
+
 export function defaultSave(): SaveData {
   return {
-    version: 1,
+    version: SAVE_VERSION,
     gold: 0,
     silver: 0,
     bought: [],

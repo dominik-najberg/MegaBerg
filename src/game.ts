@@ -6,7 +6,7 @@ import type { CharacterDef } from './data/types';
 import { RUN_LENGTH } from './data/waves';
 import { Bot, type BotSkill } from './debug/bot';
 import { DebugTools } from './debug/tools';
-import { applyRun, buyShopItem, buySilver, isUnlocked, runPool, togglePool, type PoolKind } from './meta/progress';
+import { applyRun, buyShopItem, buySilver, grantFromTotals, isUnlocked, runPool, togglePool, type PoolKind } from './meta/progress';
 import { browserStorage, SaveStore } from './meta/save';
 import { Gfx, type Quality } from './render/gfx';
 import { emptyInput } from './sim/player';
@@ -47,6 +47,8 @@ export class Game {
 
   constructor(canvas: HTMLCanvasElement, overlayCanvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.input = new Input(canvas);
+    // An older save may already meet achievements added later (e.g. 5000 kills in total for Księga Dzika).
+    if (grantFromTotals(this.store.data).length > 0) this.store.save();
     const o = this.store.data.options;
     this.gfx = new Gfx(canvas, overlayCanvas, this.map, o.quality as Quality);
     this.character = CHARACTER_BY_ID[this.store.data.character] ?? (CHARACTERS[0] as CharacterDef);

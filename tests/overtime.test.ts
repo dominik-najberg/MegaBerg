@@ -4,7 +4,8 @@ import { ENEMIES, ENEMY_INDEX } from '../src/data/enemies';
 import { enemyHpMul, finalWaveMul, FINAL_WAVE_MUL, OVERTIME, RUN_LENGTH } from '../src/data/waves';
 import type { InputState } from '../src/sim/player';
 import { GameMap } from '../src/sim/terrain';
-import { CIRCLE_CHARGE, PORTAL_HOLD, World } from '../src/sim/world';
+import { Bot } from '../src/debug/bot';
+import { CIRCLE_CHARGE, CIRCLE_RADIUS, PORTAL_HOLD, World, type Card } from '../src/sim/world';
 
 const map = new GameMap();
 const DT = 1 / 60;
@@ -177,5 +178,76 @@ describe('przelosowanie i wygnanie za złoto', () => {
       w.reroll();
       if (w.choice?.type === 'levelup') for (const c of w.choice.cards) expect(c.isNew && c.id === id).toBe(false);
     }
+  });
+});
+
+describe('bot i nowe mechaniki (etap 8)', () => {
+  const offer = (w: World, cards: Card[]): void => {
+    w.choice = { type: 'levelup', cards };
+  };
+  const junk = (id: string): Card => ({ kind: 'passive', id, rarity: 'common', isNew: true, level: 1, name: id, text: '', icon: '', color: 0 });
+  const gold: Card = { kind: 'gold', id: 'zloto', rarity: 'common', isNew: false, level: 30, name: '', text: '', icon: '', color: 0 };
+
+  it('wygania księgę, której nie chce', () => {
+    const w = quiet();
+    w.gold = 200;
+    const bot = new Bot('good');
+    offer(w, [junk('dzik'), gold, gold]);
+    bot.choose(w);
+    expect(w.banished.has('dzik')).toBe(true);
+    expect(bot.tally.banishes).toBe(1);
+    expect(w.gold).toBeLessThan(200);
+  });
+
+  it('słabą ofertę przelosowuje za złoto, najwyżej dwa razy', () => {
+    const w = quiet();
+    w.gold = 200;
+    const bot = new Bot('good');
+    offer(w, [gold, gold, gold]);
+    (bot as unknown as { score: () => number }).score = () => 1;
+    bot.choose(w);
+    expect(bot.tally.paidRerolls).toBe(2);
+    expect(w.paidRerolls).toBe(2);
+    expect(w.gold).toBeLessThan(200);
+  });
+
+  it('bez zapasu złota nie przelosowuje i nie wygania', () => {
+    const w = quiet();
+    w.gold = 0;
+    const bot = new Bot('good');
+    offer(w, [junk('dzik'), gold, gold]);
+    expect(bot.choose(w)).toBe(0);
+    expect(bot.tally).toEqual({ rerolls: 0, paidRerolls: 0, banishes: 0, circles: 0 });
+    expect(w.banished.size).toBe(0);
+  });
+
+  it('nie wygania księgi, z którą posiadana broń może ewoluować', () => {
+    const w = quiet();
+    w.gold = 500;
+    const bot = new Bot('good');
+    // Sierpy evolve with Księga Siłacza; a weak card of it must stay in the pool.
+    offer(w, [{ ...junk('pas'), rarity: 'common' }, gold, gold]);
+    (bot as unknown as { score: () => number }).score = () => 1;
+    bot.choose(w);
+    expect(w.banished.has('pas')).toBe(false);
+  });
+
+  it('staje w świętym kręgu i trzyma się go, aż się naładuje, choć obok jest wróg', () => {
+    const w = quiet();
+    const s = w.shrines.find((x) => x.kind === 'circle')!;
+    standAt(w, s.x + 2, s.z);
+    w.player.invuln = 99;
+    w.spawnEnemy(ENEMY_INDEX.chochlik as number, s.x + 3.5, s.z);
+    const bot = new Bot('good');
+    let maxD = 0;
+    for (let t = 0; t < (CIRCLE_CHARGE + 2) / DT && !w.choice; t++) {
+      w.step(DT, bot.update(w, DT));
+      w.player.invuln = 99;
+      maxD = Math.max(maxD, Math.hypot(w.player.x - s.x, w.player.z - s.z));
+    }
+    expect(maxD).toBeLessThan(CIRCLE_RADIUS);
+    expect(w.choice?.type === 'shrine' && w.choice.circle).toBe(true);
+    bot.choose(w);
+    expect(bot.tally.circles).toBe(1);
   });
 });

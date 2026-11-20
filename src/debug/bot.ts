@@ -1,6 +1,8 @@
+import { WEAPONS } from '../data/weapons';
+import { canBanish } from '../sim/cards';
 import { emptyInput, type InputState } from '../sim/player';
 import { PickupKind } from '../sim/pools';
-import type { Card, World } from '../sim/world';
+import { CIRCLE_RADIUS, MAX_WEAPONS, type Card, type Shrine, type World } from '../sim/world';
 
 export type BotSkill = 'novice' | 'good';
 
@@ -12,6 +14,34 @@ export type BotSkill = 'novice' | 'good';
 /** How much less the bot values a niche book (only when it does not unlock an evolution). */
 const BOOK_PENALTY: Record<string, number> = { sokol: 1, dzik: 2.5, strzybog: 2, glog: 1.5, mokosz: 1, mgla: 0.5, magnes: 0.5, pioro: 1.5 };
 
+/**
+ * Card economy of the good bot (stage 8). An offer whose best card scores below REROLL_BELOW (no weapon
+ * card and no evolution book) is rerolled: free while Kości wróżebne last, then for gold. A new book
+ * scoring below BANISH_BELOW that no weapon could evolve with is banished for gold. Paid rerolls and banishes keep GOLD_RESERVE
+ * of the next chest's price in the purse (treasures are worth more than one better card).
+ */
+const REROLL_BELOW = 7;
+const BANISH_BELOW = 5;
+const GOLD_RESERVE = 0.5;
+/** At most this many rerolls of one offer, so a dry pool does not drain the purse. */
+const MAX_REROLLS = 2;
+/** Święty krąg: walk in only above APPROACH_HP of health, leave below LEAVE_HP. */
+const CIRCLE_APPROACH_HP = 0.6;
+const CIRCLE_LEAVE_HP = 0.4;
+/** Boons of a Święty krąg in the order the good bot wants them (health first when hurt). */
+const CIRCLE_ORDER = ['krag-sila', 'krag-tempo', 'krag-oko', 'krag-obszar', 'krag-zdrowie', 'krag-wal', 'krag-miod', 'krag-wiatr'];
+
+/** What the bot did with the new card mechanics in one run (for `npm run sim`). */
+export interface BotTally {
+  rerolls: number;
+  paidRerolls: number;
+  banishes: number;
+  circles: number;
+}
+
+/** True once Leszy's portal is open: from then on the bot heads there and ignores circles. */
+const portalOpen = (w: World): boolean => w.portal !== null;
+
 export class Bot {
   readonly input: InputState = emptyInput();
   private wanderA = 0;
@@ -19,6 +49,7 @@ export class Bot {
   private react = 0;
   private dirX = 0;
   private dirZ = 0;
+  readonly tally: BotTally = { rerolls: 0, paidRerolls: 0, banishes: 0, circles: 0 };
 
   constructor(readonly skill: BotSkill = 'good') {}
 
@@ -164,7 +195,7 @@ export class Bot {
       if (threat < 0.25) {
         for (const s of w.shrines) {
           // The careful player leaves the greed altar alone, as with the curse book.
-          if (s.used || s.kind === 'greed') continue;
+          if (s.used || s.kind === 'greed' || s.kind === 'circle') continue;
           const dx = s.x - p.x;
           const dz = s.z - p.z;
           const d = Math.hypot(dx, dz);
@@ -174,6 +205,30 @@ export class Bot {
           ax += (dx / d) * wgt;
           az += (dz / d) * wgt;
         }
+      }
+    }
+
+    // Święty krąg charges only while the hero stands inside it, so the careful player walks in when
+    // the way is quiet and holds the ground (dodging inside the ring) until it pays out or health runs low.
+    let hold = false;
+    const circle = good && !portalOpen(w) ? this.nearestCircle(w) : null;
+    if (circle) {
+      const dx = circle.x - p.x;
+      const dz = circle.z - p.z;
+      const d = Math.hypot(dx, dz);
+      const inside = d < CIRCLE_RADIUS;
+      if (inside && hpFrac > CIRCLE_LEAVE_HP) {
+        hold = true;
+        // The farther from the centre, the harder the pull: near the rim it beats the urge to back off.
+        const pull = 0.4 + 5 * (d / CIRCLE_RADIUS) ** 3;
+        if (d > 0.01) {
+          ax += (dx / d) * pull;
+          az += (dz / d) * pull;
+        }
+      } else if (!inside && d < 40 && threat < 1 && hpFrac > CIRCLE_APPROACH_HP) {
+        const wgt = 1.1 / (d * 0.06 + 1);
+        ax += (dx / d) * wgt;
+        az += (dz / d) * wgt;
       }
     }
 
@@ -217,7 +272,8 @@ export class Bot {
     az += Math.sin(this.wanderA) * 0.05;
 
     if (think) {
-      const threatW = good ? 5 : 1.6;
+      // Holding a circle the bot only sidesteps; it does not run from the horde.
+      const threatW = good ? (hold ? 1.2 : 5) : 1.6;
       let dx = tx * threatW + ax;
       let dz = tz * threatW + az;
       const dl = Math.hypot(dx, dz);
@@ -232,7 +288,7 @@ export class Bot {
     inp.moveZ = -this.dirZ;
 
     if (good) {
-      if (threat > 3.5 && p.dashCd <= 0) inp.dash = true;
+      if (threat > 3.5 && p.dashCd <= 0 && !hold) inp.dash = true;
       if (hazardUrgent && p.onGround) {
         inp.jump = true;
       }
@@ -247,21 +303,91 @@ export class Bot {
     if (!c) return 0;
     if (c.type === 'shrine') {
       const p = w.player;
-      const want = p.hp < w.stats.maxHp * 0.5 ? 'mokosz' : this.skill === 'good' ? 'perun' : c.options[w.rng.int(c.options.length)]?.id;
+      const hurt = p.hp < w.stats.maxHp * 0.5;
+      if (c.circle) {
+        this.tally.circles++;
+        if (this.skill !== 'good') return w.rng.int(c.options.length);
+        const order = hurt ? ['krag-zdrowie', ...CIRCLE_ORDER] : CIRCLE_ORDER;
+        const rank = (id: string): number => (order.indexOf(id) + 100) % 100;
+        let bi = 0;
+        c.options.forEach((o, i) => {
+          if (rank(o.id) < rank((c.options[bi] as { id: string }).id)) bi = i;
+        });
+        return bi;
+      }
+      const want = hurt ? 'mokosz' : this.skill === 'good' ? 'perun' : c.options[w.rng.int(c.options.length)]?.id;
       const i = c.options.findIndex((o) => o.id === want);
       return i >= 0 ? i : 0;
     }
     if (c.type === 'chest') return 0;
     if (this.skill === 'novice' && w.rng.chance(0.5)) return w.rng.int(c.cards.length);
-    let best = 0;
-    let bestScore = -1;
-    c.cards.forEach((card, i) => {
+    if (this.skill === 'good') this.improveOffer(w);
+    return this.best(w).i;
+  }
+
+  private best(w: World): { i: number; score: number } {
+    const c = w.choice;
+    let i = 0;
+    let score = -1;
+    if (c?.type !== 'levelup' && c?.type !== 'chest') return { i, score };
+    c.cards.forEach((card, k) => {
       const s = this.score(w, card);
-      if (s > bestScore) {
-        bestScore = s;
-        best = i;
+      if (s > score) {
+        score = s;
+        i = k;
       }
     });
+    return { i, score };
+  }
+
+  /** Gold the bot may spend on cards without giving up the next chest. */
+  private spare(w: World): number {
+    return w.gold - w.chestCost() * GOLD_RESERVE;
+  }
+
+  /** Banishes junk books and rerolls a weak level-up offer, as a careful player does with spare gold. */
+  private improveOffer(w: World): void {
+    for (let rerolls = 0; w.choice?.type === 'levelup'; ) {
+      const cards = w.choice.cards;
+      // Banish first: a junk book that no weapon could evolve with only dilutes every later offer.
+      const junk = cards.findIndex((card) => canBanish(card) && card.kind === 'passive' && this.score(w, card) < BANISH_BELOW && !this.evolvesWith(w, card.id));
+      if (junk >= 0 && this.spare(w) >= w.banishCost() && w.banish(junk)) {
+        this.tally.banishes++;
+        continue;
+      }
+      if (rerolls >= MAX_REROLLS) return;
+      const best = this.best(w).score;
+      const free = w.rerollsLeft > 0;
+      if (best >= REROLL_BELOW) return;
+      if (!free && this.spare(w) < w.rerollCost()) return;
+      if (!w.reroll()) return;
+      rerolls++;
+      this.tally.rerolls++;
+      if (!free) this.tally.paidRerolls++;
+    }
+  }
+
+  /** True when the book is the evolution partner of an owned weapon, or of one that may still come. */
+  private evolvesWith(w: World, book: string): boolean {
+    const room = w.weapons.length < MAX_WEAPONS;
+    return WEAPONS.some(
+      (x) => x.evolution?.passive === book && (w.findWeapon(x.id) !== undefined || (room && w.weaponPool.has(x.id) && !w.banished.has(x.id))),
+    );
+  }
+
+  private nearestCircle(w: World): Shrine | null {
+    if (w.bossSummoned) return null;
+    const p = w.player;
+    let best: Shrine | null = null;
+    let bd = 1e9;
+    for (const s of w.shrines) {
+      if (s.used || s.kind !== 'circle') continue;
+      const d = Math.hypot(s.x - p.x, s.z - p.z);
+      if (d < bd) {
+        bd = d;
+        best = s;
+      }
+    }
     return best;
   }
 

@@ -741,3 +741,125 @@ Kariera (`npm run sim -- career=12`, 4 kariery): pierwsza wygrana średnio w 2,8
 Tryb nieskończony płacił srebrem drugi raz za minuty sprzed zwycięstwa (`time` nie jest zerowany przy
 przejściu w tryb nieskończony). `World.bankedTime` zapamiętuje czas już rozliczony przy zwycięstwie,
 a `silverFor` liczy tylko resztę; test w `tests/meta.test.ts`.
+
+## Etap 8: bot z nowymi mechanikami, wyrównanie postaci, stare zapisy
+
+### Bot korzysta z przelosowań, wygnań i świętego kręgu
+
+Najpierw bot, żeby balans mierzył grę z nowymi mechanikami (`src/debug/bot.ts`). Dotyczy tylko dobrego bota;
+początkujący gra jak dotąd.
+
+- **Przelosowanie.** Ocena kart bez zmian (`score`: nowa broń 9, ulepszenie broni 7, księga do ewolucji 7,5,
+  zwykła księga 5,5–6, wypełniacze 1–4, plus rzadkość). Ofertę, w której najlepsza karta ma mniej niż 7
+  (czyli brak ulepszenia broni, nowej broni i księgi do ewolucji), bot przelosowuje: darmowo, póki są Kości
+  wróżebne, a potem za złoto. Najwyżej 2 przelosowania jednej oferty. Pierwsza wersja dla płatnych miała
+  próg 6 i dawała 0,1 płatnego przelosowania na run, więc bot w praktyce z nich nie korzystał. Przy progu 7
+  jest ok. 1,3–2,1 płatnego przelosowania na run bez Chaty (z poz. 4 ok. 3,5 w sumie, w tym darmowe),
+  a wyniki mieszczą się w szumie (suma 7 postaci bez Chaty 195/448 wobec 207 przy progu 6).
+- **Wygnanie.** Nową księgę, którą bot ocenia poniżej 5 (niszowe księgi zwykłej rzadkości: Dzik, Strzybóg,
+  Głóg, Żar-ptak, Sokół, Mokosz, Wilczy Kieł przy niskim krycie, klątwa Czarnoboga), wygania, o ile nie ewoluuje z nią żadna posiadana broń ani broń, która może jeszcze
+  przyjść (wolny slot, broń w puli i niewygnana). Broni nie wygania: bot ich nie ocenia, a przy pełnych
+  slotach i tak nie są oferowane. Ok. 0,6–0,9 wygnania na run.
+- **Rezerwa złota.** Płatne przelosowania i wygnania zostawiają w sakiewce połowę ceny następnej skrzyni
+  (`GOLD_RESERVE = 0,5`). Przy pełnej cenie skrzyni bot prawie nigdy nie miał wolnego złota; skarby ze skrzyń
+  są warte więcej niż jedna lepsza karta, więc rezerwa zostaje.
+- **Święty krąg.** Bot podchodzi do najbliższego niewykorzystanego kręgu, gdy w pobliżu jest spokojnie
+  (zagrożenie < 1) i ma ponad 60% zdrowia. W kręgu trzyma się środka: przyciąganie rośnie z sześcianem
+  odległości od środka, ucieczka przed wrogami ma wagę 1,2 zamiast 5, bez zrywu. Uniki przed pociskami
+  i telegrafowanymi atakami działają dalej. Wychodzi poniżej 40% zdrowia. Po otwarciu portalu i przy
+  Leszym kręgi ignoruje. Dar wybiera według kolejności: obrażenia, szybkość ataku, kryt, obszar, zdrowie
+  (pierwsze, gdy ma mniej niż połowę zdrowia), tarcza, regeneracja, szybkość. Bot ładuje średnio 1,7–1,9
+  z 2 kręgów na run.
+- `npm run sim` wypisuje średnie na run: przelosowania (w tym płatne), wygnania i naładowane kręgi
+  (`Bot.tally`). Testy w `tests/overtime.test.ts`: wygnanie niechcianej księgi, brak wydatków bez złota,
+  ochrona księgi do ewolucji, dwa płatne przelosowania słabej oferty, utrzymanie kręgu z wrogiem obok.
+
+### Wyrównanie postaci
+
+Strojone tylko modyfikatory i pasywki w `src/data/characters.ts`; globalne krzywe bez zmian. Wynik runu jest
+dwubiegunowy: bot albo ginie przy bossie w 4.–6. minucie, albo wygrywa. Liczy się więc przeżycie wczesnej
+gry, a nie siła późnej. Dlatego największy wpływ ma maks. zdrowie, a zmiany obrażeń prawie nic nie dają
+(Radogost z −8% obrażeń wypadł nawet lepiej, w granicach szumu). Szum przy 64 runach to ok. ±6 pkt proc.,
+a przy 128 ok. ±4, więc warianty sprawdzałem na 128 runach, a wybrane na trzech zestawach ziaren
+(1000, 50000, 90000; razem 384 runy). Pomocniczy skrypt wariantów był tylko w scratchpadzie (nadpisuje
+`mods`/`passive.perLevel` postaci i woła tę samą pętlę co `npm run sim`).
+
+| postać | było | jest | dlaczego |
+|---|---|---|---|
+| Wojmir | bez zmian | | wzorzec |
+| Dobrosława | +1 zdrowia/s, +25% zasięgu zbierania, −10 zdrowia; +0,03 zdr./s i +2% zasięgu / poz. | +1 zdrowia/s, −10 zdrowia; +0,03 zdr./s i +1% zasięgu / poz. | zmiany zdrowia (−15…−25) i regeneracji (0,6–1) dawały stale 39–46%, niemonotonicznie; siłą był zasięg zbierania (więcej doświadczenia) |
+| Bogumił | +60 zdrowia, +2 pancerza, +15% obrażeń, −6% szybkości; +1,5 zdr. i +0,03 pancerza / poz. | +30 zdrowia, +1 pancerza, −8% szybkości, +8% czasu odnowienia; +1 zdr. i +0,01 pancerza / poz. | samo zdrowie, pancerz i obrażenia schodziły tylko do ok. 40%; ciupaga z dużym odrzutem chroni sama, dopiero wolniejszy zamach (cięższy młot) dał 32% |
+| Jagna | bez zmian | | po zmianie bota 33% (wcześniej 20%) |
+| Radogost | +15% złota | +15% złota, −45 zdrowia | kupiec, nie wojownik; −25 dawało 44%, −35 40%, −45 36% |
+| Strzeżymir | Pęd: +0,5% obrażeń / poz. | Pęd: +0,2% obrażeń / poz. | wystarczyło (48% → 33%) |
+| Mszczuj | +4% kradzieży życia, −15 zdrowia; +0,5% / poz. | +3% kradzieży życia, −30 zdrowia; +0,25% / poz. | −25 zdrowia dawało 37%, −30 z 0,3% / poz. 37%, wybrane 36% |
+
+Wyniki (`npm run sim`, dobry bot, ziarna 1000+; „przed” to koniec etapu 7, „nowy bot” to bot z etapu 8
+przy starych postaciach):
+
+| 64 runy | przed | nowy bot | **po strojeniu** |
+|---|---|---|---|
+| Wojmir | 20 | 22 | **22** |
+| Dobrosława | 27 | 21 | **27** |
+| Bogumił | 41 | 35 | **19** |
+| Jagna | 13 | 21 | **21** |
+| Radogost | 28 | 30 | **23** |
+| Strzeżymir | 24 | 31 | **22** |
+| Mszczuj | 38 | 35 | **17** |
+| Wojmir z poz. 4 | 60 | 58 | **58** |
+| Dobrosława z poz. 4 | 61 | 63 | **61** |
+| Bogumił z poz. 4 | 63 | 63 | **63** |
+| Jagna z poz. 4 | 60 | 61 | **61** |
+| Radogost z poz. 4 | 64 | 63 | **63** |
+| Strzeżymir z poz. 4 | 63 | 61 | **55** |
+| Mszczuj z poz. 4 | 64 | 64 | **62** |
+
+Pewniejszy pomiar wybranych wartości:
+
+| po strojeniu | 128 runów bez Chaty | 384 runy bez Chaty (3 zestawy ziaren) | 128 runów z poz. 4 |
+|---|---|---|---|
+| Wojmir | 45 (35%) | 135 (35%) | 122 (95%) |
+| Dobrosława | 49 (38%) | 134 (35%) | 123 (96%) |
+| Bogumił | 44 (34%) | 124 (32%) | 127 (99%) |
+| Jagna | 42 (33%) | 121 (32%) | 121 (95%) |
+| Radogost | 43 (34%) | 140 (36%) | 126 (98%) |
+| Strzeżymir | 46 (36%) | 127 (33%) | 115 (90%) |
+| Mszczuj | 42 (33%) | 137 (36%) | 124 (97%) |
+
+Wszystkie postacie mają 32–36% bez Chaty (cel 25–40%) i 90–99% z poz. 4 (cel 85%+). Na 64 runach Dobrosława
+ma 27/64 (42%), a Mszczuj 17/64 (27%), ale to szum: na 128 i 384 runach obie są w środku przedziału.
+Wojmir ma 35% i 95%. To odrobinę więcej niż 31% z etapu 7, bo bot gra lepiej (kręgi, przelosowania).
+Globalnej krzywej nie ruszałem: przesunęłaby wszystkich, a Strzeżymir z poz. 4 ma tylko 90% zapasu nad celem.
+Początkujący (32 runy, Wojmir): 0/32, 2:32, bez zmian.
+
+Kariera (`npm run sim -- career=12 careers=16`, Wojmir): pierwsza wygrana średnio w 2,8. runie (przed: 2,4).
+Złoto wydane na przelosowania i wygnania nie trafia do Chaty, więc w runach 2–6 jest trochę mniej poziomów
+ulepszeń (np. po 3. runie 30,9 zamiast 34,9). Od 9. runu wartości się wyrównują. Przy 4 karierach (domyślnie)
+wychodziło 5,0 wobec 2,8, ale to był szum.
+
+### Stare zapisy
+
+Zapis sprzed commitu 452fecc (np. z 7104480) wczytuje się bez zmian i bez migracji danych. Konsultacja
+z Codexem potwierdziła, że nie ma czego przemapować:
+
+- pasywki nie były zapisywane: odblokowują je osiągnięcia, a księgi zachowały id dawnych pasywek
+  (`pas`, `krzesiwo`, …, `pioro`, `zielnik`). „Pobożny wędrowiec” dalej daje Księgę Żar-ptaka, a zapisane
+  zwycięstwo nad Leszym od razu otwiera też nową Księgę Czarnoboga;
+- wszystkie stare id osiągnięć, ulepszeń Chaty i postaci istnieją; „Osełka” (`tempo`) dalej skraca czas
+  odnowienia, choć Księga Krzesiwa daje teraz szybkość ataku (poziomów ksiąg zapis nie trzymał);
+- brakujące pola (srebro, Skarbiec, Rózga) uzupełnia `sanitizeSave`.
+
+Wersja zapisu zostaje 1 (`SAVE_VERSION`). Podbijemy ją przy pierwszej zmianie, która naprawdę przekształca
+zapisane dane. Zmiana klucza zapisu bez odczytu starego wyglądałaby dla gracza jak utrata postępu. Jedyne,
+co dochodzi, to **`grantFromTotals`** (`src/meta/progress.ts`, wywoływane przy starcie gry): dopisuje
+osiągnięcia, które łączne statystyki zapisu już spełniają, a których w chwili zapisu nie było, np. Księgę
+Dzika (5000 zabitych łącznie). Wcześniej gracz dostałby ją dopiero po następnym runie. Osiągnięć
+wymagających szczegółów jednego runu nie przyznaje. Nagrodę w złocie wypłaca raz i nie dolicza jej do
+`stats.gold`. Testy w `tests/save.test.ts` z przykładowym starym zapisem: wczytanie bez błędów (złoto,
+Chata, osiągnięcia, statystyki, opcje, postać), odblokowane postacie i bronie, dawne pasywki jako księgi,
+jednorazowe `grantFromTotals`, run na tym zapisie i ponowny odczyt w nowym formacie.
+
+### Review Codexem
+
+`codex exec review --uncommitted`: brak uwag do poprawienia. Codex sam uruchomił testy (171), typecheck
+i build oraz sprawdził, że zbudowany pakiet odpowiada źródłom.
