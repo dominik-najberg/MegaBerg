@@ -8,6 +8,7 @@ import type { Chest, World } from '../sim/world';
 import { creatureMaterial } from './enemiesView';
 import { buildEnemyModels } from './enemyModels';
 import { GeoBuilder, writeMatrix } from './geo';
+import { groundDecal, groundDisc } from './groundDecal';
 import type { Overlay } from './overlay';
 import { Particles } from './particles';
 
@@ -92,9 +93,12 @@ function writeGround(arr: ArrayLike<number>, index: number, map: GameMap, x: num
   a[o + 15] = 1;
 }
 
-/** Flat ring sector on the XZ plane with a brightness gradient along the arc (for additive trails). */
-function arcGeometry(inner: number, outer: number, from: number, len: number, seg: number, fadeTail: boolean): THREE.BufferGeometry {
-  const g = new THREE.RingGeometry(inner, outer, seg, 1, from, len);
+/**
+ * Flat ring sector on the XZ plane with a brightness gradient along the arc (for additive trails).
+ * `rings` splits it radially, so a ground decal made of it can bend over the terrain.
+ */
+function arcGeometry(inner: number, outer: number, from: number, len: number, seg: number, fadeTail: boolean, rings = 1): THREE.BufferGeometry {
+  const g = new THREE.RingGeometry(inner, outer, seg, rings, from, len);
   g.rotateX(-Math.PI / 2);
   const pos = g.getAttribute('position');
   const col = new Float32Array(pos.count * 3);
@@ -364,7 +368,7 @@ export class FxView {
   /** One real light for the nearest closed chest: it warms the ground and whatever stands around it. */
   private readonly chestLight = new THREE.PointLight(0xffa238, 0, 19, 1.4);
   private chestLit = -1;
-  private readonly chestPoolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+  private readonly chestPoolGeo = new THREE.PlaneGeometry(1, 1, 8, 8).rotateX(-Math.PI / 2);
   private readonly chestParts = chestGeo('paid');
   /** A trace of its own warmth, so the oak and the brass read at night before the hero's light reaches them. */
   private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a1606 });
@@ -430,8 +434,8 @@ export class FxView {
     g.add(this.gemGlow);
     // Golden ring under the hero: keeps him readable inside a crowd.
     this.heroRing = new THREE.Mesh(
-      arcGeometry(0.72, 1, 0, TAU, 32, false),
-      new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffd060, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false }),
+      arcGeometry(0.72, 1, 0, TAU, 40, false),
+      groundDecal(new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffd060, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.5, depthWrite: false, toneMapped: false })),
     );
     this.heroRing.renderOrder = 3;
     g.add(this.heroRing);
@@ -486,12 +490,12 @@ export class FxView {
     g.add(this.ravens);
 
     // --- ground decals: zones, hazard telegraphs
-    const disc = new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2);
+    const disc = groundDisc(40, 10);
     const decal = (opacity: number, additive: boolean): THREE.MeshBasicMaterial =>
-      new THREE.MeshBasicMaterial({ transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      groundDecal(new THREE.MeshBasicMaterial({ transparent: true, opacity, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, toneMapped: false }));
     this.zones = instanced(disc, decal(0.5, false), MAX_ZONES, true);
     this.hazFill = instanced(disc, decal(0.4, false), MAX_HAZARDS, true);
-    this.hazRing = instanced(new THREE.RingGeometry(0.93, 1, 40).rotateX(-Math.PI / 2), decal(0.95, false), MAX_HAZARDS, true);
+    this.hazRing = instanced(new THREE.RingGeometry(0.93, 1, 72).rotateX(-Math.PI / 2), decal(0.95, false), MAX_HAZARDS, true);
     this.bombs = instanced(new THREE.IcosahedronGeometry(0.45, 0), new THREE.MeshBasicMaterial({ color: 0xb8ff60, toneMapped: false }), 32);
     this.trapRings = instanced(new THREE.RingGeometry(0.72, 1, 9).rotateX(-Math.PI / 2), decal(0.85, false), MAX_ZONES, true);
     this.trapRings.renderOrder = 3;
@@ -502,8 +506,8 @@ export class FxView {
     g.add(this.zones, this.hazFill, this.hazRing, this.bombs);
 
     // --- aura ring (wianek) and frost cone (marzanna)
-    this.auraMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x7fd65a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-    this.aura = new THREE.Mesh(arcGeometry(0.55, 1, 0, TAU, 40, false), this.auraMat);
+    this.auraMat = groundDecal(new THREE.MeshBasicMaterial({ vertexColors: true, color: 0x7fd65a, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    this.aura = new THREE.Mesh(arcGeometry(0.55, 1, 0, TAU, 72, false, 4), this.auraMat);
     this.aura.visible = false;
     this.aura.renderOrder = 3;
     this.cone = new THREE.Mesh(
@@ -533,15 +537,15 @@ export class FxView {
       this.bolts.push({ mesh, t: 0, span: 0.16, r: 1 });
     }
     // Shockwave: a flat ring that expands along the ground.
-    const boomGeo = arcGeometry(0.72, 1, 0, TAU, 36, false);
+    const boomGeo = arcGeometry(0.72, 1, 0, TAU, 64, false);
     for (let i = 0; i < 20; i++) {
-      const mesh = new THREE.Mesh(boomGeo, new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+      const mesh = new THREE.Mesh(boomGeo, groundDecal(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })));
       mesh.visible = false;
       mesh.renderOrder = 4;
       g.add(mesh);
       this.booms.push({ mesh, t: 0, span: 0.28, r: 1 });
     }
-    const warnGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2).translate(0, 0, 0.5);
+    const warnGeo = new THREE.PlaneGeometry(1, 1, 1, 16).rotateX(-Math.PI / 2).translate(0, 0, 0.5);
     for (let i = 0; i < 10; i++) {
       const mesh = new THREE.Mesh(warnGeo, decal(0.4, false));
       (mesh.material as THREE.MeshBasicMaterial).color.set(0xff4a2a);
@@ -1108,7 +1112,7 @@ void main() {
           }
         } else if (kind === 'aura') {
           aura = true;
-          this.aura.position.set(hx, hy + 0.12, hz);
+          this.aura.position.set(hx, map.heightAt(hx, hz) + 0.12, hz);
           this.aura.rotation.y = time * 0.5;
           this.aura.scale.setScalar(w.fxArea);
           this.auraMat.color.set(w.def.color);
@@ -1457,7 +1461,7 @@ void main() {
       // Pool of light on the ground around the chest.
       const pool = new THREE.Mesh(
         this.chestPoolGeo,
-        new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffa238, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3, toneMapped: false }),
+        groundDecal(new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffa238, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3, toneMapped: false })),
       );
       pool.scale.setScalar(c.gift ? 6 : c.rich ? 11 : 7.5);
       pool.position.y = 0.12;

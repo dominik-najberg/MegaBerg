@@ -4,6 +4,7 @@ import { Rng } from '../core/rng';
 import { PLAY_RADIUS, type GameMap, type ShrineKind } from '../sim/terrain';
 import { model, tex, type ModelName } from './assets';
 import { GeoBuilder, normalsUp, propMaterial, propUniforms, windByHeight, writeMatrix } from './geo';
+import { groundDecal } from './groundDecal';
 
 const WHITE = 0xe9e2d0;
 const RED = 0xb3261e;
@@ -586,7 +587,7 @@ export class PropsView {
       new THREE.SpriteMaterial({ map: this.glowTex, color: tint, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity, fog: false });
     const ground = new THREE.Mesh(
       shrineGroundGeo,
-      new THREE.MeshBasicMaterial({ map: this.glowTex, color: tint, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: kind === 'circle' ? 0.42 : 0.3 }),
+      groundDecal(new THREE.MeshBasicMaterial({ map: this.glowTex, color: tint, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: kind === 'circle' ? 0.42 : 0.3 })),
     );
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = 0.22;
@@ -701,7 +702,7 @@ export class PropsView {
 }
 
 const SHRINE_MOTES = 7;
-const shrineGroundGeo = new THREE.PlaneGeometry(11, 11);
+const shrineGroundGeo = new THREE.PlaneGeometry(11, 11, 10, 10);
 /** Scale of the ground glow of a Święty krąg, so it covers the 5 m circle (CIRCLE_RADIUS). */
 const CIRCLE_GROUND_SCALE = 1.5;
 
