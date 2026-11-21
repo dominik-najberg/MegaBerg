@@ -1,7 +1,7 @@
 # MegaBerg: Słowiańskie Bory
 
 Oryginalna gra 3D z gatunku „survivors-like” (roguelite z automatycznym atakiem) osadzona w słowiańskim
-folklorze. Zapada zmierzch, z kniei wyłażą chochliki, utopce i strzygi, a ty masz przetrwać 10 minut
+folklorze. Zapada zmierzch, z kniei wyłażą chochliki, utopce i strzygi, a ty masz przetrwać 8 minut
 i pokonać Leszego. Bronie atakują same: ty biegasz, skaczesz, robisz zrywy i wybierasz ulepszenia.
 
 Postacie, efekty i dźwięk powstają w kodzie. Drzewa, głazy i budowle to modele zbudowane skryptem
@@ -97,12 +97,15 @@ przeglądarki. Kod: `tools/edytor/`.
 
 ## Jak się w to gra
 
-- **Run trwa 10 minut.** Wrogowie nadchodzą falami według minutnika, coraz gęściej i coraz twardsi.
-  W 2:30 i 7:30 przylatuje Baba Jaga, w 5:00 wychodzi Południca.
-- **Portal Leszego:** w 10:00 25–40 m od bohatera otwiera się zielony portal (widać go też na mapie).
+- **Run trwa 8 minut.** Wrogowie nadchodzą według minutnika, coraz gęściej i coraz twardsi.
+  W 1:40 i 6:20 przylatuje Baba Jaga, w 4:00 wychodzi Południca.
+- **Fale:** co 2,5 minuty (2:30, 5:00, 7:30) na 30 sekund wrogów robi się o ok. 60% więcej i pojawiają
+  się znacznie szybciej. Potem bór na chwilę odpuszcza.
+- **Portal Leszego:** w 8:00 25–40 m od bohatera otwiera się zielony portal (widać go też na mapie).
   Przytrzymaj przy nim `E`, a wyjdzie **Leszy**, a bór wokół ucichnie. Pokonanie Leszego to zwycięstwo;
-  potem można grać dalej w trybie nieskończonym. Kto zwleka, wchodzi w **nadgodzinę** (horda gęstnieje),
-  a od 12:00 w **falę końcową**: co 30 s wrogowie mają o 25% więcej zdrowia i obrażeń, aż wezwiesz Leszego.
+  potem można grać dalej w trybie nieskończonym. Razem z portalem rusza **fala końcowa**: horda przez
+  1,5 minuty gęstnieje, a co 20 s wrogowie mają o 25% więcej zdrowia i obrażeń (po 3 minutach ponad
+  7 razy), aż wezwiesz Leszego.
 - **Bursztyny** wypadające z wrogów to doświadczenie. Awans zatrzymuje grę i daje wybór **1 z 3 kart**:
   nowa broń, poziom broni albo **księga**. Karty mają rzadkość (zwykła, rzadka, epicka, legendarna):
   lepsza rzadkość to silniejszy bonus. Maksymalnie **4 bronie** i 5 ksiąg.

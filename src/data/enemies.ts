@@ -10,8 +10,8 @@ export const ENEMIES: EnemyDef[] = [
   { id: 'wilkolak', name: 'Wilkołak', ai: 'charger', hp: 72, speed: 3.4, damage: 18, radius: 0.72, height: 1.5, xp: 6, weight: 0.6, scale: 1 },
   { id: 'bies', name: 'Bies', ai: 'ranged', hp: 56, speed: 2.9, damage: 13, radius: 0.6, height: 2.0, xp: 6, weight: 0.4, scale: 1 },
   { id: 'licho', name: 'Licho', ai: 'teleporter', hp: 60, speed: 3.0, damage: 16, radius: 0.5, height: 2.1, xp: 7, weight: 0.3, scale: 1 },
-  { id: 'jaga', name: 'Baba Jaga', ai: 'jaga', hp: 1500, speed: 5.0, damage: 15, radius: 1.2, height: 2.6, xp: 60, weight: 0.95, flying: true, rank: 'mini', scale: 1 },
-  { id: 'poludnica', name: 'Południca', ai: 'poludnica', hp: 2400, speed: 4.1, damage: 17, radius: 0.9, height: 2.7, xp: 100, weight: 0.95, rank: 'mini', scale: 1 },
+  { id: 'jaga', name: 'Baba Jaga', ai: 'jaga', hp: 850, speed: 5.0, damage: 11, radius: 1.2, height: 2.6, xp: 60, weight: 0.95, flying: true, rank: 'mini', scale: 1 },
+  { id: 'poludnica', name: 'Południca', ai: 'poludnica', hp: 1300, speed: 4.1, damage: 12, radius: 0.9, height: 2.7, xp: 100, weight: 0.95, rank: 'mini', scale: 1 },
   { id: 'leszy', name: 'Leszy', ai: 'leszy', hp: 15000, speed: 2.7, damage: 22, radius: 2.6, height: 9, xp: 0, weight: 1, rank: 'boss', scale: 1 },
 ];
 

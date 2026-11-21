@@ -1,7 +1,7 @@
 import { TAU } from '../core/math';
 import { ENEMY_INDEX } from '../data/enemies';
 import type { WaveEvent } from '../data/types';
-import { ELITE_FIRST, ELITE_INTERVAL, ENDLESS_BOSS_EVERY, ENDLESS_MINI_EVERY, ENDLESS_PHASE, OVERTIME, OVERTIME_PHASE, OVERTIME_RATE_END, phaseAt, RUN_LENGTH, WAVE_EVENTS } from '../data/waves';
+import { ELITE_FIRST, ELITE_INTERVAL, ENDLESS_BOSS_EVERY, ENDLESS_MINI_EVERY, ENDLESS_PHASE, FINAL_WAVE_PHASE, FINAL_WAVE_RAMP, FINAL_WAVE_RATE_END, phaseAt, RUN_LENGTH, SURGE_ALIVE, SURGE_RATE, surgeAt, WAVE_EVENTS } from '../data/waves';
 import { Ev } from './events';
 import { MAX_ENEMIES } from './pools';
 import { curseEffects } from './stats';
@@ -24,6 +24,7 @@ export class Spawner {
   /** Debug/perf: when > 0 the spawner keeps exactly this many chochliki+mix alive, ignoring waves. */
   forceAlive = 0;
   private finalWaveTold = false;
+  private surgeTold = 0;
   disabled = false;
 
   private pickSpot(w: World, ground: boolean): boolean {
@@ -153,12 +154,23 @@ export class Spawner {
     }
     let { phase, progress } = phaseAt(w.time);
     let rate = phase.rate;
+    let swell = 1;
+    const surge = w.endless ? 0 : surgeAt(w.time);
+    if (surge > 0) {
+      // Surge: half a minute of a much thicker horde.
+      swell = SURGE_ALIVE;
+      rate *= SURGE_RATE;
+      if (surge !== this.surgeTold) {
+        this.surgeTold = surge;
+        w.announce.push('Nadciąga fala! Bór rzuca na ciebie wszystko, co ma.');
+      }
+    }
     if (!w.endless && w.time >= RUN_LENGTH && !w.bossSummoned) {
-      // Overtime: the horde thickens while the portal waits.
-      phase = OVERTIME_PHASE;
-      progress = Math.min(1, (w.time - RUN_LENGTH) / OVERTIME);
-      rate = OVERTIME_PHASE.rate + (OVERTIME_RATE_END - OVERTIME_PHASE.rate) * progress;
-      if (!this.finalWaveTold && w.time >= RUN_LENGTH + OVERTIME) {
+      // Final wave: the horde thickens (and grows stronger, see finalWaveMul) while the portal waits.
+      phase = FINAL_WAVE_PHASE;
+      progress = Math.min(1, (w.time - RUN_LENGTH) / FINAL_WAVE_RAMP);
+      rate = FINAL_WAVE_PHASE.rate + (FINAL_WAVE_RATE_END - FINAL_WAVE_PHASE.rate) * progress;
+      if (!this.finalWaveTold) {
         this.finalWaveTold = true;
         w.announce.push('Fala końcowa! Bór z każdą chwilą jest groźniejszy. Wezwij Leszego!');
       }
@@ -182,7 +194,7 @@ export class Spawner {
       }
     }
     const crowd = curseEffects(w.stats.curse).enemyCount;
-    const target = (phase.alive[0] + (phase.alive[1] - phase.alive[0]) * progress) * crowd;
+    const target = (phase.alive[0] + (phase.alive[1] - phase.alive[0]) * progress) * crowd * swell;
     const alive = e.count;
     if (alive < target && alive < MAX_ENEMIES - 40) {
       const deficit = (target - alive) / target;

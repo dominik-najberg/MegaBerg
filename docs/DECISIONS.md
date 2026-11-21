@@ -863,3 +863,24 @@ jednorazowe `grantFromTotals`, run na tym zapisie i ponowny odczyt w nowym forma
 
 `codex exec review --uncommitted`: brak uwag do poprawienia. Codex sam uruchomił testy (171), typecheck
 i build oraz sprawdził, że zbudowany pakiet odpowiada źródłom.
+
+## Runda 8 minut, fale co 2,5 minuty, szybka fala końcowa
+
+Zgłoszenie z gry: w 7:54, na 26. poziomie i z pełnym zestawem ulepszeń, wrogów było ok. 250 naraz i nie
+dało się przeżyć. Zmiany (`src/data/waves.ts`, `src/sim/spawner.ts`, `src/data/enemies.ts`):
+
+- **`RUN_LENGTH` 600 → 480 s.** Fazy `WAVES` ściśnięte do 8 minut, a gęstość „zwykłego” spawnu niższa:
+  pod koniec rundy 135–150 żywych wrogów (było 260–300), tempo 8/s (było 13/s).
+- **Fale** (`surgeAt`, `SURGE_*`): w 2:30, 5:00 i 7:30 na 30 s cel żywych wrogów ×1,6 i tempo spawnu ×3.
+  Trzecia fala kończy się równo z otwarciem portalu.
+- **Mini-bossy łatwiejsze:** Baba Jaga 1500 → 850 zdrowia i 15 → 11 obrażeń, Południca 2400 → 1300
+  i 17 → 12. Przesunięte poza fale: Jaga 1:40 i 6:20, Południca 4:00.
+- **Fala końcowa od 8:00** (nie ma już osobnej „nadgodziny”): gęstość rośnie przez 90 s ze 150 do 280,
+  a zdrowie i obrażenia wrogów ×1,25 co 20 s (było co 30 s i dopiero od 12:00). Po 3 minutach to ponad ×7.
+- Obrażenia wrogów liczone jak dotąd od czasu bezwzględnego (`1 + 1,3 × t/600`), więc krótsza runda
+  nie przyspiesza ich wzrostu. Elity: pierwsza w 1:10, kolejne co 45 s (było 1:20 i 50 s).
+- Tryb nieskończony: 200–250 żywych wrogów (było 280–340), tempo 11/s.
+
+Symulacja (`npm run sim`, 12 runów, Wojmir), wygrane przed → po: dobry gracz Chata 0: 3 → 4, Chata 2:
+7 → 8, Chata 4: 11 → 11; nowicjusz Chata 0: 0 → 0, Chata 2: 1 → 1, Chata 4: 7 → 8. Poziom bohatera przy
+wezwaniu Leszego zostaje w okolicach 37–41, bo fale dają dużo doświadczenia w krótkim czasie.

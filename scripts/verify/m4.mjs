@@ -49,7 +49,7 @@ for (const [id, file, wait] of [['jaga', '04-baba-jaga.png', 5200], ['poludnica'
   await fresh();
   await ev((id) => {
     const g = window.__mb; const d = g.debug;
-    d.time(id === 'leszy' ? 600 : 200);
+    d.time(id === 'leszy' ? 480 : 200);
     d.only('sierpy', 'ogien');
     d.spawn(id, 1, id === 'leszy' ? 14 : 10);
     g.gfx.camPitch = 0.3;
