@@ -51,6 +51,24 @@ await page.keyboard.press('Escape');
 await sleep(200);
 console.log('after Esc:', await state());
 
+// Unlock all, on the hero screen: every hero becomes selectable and the screen redraws at once.
+await ev(() => window.__mb.ui.showCharacters());
+const lockedHeroes = () => page.$$eval('.char.locked, [data-char].locked', (els) => els.length);
+const before = await ev(() => ({ ach: window.__mb.store.data.achievements.length, gold: window.__mb.store.data.gold }));
+console.log('locked heroes before:', await lockedHeroes(), 'achievements:', before.ach);
+await page.keyboard.press('Backquote');
+await click('unlock');
+await sleep(200);
+console.log('unlock row:', await page.$eval('[data-dev="unlock"]', (b) => b.innerText.replace(/\s+/g, ' ')));
+await shot(page, '13b-menu-deva-odblokuj.png');
+await page.keyboard.press('Escape');
+await sleep(200);
+const after = await ev(() => {
+  const s = window.__mb.store.data;
+  return { ach: s.achievements.length, bought: s.bought.length, gold: s.gold, stored: JSON.parse(localStorage.getItem('megaberg-slowianskie-bory-v1')).achievements.length };
+});
+console.log('after unlock:', after, 'gold unchanged:', after.gold === before.gold, 'locked heroes:', await lockedHeroes());
+
 // Leave the save as it was before the test's gold/silver.
 await ev(() => {
   const s = window.__mb.store;

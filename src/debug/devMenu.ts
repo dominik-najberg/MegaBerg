@@ -1,4 +1,6 @@
 import type { Game } from '../game';
+import { ACHIEVEMENTS } from '../data/achievements';
+import { unlockAll } from '../meta/progress';
 
 /** The concept editor exists only on the dev server (tools/edytor/plugin.ts), never in the production build. */
 const EDITOR_AVAILABLE = import.meta.env.DEV;
@@ -108,6 +110,12 @@ export class DevMenu {
         g.ui.toast(`Dev: +${n} ${n === 1 ? 'poziom' : 'poziomów'} (karty po zamknięciu menu).`);
         break;
       }
+      case 'unlock': {
+        const n = unlockAll(g.store.data);
+        this.saveMeta();
+        g.ui.toast(n ? `Dev: odblokowano wszystko${this.inRun() ? ' (od następnego runu)' : ''}.` : 'Dev: wszystko już było odblokowane.');
+        break;
+      }
       case 'editor':
         if (EDITOR_AVAILABLE) window.open('/edytor', '_blank', 'noopener');
         break;
@@ -123,7 +131,12 @@ export class DevMenu {
     const g = this.game;
     g.store.save();
     g.ui.save = g.store.data;
-    if (g.ui.screen === 'shop') g.ui.showShop();
+    const screen = g.ui.screen;
+    if (screen === 'shop') g.ui.showShop();
+    else if (screen === 'characters') g.ui.showCharacters();
+    else if (screen === 'achievements') g.ui.showAchievements();
+    else if (screen === 'arsenal') g.ui.showArsenal();
+    else if (screen === 'menu') g.ui.showMenu();
   }
 
   private render(): void {
@@ -139,6 +152,7 @@ export class DevMenu {
         <button class="devmenu-row" data-dev="silver">+100 srebra <span>${s.silver}</span></button>
         <button class="devmenu-row" data-dev="lvl1"${lvlOff}>+1 poziom <span>${run ? `poz. ${this.game.world.level}` : 'tylko w runie'}</span></button>
         <button class="devmenu-row" data-dev="lvl5"${lvlOff}>+5 poziomów</button>
+        <button class="devmenu-row" data-dev="unlock">Odblokuj wszystko <span>${s.achievements.length}/${ACHIEVEMENTS.length} osiągn.</span></button>
         <button class="devmenu-row" data-dev="editor"${editorOff}>Edytor konceptów <span>${EDITOR_AVAILABLE ? 'nowa karta' : 'tylko npm run dev'}</span></button>
         <button class="devmenu-row close" data-dev="close">Zamknij <span>Esc</span></button>
       </div>`;
