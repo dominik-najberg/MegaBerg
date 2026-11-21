@@ -140,32 +140,68 @@ function potGeo(): THREE.BufferGeometry {
 }
 
 /**
+ * A strongbox with a barrel lid: plank body, metal straps running over the lid, studded corners and a lock.
  * Paid chests are dark oak with brass fittings. The gift chest must never be mistaken for one:
  * white birch with emerald fittings, a green gem and two sprouting leaves on the lid.
  */
 function chestGeo(gift: boolean): { base: THREE.BufferGeometry; lid: THREE.BufferGeometry } {
-  const wood = gift ? 0xe9e4d4 : 0x6a4526;
+  const wood = gift ? 0xe9e4d4 : 0x6e4526;
+  const woodDark = gift ? 0xcfc8b4 : 0x4a2c18;
+  const lidWood = gift ? 0xf2eee0 : 0x80522c;
   const band = gift ? 0x2fae8a : 0xd9a441;
+  const stud = gift ? 0x9ff5d8 : 0xf6d47a;
+  const W = 1.1;
+  const D = 0.75;
+  const STRAPS = [-0.36, 0.36];
   const b = new GeoBuilder(gift ? 314 : 304);
-  b.box(1.1, 0.55, 0.75, wood, { y: 0.28 });
-  b.box(1.14, 0.1, 0.79, band, { y: 0.1 });
-  b.box(1.14, 0.08, 0.79, band, { y: 0.5 });
-  b.box(0.16, 0.24, 0.08, gift ? 0x9ff5d8 : 0xf0c860, { y: 0.42, z: 0.4 });
+  b.box(W, 0.52, D, wood, { y: 0.3 });
+  // Plank seams on the front, the back and the sides.
+  for (const y of [0.22, 0.39]) {
+    b.box(W + 0.012, 0.022, D + 0.012, woodDark, { y, jitter: 0.03 });
+  }
+  // Plinth, rim under the lid, straps and corner plates.
+  b.box(W + 0.06, 0.09, D + 0.06, band, { y: 0.07 });
+  b.box(W + 0.04, 0.06, D + 0.04, band, { y: 0.53 });
+  for (const x of STRAPS) b.box(0.11, 0.5, D + 0.05, band, { x, y: 0.3 });
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      b.box(0.14, 0.2, 0.14, band, { x: sx * (W / 2 - 0.04), y: 0.2, z: sz * (D / 2 - 0.04) });
+      b.octa(0.035, stud, { x: sx * (W / 2 - 0.05), y: 0.22, z: sz * (D / 2 + 0.035), jitter: 0.02 });
+    }
+  }
+  for (const x of STRAPS) for (const y of [0.2, 0.4]) b.octa(0.03, stud, { x, y, z: D / 2 + 0.035, jitter: 0.02 });
+  // Lock: a plate with a dark keyhole.
+  b.box(0.22, 0.26, 0.06, band, { y: 0.4, z: D / 2 + 0.02 });
+  b.box(0.05, 0.1, 0.02, 0x241408, { y: 0.37, z: D / 2 + 0.052, jitter: 0 });
+  b.octa(0.04, 0x241408, { y: 0.43, z: D / 2 + 0.045, jitter: 0 });
+
+  // The lid hinges on its back edge: its origin is there, the geometry reaches forward (+z).
   const l = new GeoBuilder(gift ? 315 : 305);
-  l.box(1.1, 0.2, 0.75, gift ? 0xf2eee0 : 0x7a5230, { y: 0.1, z: 0.375 });
-  l.box(0.9, 0.14, 0.6, gift ? 0xdcd6c2 : 0x8a6238, { y: 0.26, z: 0.375 });
-  l.box(1.14, 0.08, 0.79, band, { y: 0.04, z: 0.375 });
-  l.box(0.14, 0.3, 0.8, band, { y: 0.16, z: 0.375 });
+  const cz = D / 2;
+  const R = D / 2;
+  const RISE = 0.62;
+  // Half a cylinder lying along x, flattened: three's cylinder bulges towards +x for theta 0..PI.
+  const barrel = (len: number, r: number, color: number, x = 0, jitter = 0.07): void => {
+    l.add(new THREE.CylinderGeometry(r, r, len, 9, 1, false, 0, Math.PI), color, { x, y: 0.05, z: cz, rz: Math.PI / 2, sx: RISE, jitter });
+  };
+  l.box(W, 0.07, D, lidWood, { y: 0.035, z: cz });
+  barrel(W, R, lidWood);
+  l.box(W + 0.04, 0.06, D + 0.04, band, { y: 0.03, z: cz });
+  for (const x of STRAPS) barrel(0.11, R + 0.025, band, x);
+  for (const x of STRAPS) l.octa(0.03, stud, { x, y: 0.05 + R * RISE + 0.03, z: cz, jitter: 0.02 });
+  // Hasp reaching down to the lock.
+  l.box(0.12, 0.16, 0.05, band, { y: 0.02, z: D + 0.03 });
   if (gift) {
     // Birch bark flecks on the front and the sides.
-    for (const [x, y, w] of [[-0.36, 0.3, 0.16], [0.3, 0.24, 0.2], [0.38, 0.38, 0.1], [-0.2, 0.36, 0.08]] as const) {
-      b.box(w, 0.035, 0.02, 0x3c3a36, { x, y, z: 0.376, jitter: 0 });
+    for (const [x, y, w] of [[-0.2, 0.3, 0.12], [0.2, 0.26, 0.1], [0.5, 0.44, 0.06], [-0.48, 0.3, 0.06]] as const) {
+      b.box(w, 0.035, 0.02, 0x3c3a36, { x, y, z: D / 2 + 0.008, jitter: 0 });
     }
-    b.box(0.02, 0.035, 0.18, 0x3c3a36, { x: 0.551, y: 0.32, z: 0.1, jitter: 0 });
-    b.box(0.02, 0.035, 0.14, 0x3c3a36, { x: -0.551, y: 0.26, z: -0.12, jitter: 0 });
-    l.octa(0.15, 0x7dffd8, { y: 0.44, z: 0.375, sy: 1.25, jitter: 0.03 });
-    l.cone(0.08, 0.3, 4, 0x58c878, { x: -0.3, y: 0.42, z: 0.375, rz: 0.55 });
-    l.cone(0.08, 0.3, 4, 0x58c878, { x: 0.3, y: 0.42, z: 0.375, rz: -0.55 });
+    b.box(0.02, 0.035, 0.18, 0x3c3a36, { x: W / 2 + 0.008, y: 0.32, z: 0.1, jitter: 0 });
+    b.box(0.02, 0.035, 0.14, 0x3c3a36, { x: -W / 2 - 0.008, y: 0.3, z: -0.12, jitter: 0 });
+    const top = 0.05 + R * RISE;
+    l.octa(0.15, 0x7dffd8, { y: top + 0.14, z: cz, sy: 1.25, jitter: 0.03 });
+    l.cone(0.08, 0.3, 4, 0x58c878, { x: -0.3, y: top + 0.08, z: cz, rz: 0.55 });
+    l.cone(0.08, 0.3, 4, 0x58c878, { x: 0.3, y: top + 0.08, z: cz, rz: -0.55 });
   }
   return { base: b.build(), lid: l.build() };
 }
@@ -197,6 +233,8 @@ function magnetGeo(): THREE.BufferGeometry {
 }
 
 const BEAM_H = 16;
+/** Distance from the hero within which the nearest closed chest gets the real light. */
+const CHEST_LIGHT_RANGE = 46;
 
 /**
  * Pillar of light over a bonus (drawn additively): dim at the ground so the object inside stays readable,
@@ -281,9 +319,14 @@ export class FxView {
   private readonly warns: Timed[] = [];
   private readonly flash: THREE.PointLight;
   private flashT = 0;
-  private readonly chestViews: Array<{ group: THREE.Group; lid: THREE.Mesh; glow: THREE.Sprite; beam: THREE.Mesh | null; openT: number }> = [];
+  private readonly chestViews: Array<{ group: THREE.Group; lid: THREE.Mesh; glow: THREE.Sprite; pool: THREE.Mesh; beam: THREE.Mesh | null; openT: number }> = [];
+  /** One real light for the nearest closed chest: it warms the ground and whatever stands around it. */
+  private readonly chestLight = new THREE.PointLight(0xffa238, 0, 19, 1.4);
+  private chestLit = -1;
+  private readonly chestPoolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
   private readonly chestParts = chestGeo(false);
-  private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  /** A trace of its own warmth, so the oak and the brass read at night before the hero's light reaches them. */
+  private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a1606 });
   private readonly giftParts = chestGeo(true);
   /** Slightly self-lit, so the white birch still reads as white deep in the night. */
   private readonly giftMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x16382e });
@@ -449,7 +492,7 @@ export class FxView {
     this.flash = new THREE.PointLight(0xbfdcff, 0, 40, 1.4);
     g.add(this.flash);
 
-    g.add(this.sparks.points, this.dust.points);
+    g.add(this.sparks.points, this.dust.points, this.chestLight);
 
     // --- fireflies: positions wrap around the hero in the vertex shader
     const fcount = 140;
@@ -894,7 +937,7 @@ void main() {
       (this.magnetBeams.material as THREE.MeshBasicMaterial).opacity = pulse;
       this.giftBeamMat.opacity = pulse;
     }
-    this.syncChests(world, dt, time, emit);
+    this.syncChests(world, dt, time, emit, night);
 
     // hero ring + wading splashes + dash afterimages
     {
@@ -1217,7 +1260,7 @@ void main() {
     fu.uNight!.value = night;
   }
 
-  private syncChests(world: World, dt: number, time: number, emit: boolean): void {
+  private syncChests(world: World, dt: number, time: number, emit: boolean, night: number): void {
     const list = world.chests;
     while (this.chestViews.length < list.length) {
       const c = list[this.chestViews.length] as Chest;
@@ -1228,10 +1271,19 @@ void main() {
       const lid = new THREE.Mesh(parts.lid, mat);
       lid.position.set(0, 0.56, -0.375);
       base.castShadow = true;
+      lid.castShadow = true;
+      // Pool of light on the ground around the chest.
+      const pool = new THREE.Mesh(
+        this.chestPoolGeo,
+        new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffa238, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3, toneMapped: false }),
+      );
+      pool.scale.setScalar(c.gift ? 6 : 7.5);
+      pool.position.y = 0.12;
+      pool.renderOrder = 2;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffd860, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
       glow.scale.setScalar(c.gift ? 3.8 : 3.4);
       glow.position.y = 0.6;
-      group.add(base, lid, glow);
+      group.add(base, lid, glow, pool);
       let beam: THREE.Mesh | null = null;
       if (c.gift) {
         beam = new THREE.Mesh(this.beamGeo, this.giftBeamMat);
@@ -1241,13 +1293,23 @@ void main() {
       group.position.set(c.x, c.y, c.z);
       group.rotation.y = c.rot;
       this.group.add(group);
-      this.chestViews.push({ group, lid, glow, beam, openT: 0 });
+      this.chestViews.push({ group, lid, glow, pool, beam, openT: 0 });
     }
+    const hero = world.player;
+    let nearest = -1;
+    let nearestD = CHEST_LIGHT_RANGE;
     for (let i = 0; i < list.length; i++) {
       const c = list[i] as Chest;
       const v = this.chestViews[i] as (typeof this.chestViews)[number];
       const mat = v.glow.material;
+      const poolMat = v.pool.material as THREE.MeshBasicMaterial;
+      const dist = Math.hypot(c.x - hero.x, c.z - hero.z);
+      if (!c.opened && dist < nearestD) {
+        nearest = i;
+        nearestD = dist;
+      }
       if (c.opened) {
+        poolMat.opacity = Math.max(0, poolMat.opacity - dt * 0.5);
         v.openT += dt;
         v.lid.rotation.x = -Math.min(1.9, v.openT * 9);
         mat.opacity = Math.max(0, 0.9 - v.openT * 0.6);
@@ -1258,13 +1320,31 @@ void main() {
         v.group.visible = true;
         v.group.scale.setScalar(c.free ? 1.15 + Math.sin(time * 6) * 0.05 : 1);
         // The gift is already lit by its pillar: a softer halo keeps the white birch readable.
-        mat.opacity = c.gift ? 0.32 + Math.sin(time * 5) * 0.1 : c.free ? 0.6 + Math.sin(time * 5) * 0.2 : 0.22 + Math.sin(time * 2 + i) * 0.08;
-        mat.color.set(c.gift ? GIFT_COLOR : c.free ? 0xffe27a : 0xd9a441);
+        mat.opacity = c.gift ? 0.32 + Math.sin(time * 5) * 0.1 : c.free ? 0.6 + Math.sin(time * 5) * 0.2 : 0.26 + Math.sin(time * 2 + i) * 0.08;
+        mat.color.set(c.gift ? GIFT_COLOR : c.free ? 0xffe27a : 0xffb347);
+        poolMat.color.set(c.gift ? GIFT_COLOR : 0xffa238);
+        poolMat.opacity = (c.gift ? 0.14 : 0.14 + night * 0.12) * (0.9 + Math.sin(time * 2.3 + i * 1.7) * 0.1);
+        // Embers of light drift up from the lid, as if the treasure inside were breathing.
+        if (!c.gift && emit && dist < 45 && Math.random() < 0.1) {
+          this.sparks.emit(c.x + (Math.random() - 0.5) * 0.8, c.y + 0.8, c.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.3, 0.7 + Math.random() * 0.9, (Math.random() - 0.5) * 0.3, 1.3, 0.13, 0xffc04a, 0, 0.4);
+        }
         if (c.gift && emit && Math.random() < 0.2) {
           this.sparks.emit(c.x + (Math.random() - 0.5) * 1.2, c.y + 0.4, c.z + (Math.random() - 0.5) * 1.2, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, GIFT_COLOR, 0, 0.3);
         }
       }
     }
+    // The light fades out before it moves to another chest, so it never jumps.
+    const light = this.chestLight;
+    if (this.chestLit !== nearest && light.intensity < 0.4) this.chestLit = nearest;
+    const lit = this.chestLit >= 0 ? (list[this.chestLit] as Chest | undefined) : undefined;
+    let want = 0;
+    if (lit && this.chestLit === nearest) {
+      const fade = 1 - Math.min(1, Math.max(0, (nearestD - CHEST_LIGHT_RANGE * 0.6) / (CHEST_LIGHT_RANGE * 0.4)));
+      want = (lit.gift ? 10 : 15 + night * 15) * fade * (0.92 + Math.sin(time * 7 + 1.3) * 0.05 + Math.sin(time * 17) * 0.03);
+      light.color.set(lit.gift ? GIFT_COLOR : 0xffa238);
+      light.position.set(lit.x, lit.y + 1.25, lit.z);
+    }
+    light.intensity += (want - light.intensity) * Math.min(1, dt * 6);
   }
 
   /** Removes chest meshes of a finished run. */
@@ -1272,8 +1352,11 @@ void main() {
     for (const v of this.chestViews) {
       this.group.remove(v.group);
       v.glow.material.dispose();
+      (v.pool.material as THREE.Material).dispose();
     }
     this.chestViews.length = 0;
+    this.chestLit = -1;
+    this.chestLight.intensity = 0;
     for (const list of [this.sweeps, this.bolts, this.booms, this.warns]) for (const s of list) s.mesh.visible = false;
     for (const gh of this.ghosts) {
       gh.t = 0;

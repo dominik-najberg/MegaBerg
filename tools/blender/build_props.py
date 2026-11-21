@@ -269,94 +269,107 @@ BARK_DARK = hexc(0x402e22)
 
 
 def fir(seed, lod=0):
-    """Spruce: layered, drooping skirts of branches with a star-shaped outline."""
+    """Spruce: many ragged, drooping skirts of boughs; dark inside, the bough tips catch the light."""
     s = Soup(seed)
     r = s.rng
-    H = r.uniform(9.2, 11.2)
+    H = r.uniform(9.4, 11.4)
     lean = V((r.uniform(-0.35, 0.35), 0, r.uniform(-0.35, 0.35)))
     sides = 5 if lod else 7
     pts = [V((0, -0.4, 0)), V((0, 0.45, 0)), lean * 0.3 + V((0, H * 0.35, 0)), lean * 0.7 + V((0, H * 0.7, 0)), lean + V((0, H * 0.96, 0))]
-    s.tube(pts, [0.66, 0.44, 0.34, 0.2, 0.05], sides, lambda i, k: mixc(BARK_DARK, BARK, r.random()), lambda i: [0, 0, 0.1, 0.3, 0.6][i], rough=0.06)
-    n = 5 if lod else 9
-    dark = hexc(0x1f4a2e)
-    light = hexc(0x3f7a4a)
-    under = hexc(0x16301f)
+    s.tube(pts, [0.7, 0.46, 0.35, 0.2, 0.05], sides, lambda i, k: mixc(BARK_DARK, hexc(0x6a4a34), r.random()), lambda i: [0, 0, 0.1, 0.3, 0.6][i], rough=0.06)
+    n = 6 if lod else 11
+    dark = hexc(0x1c4a30)
+    mid = hexc(0x2f6a3c)
+    tipc = hexc(0x8ab84c)
+    under = hexc(0x122a1c)
     for i in range(n):
         t = i / (n - 1)
-        y = lerp(1.9, H * 0.9, t ** 0.92)
-        R = lerp(3.0, 0.6, t ** 0.8) * r.uniform(0.9, 1.1)
-        h = lerp(2.3, 1.15, t)
+        y = lerp(1.7, H * 0.9, t ** 0.9)
+        R = lerp(3.5, 0.55, t ** 0.78) * r.uniform(0.9, 1.1)
+        h = lerp(1.55, 0.85, t)
         lobes = max(4, round(lerp(6 if lod else 9, 4 if lod else 5, t)))
-        droop = lerp(1.0, 0.25, t)
+        droop = lerp(0.85, 0.25, t)
         axis = lean * (y / (H * 0.96))
         rot = r.random() * TAU
-        col = mixc(dark, light, t * 0.8 + r.uniform(-0.08, 0.12))
+        body = mixc(dark, mid, t * 0.7 + r.uniform(-0.08, 0.12))
+        light = mixc(mid, tipc, 0.4 + t * 0.35 + r.uniform(-0.1, 0.1))
         wind = lerp(0.3, 1.0, t)
         m = 2 * lobes
         top = []
+        mdl = []
         out = []
         rt = max(0.07, R * 0.1)
         for k in range(m):
-            a = k * math.pi / lobes + rot
-            top.append(axis + V((math.cos(a) * rt, y + h, math.sin(a) * rt)))
+            a = k * math.pi / lobes + rot + r.uniform(-0.08, 0.08)
+            ca, sa = math.cos(a), math.sin(a)
+            top.append(axis + V((ca * rt, y + h, sa * rt)))
             tip = k % 2 == 0
-            rr = R * (r.uniform(0.92, 1.12) if tip else r.uniform(0.5, 0.66))
-            yy = y - (droop * r.uniform(0.8, 1.2) if tip else droop * 0.2)
-            out.append(axis + V((math.cos(a) * rr, yy, math.sin(a) * rr)))
+            rr = R * (r.uniform(0.9, 1.2) if tip else r.uniform(0.46, 0.62))
+            yy = y - (droop * r.uniform(0.75, 1.3) if tip else droop * 0.12)
+            o = axis + V((ca * rr, yy, sa * rr))
+            out.append(o)
+            # the bough bulges outwards half way down before it droops
+            mdl.append(axis + V((ca * rr * 0.6, lerp(y + h, yy, 0.42) + (0.16 if tip else 0.0), sa * rr * 0.6)))
         inside = axis + V((0, y + h * 0.3, 0))
-        below = axis + V((0, y + h * 0.3, 0))
         for k in range(m):
             k1 = (k + 1) % m
-            face = mulc(col, 1.12 if k % 2 == 0 else 0.86)
-            s.quad(top[k], top[k1], out[k1], out[k], face, (wind * 0.25, wind * 0.25, wind, wind), inside, 0.1)
-            if not lod:
-                s.tri(below, out[k], out[k1], under, (wind * 0.2, wind, wind), axis + V((0, y + h, 0)), 0.1)
-    tip = lean + V((0, H + 0.9, 0))
+            shade = 1.1 if k % 2 == 0 else 0.84
+            if lod:
+                s.quad(top[k], top[k1], out[k1], out[k], mulc(mixc(body, light, 0.4), shade), (wind * 0.25, wind * 0.25, wind, wind), inside, 0.1)
+            else:
+                s.quad(top[k], top[k1], mdl[k1], mdl[k], mulc(body, shade), (wind * 0.25, wind * 0.25, wind * 0.6, wind * 0.6), inside, 0.1)
+                s.quad(mdl[k], mdl[k1], out[k1], out[k], mulc(light, shade), (wind * 0.6, wind * 0.6, wind, wind), inside, 0.1)
+                s.tri(inside, out[k], out[k1], under, (wind * 0.2, wind, wind), axis + V((0, y + h, 0)), 0.1)
+    tip = lean + V((0, H + 1.0, 0))
     base = lean + V((0, H * 0.9, 0))
     for k in range(5):
         a0 = k * TAU / 5
         a1 = (k + 1) * TAU / 5
-        s.tri(base + V((math.cos(a0) * 0.3, 0, math.sin(a0) * 0.3)), base + V((math.cos(a1) * 0.3, 0, math.sin(a1) * 0.3)), tip, light, (0.8, 0.8, 1.0), base, 0.1)
+        s.tri(base + V((math.cos(a0) * 0.3, 0, math.sin(a0) * 0.3)), base + V((math.cos(a1) * 0.3, 0, math.sin(a1) * 0.3)), tip, tipc, (0.8, 0.8, 1.0), base, 0.1)
     return s
 
 
 def pine(seed, lod=0):
-    """Scots pine: tall bare trunk going from grey to orange bark, flat crown of needle clumps on top."""
+    """Scots pine: tall bare trunk going from grey to red-orange bark, the crown in flat layered plates."""
     s = Soup(seed)
     r = s.rng
     H = r.uniform(11.0, 13.5)
-    grey = hexc(0x4a3b32)
-    orange = hexc(0x9a5a30)
+    grey = hexc(0x54403a)
+    orange = hexc(0xb5622f)
     bend = V((r.uniform(-0.8, 0.8), 0, r.uniform(-0.8, 0.8)))
     seg = 6
     pts = [V((0, -0.4, 0))]
-    rad = [0.62]
+    rad = [0.64]
     for i in range(1, seg + 1):
         t = i / seg
         pts.append(bend * (math.sin(t * math.pi) * 0.5 + t * 0.4) + V((0, 0.5 + t * (H - 0.5), 0)))
-        rad.append(lerp(0.4, 0.13, t))
-    s.tube(pts, rad, 5 if lod else 7, lambda i, k: mixc(grey, orange, smooth((i - 1.5) / 3.0) + r.uniform(-0.12, 0.12)), lambda i: (i / seg) ** 2 * 0.5, rough=0.05)
+        rad.append(lerp(0.42, 0.14, t))
+    s.tube(pts, rad, 5 if lod else 7, lambda i, k: mixc(grey, orange, smooth((i - 1.0) / 2.6) + r.uniform(-0.12, 0.12)), lambda i: (i / seg) ** 2 * 0.5, rough=0.05)
     top = pts[-1]
-    dark = hexc(0x234a34)
-    light = hexc(0x4a8052)
+    dark = hexc(0x1f4a34)
+    light = hexc(0x5c9650)
     # dead stubs on the bare trunk
     if not lod:
-        for i in range(3):
-            t = r.uniform(0.35, 0.65)
+        for i in range(4):
+            t = r.uniform(0.3, 0.68)
             p = pts[0].lerp(top, t)
             a = r.random() * TAU
             d = V((math.cos(a), 0.25, math.sin(a)))
-            s.tube([p, p + d * r.uniform(0.6, 1.1)], [0.07, 0.03], 4, BARK_DARK, 0.2)
-    limbs = 3 if lod else 5
+            s.tube([p, p + d * r.uniform(0.6, 1.2)], [0.07, 0.03], 4, BARK_DARK, 0.2)
+    limbs = 3 if lod else 6
+    sub = 1 if lod else 2
     for i in range(limbs):
-        a = i * TAU / limbs + r.uniform(-0.4, 0.4)
-        start = pts[0].lerp(top, r.uniform(0.78, 0.92))
-        reach = r.uniform(1.6, 2.6)
-        end = start + V((math.cos(a) * reach, r.uniform(0.5, 1.3), math.sin(a) * reach))
+        a = i * TAU / limbs * 1.9 + r.uniform(-0.4, 0.4)
+        start = pts[0].lerp(top, lerp(0.74, 0.93, i / max(1, limbs - 1)))
+        reach = r.uniform(1.8, 2.9)
+        end = start + V((math.cos(a) * reach, r.uniform(0.4, 1.0), math.sin(a) * reach))
         mid = start.lerp(end, 0.5) + V((0, 0.35, 0))
         s.tube([start, mid, end], [0.13, 0.09, 0.05], 4 if lod else 5, orange, lambda j: 0.4 + j * 0.25)
-        s.blob(end + V((0, 0.2, 0)), (r.uniform(1.5, 2.1), r.uniform(0.7, 0.95), r.uniform(1.5, 2.1)), light, dark, 1 if lod else 2, 0.2, 0.9, 0.9, 0.12, 0.35)
-    s.blob(top + V((0, 0.9, 0)), (2.0, 1.1, 2.0), light, dark, 1 if lod else 2, 0.22, 0.9, 1.0, 0.12, 0.3)
+        rr = r.uniform(1.7, 2.4)
+        s.blob(end + V((0, 0.25, 0)), (rr, r.uniform(0.5, 0.68), rr * r.uniform(0.85, 1.0)), mixc(light, hexc(0x78a84e), r.random() * 0.5), dark, sub, 0.2, 0.9, 0.9, 0.12, 0.55)
+    s.blob(top + V((0, 0.7, 0)), (2.7, 0.8, 2.6), light, dark, sub, 0.2, 0.9, 1.0, 0.12, 0.5)
+    if not lod:
+        s.blob(top + V((r.uniform(-0.5, 0.5), 1.45, r.uniform(-0.5, 0.5))), (1.6, 0.55, 1.5), hexc(0x78a84e), dark, 1, 0.2, 0.9, 1.0, 0.12, 0.5)
     return s
 
 
@@ -375,9 +388,9 @@ def oak(seed, lod=0, scale=1.0):
             d = V((math.cos(a), 0, math.sin(a)))
             s.tube([d * 0.6 + V((0, 0.5, 0)), d * 1.3 + V((0, 0.12, 0)), d * 2.0 + V((0, -0.3, 0))], [0.34, 0.24, 0.1], 5, bark2, 0.0, rough=0.08)
     fork = pts[-1]
-    top = hexc(0x5c8a3e)
-    mid = hexc(0x426b33)
-    low = hexc(0x284a28)
+    top = hexc(0x6a9a40)
+    mid = hexc(0x457234)
+    low = hexc(0x234626)
     limbs = 4 if lod else 5
     ends = []
     for i in range(limbs):
@@ -442,35 +455,51 @@ def birch(seed, lod=0):
 
 
 def bush(seed):
+    """Leafy shrub: clumps with pointed leaves poking out; every other one carries bunches of red berries."""
     s = Soup(seed)
     r = s.rng
-    top = hexc(0x4e7a38)
-    low = hexc(0x25421f)
+    top = hexc(0x55863a)
+    low = hexc(0x234220)
+    leaf = hexc(0x7fa844)
+    berry = hexc(0xd2301f)
+    verts, faces = ico(0)
     for i in range(4):
         a = i * TAU / 4 + r.uniform(-0.4, 0.4)
-        d = r.uniform(0.0, 0.55)
-        rr = r.uniform(0.45, 0.75)
+        d = r.uniform(0.0, 0.6)
+        rr = r.uniform(0.48, 0.8)
         c = V((math.cos(a) * d, rr * 0.75, math.sin(a) * d))
         s.blob(c, (rr, rr * 0.85, rr), mixc(top, hexc(0x6a8c3c), r.random() * 0.6), low, 1, 0.28, 1.1, 0.7, 0.12, 0.3)
+        for b in range(9):
+            u = V((r.uniform(-1, 1), r.uniform(0.0, 1), r.uniform(-1, 1))).normalized()
+            p = c + V((u.x * rr, u.y * rr * 0.85, u.z * rr)) * 0.92
+            side = u.cross(V((0, 1, 0)))
+            side = side.normalized() if side.length > 1e-3 else V((1, 0, 0))
+            L = r.uniform(0.2, 0.32)
+            tipp = p + u * L + V((0, r.uniform(-0.06, 0.08), 0))
+            col = mixc(top, leaf, r.uniform(0.4, 1.0))
+            s.tri(p - side * 0.09, p + side * 0.09, tipp, col, (0.6, 0.6, 1.0), c, 0.08)
+            s.tri(p + side * 0.09, p - side * 0.09, tipp, mulc(col, 0.8), (0.6, 0.6, 1.0), c + u * 3, 0.08)
         if seed % 2 == 0:
-            verts, faces = ico(0)
-            for b in range(5):
+            for b in range(4):
                 u = V((r.uniform(-1, 1), r.uniform(0.1, 1), r.uniform(-1, 1))).normalized()
-                bc = c + V((u.x * rr, u.y * rr * 0.85, u.z * rr)) * 1.02
-                for f in faces:
-                    s.tri(bc + verts[f[0]] * 0.07, bc + verts[f[1]] * 0.07, bc + verts[f[2]] * 0.07, hexc(0xc0301f), 0.7, bc, 0.05)
+                bc = c + V((u.x * rr, u.y * rr * 0.85, u.z * rr)) * 1.03
+                for q in range(r.choice((2, 3))):
+                    cc = bc + V((r.uniform(-0.09, 0.09), r.uniform(-0.09, 0.05), r.uniform(-0.09, 0.09)))
+                    for f in faces:
+                        s.tri(cc + verts[f[0]] * 0.085, cc + verts[f[1]] * 0.085, cc + verts[f[2]] * 0.085, berry, 0.7, cc, 0.05)
     return s
 
 
 # ----------------------------------------------------------------------------- stones
 
-STONE = hexc(0x6f6c7e)
-STONE2 = hexc(0x827f90)
-MOSS = hexc(0x4f6e33)
-LICHEN = hexc(0x7d7c5c)
+STONE = hexc(0x726c7c)
+STONE2 = hexc(0x8a8290)
+MOSS = hexc(0x5a8236)
+LICHEN = hexc(0x8a8660)
+RUNE = hexc(0xe6dcc0)
 
 
-def stone_col(rng, moss_from=0.55, lichen=0.25, base=STONE, base2=STONE2):
+def stone_col(rng, moss_from=0.45, lichen=0.25, base=STONE, base2=STONE2):
     def f(n, c):
         col = mixc(base, base2, rng.random())
         if n.y > moss_from:
@@ -504,27 +533,125 @@ def rock(seed):
     return s
 
 
-def menhir(seed):
-    """Standing stone: tall, tapering, a little crooked, lichen on the weather side."""
+def rune(s, kind, at, a=0.29, b=0.41, th=0.05):
+    """
+    A carved Slavic sign as a flat decal. `at(u, v)` maps face coordinates (u across, v up, metres from the
+    middle of the face) to a point just above the stone. kind 0: the sown field (a rhombus quartered, a seed in
+    every quarter); kind 1: a rhombus within a rhombus with hooked corners.
+    """
+    def bar(p, q, t=th):
+        d = V((q[0] - p[0], q[1] - p[1], 0))
+        n = V((-d.y, d.x, 0)).normalized() * (t / 2)
+        e = d.normalized() * (t / 2)
+        c = [at(p[0] - e.x + n.x, p[1] - e.y + n.y), at(q[0] + e.x + n.x, q[1] + e.y + n.y), at(q[0] + e.x - n.x, q[1] + e.y - n.y), at(p[0] - e.x - n.x, p[1] - e.y - n.y)]
+        s.quad(c[0], c[1], c[2], c[3], RUNE, 0.0, at(0, 0, -0.5), 0.03)
+
+    def diamond(u, v, k):
+        c = [at(u, v + k * 1.3), at(u + k, v), at(u, v - k * 1.3), at(u - k, v)]
+        s.quad(c[0], c[1], c[2], c[3], RUNE, 0.0, at(0, 0, -0.5), 0.03)
+
+    T, R, B, L = (0, b), (a, 0), (0, -b), (-a, 0)
+    for p, q in ((T, R), (R, B), (B, L), (L, T)):
+        bar(p, q)
+    if kind == 0:
+        bar((-a / 2, b / 2), (a / 2, -b / 2))
+        bar((a / 2, b / 2), (-a / 2, -b / 2))
+        for u, v in ((0, b / 2), (a / 2, 0), (0, -b / 2), (-a / 2, 0)):
+            diamond(u, v, 0.028)
+        for u, v in ((0, b + 0.09), (0, -b - 0.09), (a + 0.07, 0), (-a - 0.07, 0)):
+            diamond(u, v, 0.034)
+    else:
+        k = 0.45
+        for p, q in ((T, R), (R, B), (B, L), (L, T)):
+            bar((p[0] * k, p[1] * k), (q[0] * k, q[1] * k), th * 0.85)
+        diamond(0, 0, 0.03)
+        # hooks: every side runs on past the corner
+        for (p, q) in ((T, R), (R, B), (B, L), (L, T)):
+            bar(q, (q[0] + (q[0] - p[0]) * 0.3, q[1] + (q[1] - p[1]) * 0.3))
+
+
+def menhir(seed, kind=0):
+    """
+    Standing stone: a tapering slab with chamfered edges and a chiselled top, a moss cap, moss creeping up from
+    the ground and a carved sign on both broad faces (local +Z and -Z).
+    """
     s = Soup(seed)
     r = s.rng
-    H = r.uniform(3.2, 3.8)
-    lean = V((r.uniform(-0.25, 0.25), 0, r.uniform(-0.2, 0.2)))
-    pts = []
-    for i in range(7):
-        t = i / 6
-        w = lerp(0.62, 0.34, t ** 1.4) * r.uniform(0.9, 1.08)
-        d = lerp(0.42, 0.24, t ** 1.2) * r.uniform(0.9, 1.08)
-        y = -0.3 + t * (H + 0.3)
-        for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
-            pts.append(lean * t + V((sx * w * r.uniform(0.85, 1.0), y + r.uniform(-0.12, 0.12), sz * d * r.uniform(0.85, 1.0))))
-    pts.append(lean + V((r.uniform(-0.1, 0.1), H + 0.25, 0)))
-    s.hull(pts, stone_col(r, 0.7, 0.4, hexc(0x66647a), hexc(0x7a7888)))
-    # a couple of small stones wedged at the foot
+    H = r.uniform(3.3, 3.9)
+    base, base2, shade = hexc(0x857a80), hexc(0x9c9094), hexc(0x5c5460)
+    y0, y1 = 1.1, 2.7  # between these heights the broad faces are flat, so the carving lies flush
+    # (height, half width, half depth, how crooked)
+    prof = [(-0.3, 0.80, 0.52, 1.0), (0.45, 0.76, 0.50, 1.0), (y0, 0.70, 0.46, 0.0), (y1, 0.56, 0.36, 0.0), (H - 0.35, 0.46, 0.29, 1.0), (H, 0.30, 0.19, 1.0)]
+    slant = r.uniform(-0.22, 0.22)
+    rings = []
+    for y, w, d, j in prof:
+        c = 0.13 * (w / 0.7)
+        ring = []
+        for x, z in ((-(w - c), d), (w - c, d), (w, d - c), (w, -(d - c)), (w - c, -d), (-(w - c), -d), (-w, -(d - c)), (-w, d - c)):
+            jj = 0.05 * j
+            yy = y + (x * slant if y >= H - 0.01 else 0) + r.uniform(-jj, jj)
+            ring.append(V((x + r.uniform(-jj, jj), yy, z + r.uniform(-jj, jj))))
+        rings.append(ring)
+    axis = [V((0, y, 0)) for y, _, _, _ in prof]
+    moss_top = H - r.uniform(0.5, 0.9)
+
+    def col(n, cen):
+        c = mixc(base, base2, r.random())
+        if n.y > 0.35 or (cen.y > moss_top and r.random() < 0.75):
+            return mixc(c, MOSS, 0.9)
+        if cen.y < 0.55 and r.random() < 0.6:
+            return mixc(c, MOSS, 0.75)
+        if abs(n.z) < 0.5:
+            c = mixc(c, shade, 0.45)  # the narrow sides are darker, weathered stone
+        if r.random() < 0.18:
+            c = mixc(c, LICHEN, 0.5)
+        return c
+
+    def face(a, b, c, inside):
+        n = (b - a).cross(c - a)
+        cen = (a + b + c) / 3
+        if n.dot(cen - inside) < 0:
+            n = -n
+        s.tri(a, b, c, col(n.normalized(), cen), 0.0, inside, 0.08)
+
+    for i in range(len(rings) - 1):
+        inside = (axis[i] + axis[i + 1]) / 2
+        for k in range(8):
+            a, b, c, d = rings[i][k], rings[i][(k + 1) % 8], rings[i + 1][(k + 1) % 8], rings[i + 1][k]
+            face(a, b, c, inside)
+            face(a, c, d, inside)
+    apex = V((r.uniform(-0.12, 0.12), H + 0.22, r.uniform(-0.05, 0.05)))
+    for k in range(8):
+        s.tri(rings[-1][k], rings[-1][(k + 1) % 8], apex, mixc(mixc(base, base2, r.random()), MOSS, 0.9), 0.0, axis[-1], 0.1)
+
+    # the carving, on both broad faces
+    d0, d1 = prof[2][2], prof[3][2]
+    ym = (y0 + y1) / 2 + 0.1
+    slope = (d0 - d1) / (y1 - y0)
+    for sign in (1, -1):
+        def at(u, v, lift=0.035, sign=sign):
+            # v runs up the tilted face: nearly vertical, leaning in by `slope`
+            k = 1 / math.sqrt(1 + slope * slope)
+            y = ym + v * k
+            z = lerp(d0, d1, (y - y0) / (y1 - y0)) + lift
+            return V((u * sign, y, z * sign))
+        rune(s, kind, at)
+
+    # moss tufts and small stones wedged at the foot
     for i in range(3):
         a = r.random() * TAU
-        c = V((math.cos(a) * 0.6, 0.0, math.sin(a) * 0.5))
+        c = V((math.cos(a) * 0.75, 0.0, math.sin(a) * 0.55))
         s.hull([c + V((r.uniform(-0.25, 0.25), r.uniform(-0.05, 0.28), r.uniform(-0.25, 0.25))) for _ in range(9)], stone_col(r))
+    for i in range(3):
+        a = r.random() * TAU
+        s.blob(V((math.cos(a) * 0.72, 0.08, math.sin(a) * 0.5)), (0.3, 0.16, 0.26), MOSS, mulc(MOSS, 0.55), 1, 0.25, 1.2, 0.0, 0.1)
+
+    # a little crooked: shear the whole stone, which keeps the carved faces flat
+    lean = V((r.uniform(-0.22, 0.22), 0, r.uniform(-0.1, 0.1)))
+    for p in s.P:
+        t = max(0.0, p.y) / H
+        p.x += lean.x * t
+        p.z += lean.z * t
     return s
 
 
@@ -769,7 +896,7 @@ def build_all():
     for i in range(3):
         add(f'rock{i}', rock(51 + i), 1.5, 0.4)
     for i in range(2):
-        add(f'menhir{i}', menhir(61 + i * 4), 2.0, 0.4)
+        add(f'menhir{i}', menhir(61 + i * 4, i), 2.0, 0.4)
     for i in range(2):
         add(f'bush{i}', bush(70 + i), 1.2, 0.4)
     add('ancient_oak', ancient_oak(), 6.0)

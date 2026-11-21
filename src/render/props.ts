@@ -90,57 +90,155 @@ function bonfireGeo(): THREE.BufferGeometry {
   return b.build();
 }
 
+/** Thin leaves from a flat list of triangle corners, each drawn from both sides (the prop material shows front faces only). */
+function leaves(pts: number[]): THREE.BufferGeometry {
+  const out: number[] = [];
+  for (let i = 0; i + 8 < pts.length; i += 9) {
+    const t = pts.slice(i, i + 9) as [number, number, number, number, number, number, number, number, number];
+    out.push(...t, t[3], t[4], t[5], t[0], t[1], t[2], t[6], t[7], t[8]);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(out, 3));
+  return g;
+}
+
+/** Fern: arching fronds, each a midrib with pairs of leaflets that shrink towards the tip. */
 function fernGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(9);
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * TAU + 0.2;
-    const tri = new THREE.BufferGeometry();
-    tri.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute([0, 0, -0.12, 0, 0, 0.12, 0.55, 0.42, 0, 0, 0, 0.12, 0, 0, -0.12, 0.55, 0.42, 0, 0.55, 0.42, 0.09, 0.55, 0.42, -0.09, 1.0, 0.22, 0, 0.55, 0.42, -0.09, 0.55, 0.42, 0.09, 1.0, 0.22, 0], 3),
-    );
-    b.add(tri, i % 2 ? 0x3f7a34 : 0x4c8a3a, { ry: a, jitter: 0.12 });
+  const FRONDS = 6;
+  const STATIONS = 6;
+  for (let i = 0; i < FRONDS; i++) {
+    const a = (i / FRONDS) * TAU + 0.2 + (i % 2) * 0.25;
+    const L = 1.15 + (i % 3) * 0.14;
+    const lift = 0.95 + (i % 2) * 0.3;
+    // Midrib: up and out, then drooping.
+    const rib = (t: number): [number, number] => [L * t, L * (lift * t - (lift - 0.12) * t * t)];
+    const inner: number[] = [];
+    const outer: number[] = [];
+    for (let k = 0; k < STATIONS; k++) {
+      const t = 0.14 + (k / STATIONS) * 0.8;
+      const dt = 0.062;
+      const [x0, y0] = rib(t - dt);
+      const [x1, y1] = rib(t + dt);
+      const [xm, ym] = rib(t + 0.03);
+      const w = 0.4 * Math.pow(1 - t, 0.6) * Math.min(1, t * 4 + 0.35);
+      const dst = k < 3 ? inner : outer;
+      for (const side of [-1, 1]) dst.push(x0, y0, 0, x1, y1, 0, xm + 0.05, ym - 0.05 - w * 0.18, side * w);
+    }
+    const [xa, ya] = rib(0.9);
+    const [xt, yt] = rib(1.04);
+    outer.push(xa, ya, -0.045, xa, ya, 0.045, xt, yt, 0);
+    b.add(leaves(inner), i % 2 ? 0x2f7436 : 0x3a8238, { ry: a, jitter: 0.12 });
+    b.add(leaves(outer), i % 2 ? 0x5c9c40 : 0x6fae48, { ry: a, jitter: 0.12 });
   }
   return b.build();
 }
 
+/** Tuft of grass: blades of different heights bending outwards, dark at the root and light at the tip. */
 function grassGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(3);
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * TAU;
-    const lean = 0.1 + (i % 3) * 0.08;
-    const tri = new THREE.BufferGeometry();
-    tri.setAttribute('position', new THREE.Float32BufferAttribute([-0.05, 0, 0, 0.05, 0, 0, lean, 0.5, 0, 0.05, 0, 0, -0.05, 0, 0, lean, 0.5, 0], 3));
-    b.add(tri, i % 2 ? 0x55803a : 0x47702f, { x: Math.cos(a) * 0.12, z: Math.sin(a) * 0.12, ry: a * 1.7, jitter: 0.15 });
+  const N = 7;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * TAU;
+    const h = 0.42 + ((i * 5) % 7) * 0.06;
+    const lean = 0.08 + (i % 3) * 0.09;
+    const w = 0.045;
+    const mx = lean * 0.35;
+    const my = h * 0.55;
+    const xf = { x: Math.cos(a) * 0.13, z: Math.sin(a) * 0.13, ry: a * 1.7, jitter: 0.15 };
+    b.add(leaves([-w, 0, 0, w, 0, 0, mx + w * 0.7, my, 0, -w, 0, 0, mx + w * 0.7, my, 0, mx - w * 0.7, my, 0]), i % 2 ? 0x3f6e2e : 0x356428, xf);
+    b.add(leaves([mx - w * 0.7, my, 0, mx + w * 0.7, my, 0, lean, h, 0]), i % 2 ? 0x74a544 : 0x64963c, xf);
   }
   return b.build();
 }
 
-/** Lily of the valley: broad leaves + a stalk of white bells. */
+/** Lily of the valley: two broad upright leaves and an arched stalk hung with white bells. */
 function lilyGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(4);
   for (const s of [-1, 1]) {
-    b.cone(0.09, 0.5, 4, 0x3e7a3a, { x: s * 0.06, y: 0.24, rz: s * -0.35, sz: 0.35 });
+    // A leaf folded along its midrib: root, two shoulders, tip.
+    const leaf = leaves([0, 0, 0, 0.1, 0.26, 0.07, 0.16, 0.58, 0, 0, 0, 0, 0.16, 0.58, 0, 0.1, 0.26, -0.07]);
+    b.add(leaf, s < 0 ? 0x3a7c3a : 0x4a8e40, { x: s * 0.03, ry: s < 0 ? Math.PI * 0.9 : 0.2, jitter: 0.1 });
   }
-  b.cyl(0.012, 0.015, 0.5, 3, 0x5a8a44, { x: 0.04, y: 0.3, rz: -0.3 });
-  for (let i = 0; i < 4; i++) {
-    b.ico(0.045, 0, 0xf4f1e6, { x: 0.07 + i * 0.045, y: 0.3 + i * 0.075, z: 0, jitter: 0.02 });
+  const BELLS = 5;
+  let px = 0;
+  let py = 0;
+  for (let i = 0; i <= BELLS; i++) {
+    // The stalk rises and bows over to one side.
+    const t = i / BELLS;
+    const x = 0.02 + t * t * 0.3;
+    const y = 0.16 + t * 0.52 - t * t * 0.18;
+    if (i > 0) {
+      const len = Math.hypot(x - px, y - py);
+      b.cyl(0.011, 0.013, len, 3, 0x5f9448, { x: (x + px) / 2, y: (y + py) / 2, z: 0.02, rz: -Math.atan2(x - px, y - py) });
+      b.octa(0.05, 0xfaf6ea, { x: x + 0.015, y: y - 0.055, z: 0.02, sy: 0.9, jitter: 0.02 });
+    }
+    px = x;
+    py = y;
   }
   return b.build();
 }
 
+/** Fly agaric, a big one and a small one: domed red cap with white warts, pale gills, a ring on the stem. */
 function mushroomGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(6);
-  b.cyl(0.05, 0.07, 0.22, 5, 0xe8dfc8, { y: 0.11 });
-  b.cone(0.2, 0.16, 6, 0xb5352a, { y: 0.28 });
-  b.cyl(0.035, 0.045, 0.14, 5, 0xe8dfc8, { x: 0.2, y: 0.07, z: 0.08 });
-  b.cone(0.12, 0.1, 6, 0xc04030, { x: 0.2, y: 0.18, z: 0.08 });
+  const one = (x: number, z: number, k: number, red: number): void => {
+    b.cyl(0.045 * k, 0.07 * k, 0.26 * k, 5, 0xefe6d0, { x, y: 0.13 * k, z });
+    b.cyl(0.075 * k, 0.06 * k, 0.03 * k, 5, 0xd9cfb6, { x, y: 0.19 * k, z });
+    b.cyl(0.2 * k, 0.17 * k, 0.03 * k, 7, 0xe6dcc4, { x, y: 0.265 * k, z });
+    b.add(new THREE.SphereGeometry(0.21 * k, 7, 3, 0, TAU, 0, Math.PI / 2), red, { x, y: 0.275 * k, z, sy: 0.72, jitter: 0.08 });
+    const warts: Array<[number, number]> = [[0, 0.1], [1.3, 0.62], [2.6, 0.7], [3.8, 0.6], [5.1, 0.72], [0.5, 0.8]];
+    for (const [a, r] of warts) {
+      const d = 0.2 * k * r;
+      const up = Math.sqrt(Math.max(0, 1 - r * r)) * 0.21 * k * 0.72;
+      b.octa(0.028 * k, 0xfbf7ee, { x: x + Math.cos(a) * d, y: 0.28 * k + up, z: z + Math.sin(a) * d, sy: 0.6, jitter: 0.02 });
+    }
+  };
+  one(0, 0, 1, 0xc8301f);
+  one(0.24, 0.1, 0.62, 0xd43a22);
   return b.build();
 }
 
+/** Burdock: a rosette of big heart-shaped leaves lying low, the kind that fills the shade under trees. */
+function burdockGeo(): THREE.BufferGeometry {
+  const b = new GeoBuilder(12);
+  const N = 5;
+  for (let i = 0; i < N; i++) {
+    const a = (i / N) * TAU + 0.4;
+    const k = 0.8 + (i % 3) * 0.16;
+    // Stalk, then a leaf folded along the midrib: lobes at the base, widest a third of the way, pointed tip.
+    const leaf = leaves([
+      0.14, 0.2, 0, 0.3, 0.36, 0.3, 0.52, 0.34, 0, 0.14, 0.2, 0, 0.52, 0.34, 0, 0.3, 0.36, -0.3,
+      0.3, 0.36, 0.3, 0.62, 0.3, 0.26, 0.52, 0.34, 0, 0.3, 0.36, -0.3, 0.52, 0.34, 0, 0.62, 0.3, -0.26,
+      0.62, 0.3, 0.26, 0.98, 0.12, 0, 0.52, 0.34, 0, 0.62, 0.3, -0.26, 0.52, 0.34, 0, 0.98, 0.12, 0,
+    ]);
+    b.add(leaf, i % 2 ? 0x2d6a3a : 0x3b7c3e, { ry: a, s: k, jitter: 0.14 });
+    b.add(leaves([0, 0, -0.02, 0, 0, 0.02, 0.16, 0.21, 0]), 0x4a7a3a, { ry: a, s: k });
+  }
+  return b.build();
+}
+
+/** A handful of fallen leaves lying on the trail. */
+function litterGeo(): THREE.BufferGeometry {
+  const b = new GeoBuilder(15);
+  const spots: Array<[number, number, number, number]> = [
+    [0, 0, 0.3, 0x6a3c1c],
+    [0.5, 0.22, 1.9, 0x54301a],
+    [-0.42, 0.36, 4.1, 0x7a5424],
+    [0.2, -0.5, 2.9, 0x5c381a],
+  ];
+  for (const [x, z, ry, color] of spots) {
+    b.add(leaves([-0.11, 0, 0, 0, 0.012, 0.06, 0.13, 0, 0, -0.11, 0, 0, 0.13, 0, 0, 0, 0.012, -0.06]), color, { x, y: 0.05, z, ry, jitter: 0.12 });
+  }
+  return b.build();
+}
+
+/** A stone half sunk in the ground with moss on its back. */
 function pebbleGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(8);
-  b.ico(0.22, 0, 0x625e70, { y: 0.06, sy: 0.5 });
+  b.ico(0.24, 0, 0x6c6474, { y: 0.06, sy: 0.55, sz: 0.8 });
+  b.ico(0.12, 0, 0x7a7280, { x: 0.24, y: 0.03, z: 0.08, sy: 0.6 });
+  b.tintUpFaces(0x5a8236, 0.55, 0.85);
   return b.build();
 }
 
@@ -224,9 +322,11 @@ export class PropsView {
     }
     this.geos.set('shrine', shrineGeo());
     this.geos.set('bonfire', bonfireGeo());
-    this.geos.set('fern', normalsUp(windByHeight(fernGeo(), 0.45, 0.5)));
-    this.geos.set('grass', normalsUp(windByHeight(grassGeo(), 0.5, 0.55)));
+    this.geos.set('fern', normalsUp(windByHeight(fernGeo(), 0.5, 0.5)));
+    this.geos.set('grass', normalsUp(windByHeight(grassGeo(), 0.6, 0.55)));
     this.geos.set('lily', normalsUp(windByHeight(lilyGeo(), 0.6, 0.4), 0.5));
+    this.geos.set('burdock', normalsUp(windByHeight(burdockGeo(), 0.5, 0.3)));
+    this.geos.set('litter', normalsUp(litterGeo(), 0));
     this.geos.set('mushroom', mushroomGeo());
     this.geos.set('pebble', pebbleGeo());
 
@@ -380,6 +480,9 @@ export class PropsView {
     scatter('lily', 1600, 0.9, 1.5, (x, z) => (fbm(x / 6 + 40, z / 6 + 13, 2) > 0.6 && map.isFree(x, z, 0.2) ? 1 : 0.02) * offPath(x, z));
     scatter('mushroom', 640, 0.8, 1.6, nearObstacle);
     scatter('pebble', 1200, 0.6, 1.8, (x, z) => (map.isFree(x, z, 0.3) ? 0.6 : 0));
+    // Big leaves crowd the shade around trunks and stones; fallen leaves gather on the trails.
+    scatter('burdock', 900, 0.8, 1.5, (x, z) => (map.isFree(x, z, 3.0) ? 0.03 : map.isFree(x, z, 0.9) ? 1 : 0) * offPath(x, z));
+    scatter('litter', 1500, 0.55, 1.0, (x, z) => (map.pathAt(x, z) > 0.3 && map.isFree(x, z, 0.3) ? 1 : 0.015));
     // Bushes fill the space between trunks; they do not block movement.
     const bushy = (x: number, z: number): number => (map.isFree(x, z, 0.6) && !map.isFree(x, z, 3.2) ? 1 : 0.03) * offPath(x, z);
     scatter('bush0', 420, 0.8, 1.5, bushy, 'near');

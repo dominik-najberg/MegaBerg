@@ -23,10 +23,29 @@ uniform sampler2D uMoonTex;
 varying vec3 vDir;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
-float noise(vec2 p) {
-  vec2 i = floor(p); vec2 f = fract(p);
+float hash3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
+float noise3(vec3 p) {
+  vec3 i = floor(p); vec3 f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+  float a = mix(mix(hash3(i), hash3(i + vec3(1.0, 0.0, 0.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 0.0)), hash3(i + vec3(1.0, 1.0, 0.0)), f.x), f.y);
+  float b = mix(mix(hash3(i + vec3(0.0, 0.0, 1.0)), hash3(i + vec3(1.0, 0.0, 1.0)), f.x), mix(hash3(i + vec3(0.0, 1.0, 1.0)), hash3(i + vec3(1.0, 1.0, 1.0)), f.x), f.y);
+  return mix(a, b, f.z);
+}
+float fbm3(vec3 p) {
+  float s = 0.0;
+  float a = 0.5;
+  for (int i = 0; i < 4; i++) {
+    s += noise3(p) * a;
+    p = p * 2.03 + vec3(17.3, 9.1, 4.7);
+    a *= 0.5;
+  }
+  return s / 0.9375;
+}
+/** Cloud density in a direction of the sky: big heaps, wider than tall, with smaller billows riding on them. */
+float clouds(vec3 p) {
+  float big = fbm3(p);
+  float small = fbm3(p * 3.1 + big * 1.6);
+  return big * 0.7 + small * 0.3;
 }
 
 void main() {
@@ -38,12 +57,28 @@ void main() {
   float sd = max(dot(d, uSunDir), 0.0);
   col += uSunCol * (pow(sd, 5.0) * 0.45 + pow(sd, 90.0) * 0.9);
 
-  // Streaky clouds lit from below by the sunset.
-  vec2 cuv = vec2(atan(d.z, d.x) * 2.2, h * 9.0 - uTime * 0.004);
-  float c = noise(cuv * vec2(1.0, 2.6)) * 0.6 + noise(cuv * vec2(2.3, 6.0) + 3.7) * 0.4;
-  float cloud = smoothstep(0.52, 0.8, c) * smoothstep(0.02, 0.16, h) * (1.0 - smoothstep(0.35, 0.6, h));
-  vec3 cloudCol = mix(uMid * 0.6, uHorizon * 1.25 + uSunCol * 0.25, pow(sd, 2.0) * 0.8 + 0.2);
-  col = mix(col, cloudCol, cloud * 0.75);
+  // Heaped clouds drifting over the forest, sampled by direction, so they have no seam and keep their
+  // size down to the horizon. The side of every heap that faces the sun or the moon is lit, the rest stays dark.
+  vec3 lightDir = normalize(mix(uSunDir, uMoonDir, uNight));
+  vec3 cp = vec3(d.x, d.y * 2.4, d.z) * 2.6 + vec3(uTime * 0.004, 0.0, uTime * 0.0015);
+  float dens = clouds(cp);
+  float lit = clamp((dens - clouds(cp + lightDir * 0.22)) * 3.2 + 0.25, 0.0, 1.0);
+  float cloud = smoothstep(0.47, 0.58, dens) * smoothstep(0.0, 0.07, h);
+  float thick = smoothstep(0.5, 0.75, dens);
+  float ld = max(dot(d, lightDir), 0.0);
+  float near = pow(ld, 3.0);
+  vec3 dayBody = mix(uTop, uMid, 0.3) * 0.95;
+  vec3 dayRim = uHorizon * 1.25 + uSunCol * 0.45;
+  vec3 nightBody = mix(uMid, vec3(0.17, 0.11, 0.32), 0.7) * 0.8;
+  vec3 nightRim = vec3(0.36, 0.29, 0.62);
+  vec3 body = mix(dayBody, nightBody, uNight);
+  vec3 rim = mix(dayRim, nightRim, uNight);
+  vec3 cloudCol = mix(body * (1.0 - thick * 0.3), rim, lit * (0.35 + near * 0.65));
+  // Silver lining where a cloud passes close to the light.
+  cloudCol += rim * pow(ld, 24.0) * (1.0 - thick) * 0.6;
+  // A hole in the clouds around the moon keeps it in the clear.
+  cloud *= 1.0 - uNight * 0.8 * smoothstep(0.972, 0.996, dot(d, uMoonDir));
+  col = mix(col, cloudCol, cloud * 0.9);
 
   // Stars.
   vec2 suv = vec2(atan(d.z, d.x) * 40.0, h * 70.0);

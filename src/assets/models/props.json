@@ -1,94 +1,94 @@
 {
  "fir0": {
   "offset": 0,
-  "verts": 1338
+  "verts": 2514
  },
  "fir1": {
-  "offset": 21408,
-  "verts": 1338
+  "offset": 40224,
+  "verts": 2514
  },
  "fir2": {
-  "offset": 42816,
-  "verts": 1338
+  "offset": 80448,
+  "verts": 2514
  },
  "fir_lod": {
-  "offset": 64224,
-  "verts": 450
+  "offset": 120672,
+  "verts": 510
  },
  "pine0": {
-  "offset": 71424,
-  "verts": 2196
+  "offset": 128832,
+  "verts": 2607
  },
  "pine1": {
-  "offset": 106560,
-  "verts": 2196
+  "offset": 170544,
+  "verts": 2607
  },
  "pine_lod": {
-  "offset": 141696,
+  "offset": 212256,
   "verts": 615
  },
  "oak0": {
-  "offset": 151536,
+  "offset": 222096,
   "verts": 2718
  },
  "oak1": {
-  "offset": 195024,
+  "offset": 265584,
   "verts": 2718
  },
  "oak_lod": {
-  "offset": 238512,
+  "offset": 309072,
   "verts": 762
  },
  "birch0": {
-  "offset": 250704,
+  "offset": 321264,
   "verts": 1338
  },
  "birch1": {
-  "offset": 272112,
+  "offset": 342672,
   "verts": 1338
  },
  "birch_lod": {
-  "offset": 293520,
+  "offset": 364080,
   "verts": 615
  },
  "rock0": {
-  "offset": 303360,
-  "verts": 192
+  "offset": 373920,
+  "verts": 198
  },
  "rock1": {
-  "offset": 306432,
+  "offset": 377088,
   "verts": 132
  },
  "rock2": {
-  "offset": 308544,
+  "offset": 379200,
   "verts": 198
  },
  "menhir0": {
-  "offset": 311712,
-  "verts": 228
+  "offset": 382368,
+  "verts": 720
  },
  "menhir1": {
-  "offset": 315360,
-  "verts": 204
+  "offset": 393888,
+  "verts": 720
  },
  "bush0": {
-  "offset": 318624,
-  "verts": 1440
+  "offset": 405408,
+  "verts": 2916
  },
  "bush1": {
-  "offset": 341664,
-  "verts": 240
+  "offset": 452064,
+  "verts": 456
  },
  "ancient_oak": {
-  "offset": 345504,
+  "offset": 459360,
   "verts": 13458
  },
  "hut": {
-  "offset": 560832,
+  "offset": 674688,
   "verts": 3912
  },
  "idol": {
-  "offset": 623424,
+  "offset": 737280,
   "verts": 2322
  }
 }

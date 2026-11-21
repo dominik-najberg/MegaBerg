@@ -322,7 +322,8 @@ export class GameMap {
           for (let i = 1; i < n; i++) {
             const a = toCentre + (i / n) * TAU;
             const [x, z] = at(a, 7);
-            this.obstacles.push({ x, z, r: 0.85, kind: 'menhir', scale: 0.85 + hash2(i * 7, 3) * 0.5, rot: a + hash2(i, 9) * 0.6 });
+            // The broad, carved face of every stone looks at the middle of the ring (give or take).
+            this.obstacles.push({ x, z, r: 0.85, kind: 'menhir', scale: 0.85 + hash2(i * 7, 3) * 0.5, rot: -a - Math.PI / 2 + (hash2(i, 9) - 0.5) * 0.5 });
           }
           this.chestSpots.push({ x: l.x, z: l.z, rot: face });
           break;
