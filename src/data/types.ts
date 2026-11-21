@@ -213,6 +213,8 @@ export interface CharacterDef {
     skin: number;
     build: number;
     style: 'wojmir' | 'dobroslawa' | 'bogumil' | 'jagna';
+    /** Extra dress on top of the style; heroes that share a style differ by it. */
+    outfit?: 'perun';
   };
 }
 

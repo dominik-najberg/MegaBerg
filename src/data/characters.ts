@@ -5,7 +5,7 @@ export const CHARACTERS: CharacterDef[] = [
     id: 'wojmir',
     name: 'Wojmir',
     title: 'Młody woj',
-    desc: 'Zbalansowany wojownik w lnianej koszuli z czerwonym haftem.',
+    desc: 'Zbalansowany wojownik w burzowej tunice ze znakiem Peruna.',
     bonus: '+10% obrażeń, +5% szybkości ruchu',
     startWeapon: 'sierpy',
     mods: [
@@ -13,7 +13,7 @@ export const CHARACTERS: CharacterDef[] = [
       { stat: 'moveSpeed', add: 0.05 },
     ],
     passive: { name: 'Hart woja', desc: '+0,6% obrażeń z każdym poziomem.', perLevel: [{ stat: 'damage', add: 0.006 }] },
-    look: { shirt: 0xe9e1cc, trim: 0xb3261e, pants: 0x5b3a2e, hair: 0xe2b34a, skin: 0xe0a985, build: 1, style: 'wojmir' },
+    look: { shirt: 0x2a3760, trim: 0xb5744e, pants: 0x3e2a22, hair: 0x453a36, skin: 0xe0a985, build: 1, style: 'wojmir', outfit: 'perun' },
   },
   {
     id: 'dobroslawa',
@@ -76,7 +76,7 @@ export const CHARACTERS: CharacterDef[] = [
     ],
     passive: { name: 'Wiedźmie oko', desc: '+0,3% szansy na krytyk z każdym poziomem.', perLevel: [{ stat: 'critChance', add: 0.003 }] },
     unlock: 'jaga',
-    look: { shirt: 0x4a3a66, trim: 0xb3261e, pants: 0x2e2440, hair: 0x35284f, skin: 0xe2b8a0, build: 0.95, style: 'jagna' },
+    look: { shirt: 0xeae2cd, trim: 0xb3261e, pants: 0x3f6a3a, hair: 0x2c2434, skin: 0xe2b8a0, build: 0.95, style: 'jagna' },
   },
   {
     id: 'radogost',

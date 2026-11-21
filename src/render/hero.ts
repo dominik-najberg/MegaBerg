@@ -18,6 +18,17 @@ const IRON = 0x9a9080;
 const AMBER = 0xf0a030;
 const GOLD = 0xd9a441;
 const EMBROIDERY = 0xa02c22;
+/** Wojmir, after the starred "Perun" skin: storm-navy tunic, copper trim, smoked leather, axe amulet. */
+const COPPER = 0xb5744e;
+const COPPER_LIT = 0xd29a6c;
+const SMOKED = 0x4a3024;
+const SMOKED_DARK = 0x33211a;
+/** Jagna, after the starred "Noc Kupały" skin: fern wreath, moss capelet, green skirt with red bands. */
+const MOSS = 0x2f5a34;
+const FERN = 0x4f8a3a;
+const FERN_LIT = 0x76a84a;
+const PETAL = 0xe890a0;
+const FERN_FLOWER = 0xffb040;
 
 /**
  * Articulated low-poly hero built from boxes. All animation is procedural:
@@ -114,18 +125,38 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
     }
 
     // --- torso + head
+    const perun = look.outfit === 'perun';
     const t = new GeoBuilder(41);
     t.box(0.54 * wide, 0.62, 0.3, look.shirt, { y: 0.36 });
-    t.box(0.58 * wide, 0.2, 0.34, look.shirt, { y: -0.02 });
+    // jagna wears a green apron over the hips, the others the lower half of the shirt
+    t.box(0.58 * wide, 0.2, 0.34, look.style === 'jagna' ? look.pants : look.shirt, { y: -0.02 });
     t.box(0.585 * wide, 0.045, 0.345, look.trim, { y: -0.1 });
-    t.box(0.56 * wide, 0.09, 0.33, RED, { y: 0.1 });
-    if (look.style !== 'bogumil') {
+    t.box(0.56 * wide, 0.09, 0.33, perun ? SMOKED : RED, { y: 0.1 });
+    if (perun) {
+      // smoked leather: belt loop, hanger and scabbard, with a flat copper axe amulet on top
+      t.box(0.07, 0.1, 0.03, SMOKED_DARK, { x: 0.15, y: 0.1, z: 0.17 });
+      t.box(0.05, 0.3, 0.035, SMOKED_DARK, { x: 0.15, y: -0.06, z: 0.185 });
+      t.box(0.095, 0.2, 0.05, SMOKED, { x: 0.15, y: -0.24, z: 0.19 });
+      t.box(0.068, 0.068, 0.05, SMOKED, { x: 0.15, y: -0.34, z: 0.19, rz: Math.PI / 4 });
+      t.box(0.03, 0.2, 0.025, COPPER, { x: 0.15, y: -0.01, z: 0.215, jitter: 0.03 });
+      t.box(0.1, 0.075, 0.025, COPPER_LIT, { x: 0.2, y: 0.045, z: 0.215, jitter: 0.03 });
+      t.box(0.05, 0.11, 0.024, COPPER_LIT, { x: 0.235, y: 0.045, z: 0.215, jitter: 0.03 });
+    } else if (look.style !== 'bogumil') {
       t.box(0.06, 0.34, 0.05, RED, { x: 0.15, y: -0.1, z: 0.175, rz: 0.08 });
       t.box(0.09, 0.07, 0.06, GOLD, { x: 0.15, y: -0.28, z: 0.175 });
     }
     t.box(0.24, 0.05, 0.31, look.trim, { y: 0.65 });
-    t.box(0.09, 0.3, 0.31, look.trim, { y: 0.5 });
-    if (look.style !== 'bogumil') {
+    if (perun) {
+      // short copper neckline running into an embroidered thunderbolt, six-armed thunder mark beside it
+      t.box(0.08, 0.1, 0.31, look.trim, { y: 0.6 });
+      t.box(0.06, 0.17, 0.02, COPPER_LIT, { x: 0.035, y: 0.5, z: 0.155, rz: -0.45, jitter: 0.03 });
+      t.box(0.1, 0.04, 0.02, COPPER_LIT, { x: 0.035, y: 0.428, z: 0.156, jitter: 0.03 });
+      t.box(0.04, 0.18, 0.02, COPPER_LIT, { x: 0.03, y: 0.345, z: 0.155, rz: -0.45, jitter: 0.03 });
+      for (let i = 0; i < 3; i++) t.box(0.1, 0.02, 0.02, COPPER, { x: -0.165, y: 0.5, z: 0.155, rz: (i * Math.PI) / 3, jitter: 0.03 });
+    } else {
+      t.box(0.09, 0.3, 0.31, look.trim, { y: 0.5 });
+    }
+    if (look.style !== 'bogumil' && !perun) {
       t.box(0.04, 0.04, 0.315, LINEN, { y: 0.52, rz: Math.PI / 4 });
       t.box(0.04, 0.04, 0.315, LINEN, { y: 0.42, rz: Math.PI / 4 });
     }
@@ -200,11 +231,37 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
       t.box(0.075, 0.03, 0.055, 0x7e1a14, { x: 0.13, y: -0.16, z: 0.23 });
       t.box(0.1, 0.09, 0.075, GOLD, { x: 0.13, y: -0.25, z: 0.23 });
     } else {
-      // jagna: hood and shawl
-      t.box(0.38, 0.3, 0.36, look.hair, { y: 1.02, z: -0.03 });
-      t.cone(0.2, 0.3, 4, look.hair, { y: 1.2, z: -0.12, rx: -0.7 });
-      t.box(0.62, 0.16, 0.36, look.hair, { y: 0.6 });
+      // jagna on Kupala night: dark bob under a wreath of fern, herbs and flowers
+      t.box(0.36, 0.14, 0.35, look.hair, { y: 1.07 });
+      t.box(0.36, 0.36, 0.1, look.hair, { y: 0.92, z: -0.15 });
+      for (const s of [-1, 1]) t.box(0.05, 0.3, 0.22, look.hair, { x: s * 0.17, y: 0.93, z: -0.03 });
+      t.box(0.32, 0.06, 0.03, look.hair, { y: 1.03, z: 0.155 });
+      t.cone(0.07, 0.12, 4, look.hair, { y: 1.18, z: -0.02 });
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * TAU + 0.22;
+        const cx = Math.cos(a);
+        const cz = Math.sin(a);
+        // fern fronds fan outwards and up
+        t.cone(0.05, 0.22, 4, i % 2 ? FERN : FERN_LIT, { x: cx * 0.23, y: 1.13, z: cz * 0.23, rz: -cx * 1.05, rx: cz * 1.05 });
+        if (i % 3 === 0) t.ico(0.05, 0, i % 2 ? PETAL : 0xf2e9d8, { x: cx * 0.21, y: 1.09, z: cz * 0.21 });
+      }
+      t.box(0.4, 0.045, 0.39, MOSS, { y: 1.09 });
+      // the fern flower itself, over the left brow
+      t.octa(0.055, FERN_FLOWER, { x: 0.12, y: 1.13, z: 0.2, jitter: 0 });
+      // moss capelet, green bodice sides, red shoulder straps and chest embroidery
+      t.box(0.64, 0.14, 0.37, MOSS, { y: 0.61 });
+      t.box(0.4, 0.07, 0.38, MOSS, { y: 0.52 });
+      for (const s of [-1, 1]) {
+        t.box(0.09, 0.42, 0.305, look.pants, { x: s * 0.23, y: 0.3 });
+        t.box(0.045, 0.36, 0.31, RED, { x: s * 0.16, y: 0.31 });
+        t.box(0.035, 0.035, 0.02, RED, { x: s * 0.085, y: 0.36, z: 0.155, rz: Math.PI / 4 });
+        t.box(0.035, 0.035, 0.02, RED, { x: s * 0.085, y: 0.25, z: 0.155, rz: Math.PI / 4 });
+      }
+      // skirt with red woven bands and a linen hem
       t.cyl(0.3, 0.46, 0.62, 7, look.pants, { y: -0.36 });
+      t.cyl(0.427, 0.443, 0.055, 7, RED, { y: -0.53 });
+      t.cyl(0.444, 0.451, 0.025, 7, RED, { y: -0.59 });
+      t.cyl(0.453, 0.468, 0.055, 7, LINEN, { y: -0.645 });
     }
     this.part(this.torso, t);
 
@@ -227,6 +284,11 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
       } else {
         b.box(0.18, 0.38, 0.2, look.shirt, { y: -0.17 });
         b.box(0.19, 0.045, 0.21, look.trim, { y: -0.36 });
+        if (look.style === 'jagna') {
+          // embroidered sleeve: a red band with a flower under it
+          b.box(0.185, 0.04, 0.205, RED, { y: -0.1 });
+          b.box(0.05, 0.05, 0.02, RED, { x: side * 0.092, y: -0.21, rz: Math.PI / 4, ry: Math.PI / 2 });
+        }
         b.box(0.13, 0.22, 0.14, look.skin, { y: -0.48 });
       }
       this.part(arm, b);
