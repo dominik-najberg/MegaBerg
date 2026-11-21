@@ -345,3 +345,28 @@ export function buyShopItem(save: SaveData, id: string): boolean {
   save.shop[id] = level + 1;
   return true;
 }
+
+/**
+ * Developer shortcut (dev menu): earns every achievement, buys every Skarbiec thing and marks every
+ * evolution as seen, so all heroes, weapons, books, treasures and endless mode are open. Achievement gold
+ * is not paid and existing progress is kept. Idempotent; returns how many new entries it added.
+ */
+export function unlockAll(save: SaveData): number {
+  let added = 0;
+  const add = (list: string[], id: string): void => {
+    if (list.includes(id)) return;
+    list.push(id);
+    added++;
+  };
+  for (const a of ACHIEVEMENTS) {
+    add(save.achievements, a.id);
+    delete save.best[a.id];
+  }
+  for (const w of WEAPONS) {
+    if (w.evolved) add(save.evolutionsSeen, w.id);
+    else if (w.silver) add(save.bought, `weapon:${w.id}`);
+  }
+  for (const i of ITEMS) if (i.silver) add(save.bought, `item:${i.id}`);
+  add(save.bought, 'toggler');
+  return added;
+}
