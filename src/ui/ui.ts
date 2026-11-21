@@ -6,9 +6,9 @@ import { CHARACTERS } from '../data/characters';
 import { ENEMIES } from '../data/enemies';
 import { RARITIES } from '../data/rarity';
 import { SHOP, shopCost } from '../data/shop';
-import type { EnemyDef } from '../data/types';
-import { WEAPON_BY_ID } from '../data/weapons';
-import { isUnlocked, MIN_ENABLED, poolIds, runPool, TOGGLER_PRICE, type PoolKind, type RunResult } from '../meta/progress';
+import type { AchievementDef, EnemyDef, WeaponKind } from '../data/types';
+import { WEAPON_BY_ID, WEAPONS } from '../data/weapons';
+import { achievementProgress, isUnlocked, MIN_ENABLED, poolIds, runPool, TOGGLER_PRICE, unlockedWeaponIds, type PoolKind, type RunResult } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import { canBanish, type Card } from '../sim/cards';
 import { dodgeChance } from '../sim/stats';
@@ -33,9 +33,40 @@ export interface UIActions {
   uiSound(kind: 'click' | 'hover' | 'buy' | 'deny'): void;
 }
 
-export type Screen = 'menu' | 'characters' | 'shop' | 'achievements' | 'options' | 'pause' | 'end' | 'choice' | 'none';
+export type Screen = 'menu' | 'characters' | 'shop' | 'achievements' | 'arsenal' | 'options' | 'pause' | 'end' | 'choice' | 'none';
 
 const fmtTime = (t: number): string => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+/** Polish names of the attack types, for the Arsenał. */
+const KIND_NAMES: Record<WeaponKind, string> = {
+  orbit: 'Krążące ostrza',
+  bolt: 'Pocisk',
+  lightning: 'Piorun',
+  sweep: 'Zamach',
+  aura: 'Aura',
+  bounce: 'Rykoszet',
+  summon: 'Przywołanie',
+  cone: 'Stożek',
+  lob: 'Rzut ze strefą',
+  homing: 'Pociski naprowadzane',
+  trap: 'Pułapki',
+  trail: 'Ognisty ślad',
+  boomerang: 'Powracający rzut',
+  wander: 'Wędrujące wiry',
+  vortex: 'Wir wciągający',
+  guard: 'Blok i kontra',
+  tether: 'Nić',
+};
+
+/** Progress bar of an achievement that counts something ("1240 / 2000"); empty for yes/no achievements. */
+function progressHtml(save: SaveData, ach: AchievementDef | undefined): string {
+  const p = ach ? achievementProgress(save, ach) : null;
+  if (!ach || !p) return '';
+  const t = ach.cond.type;
+  const fmt = (v: number): string =>
+    t === 'survive' || t === 'unhurt' || t === 'unhurtStreak' ? fmtTime(v) : t === 'speed' ? `+${Math.round(v * 100)}%` : Math.floor(v).toLocaleString('pl-PL');
+  return `<div class="progress"><div class="dmg-bar"><i style="width:${Math.round((p.have / Math.max(1e-9, p.need)) * 100)}%"></i></div><b>${fmt(p.have)} / ${fmt(p.need)}</b></div>`;
+}
 
 function el(tag: string, cls: string, parent: HTMLElement): HTMLElement {
   const e = document.createElement(tag);
@@ -152,6 +183,10 @@ export class UI {
       case 'achievements':
         a.uiSound('click');
         this.showAchievements();
+        break;
+      case 'arsenal':
+        a.uiSound('click');
+        this.showArsenal();
         break;
       case 'options':
         a.uiSound('click');
@@ -274,7 +309,7 @@ export class UI {
         this.actions.resume();
         return true;
       }
-      if (this.screen === 'characters' || this.screen === 'shop' || this.screen === 'achievements' || this.screen === 'options') {
+      if (this.screen === 'characters' || this.screen === 'shop' || this.screen === 'achievements' || this.screen === 'arsenal' || this.screen === 'options') {
         this.run('back', '');
         return true;
       }
@@ -335,6 +370,7 @@ export class UI {
           <button class="btn primary" data-act="play">${icon('sword')} Graj</button>
           <button class="btn" data-act="shop">${icon('home')} Chata <span class="pill">${icon('coin', '#ffd040', 14)} ${s.gold}</span></button>
           <button class="btn" data-act="achievements">${icon('star')} Osiągnięcia <span class="pill">${s.achievements.length}/${ACHIEVEMENTS.length}</span></button>
+          <button class="btn" data-act="arsenal">${icon('sickle')} Arsenał <span class="pill">${unlockedWeaponIds(s).length}/${WEAPONS.filter((w) => !w.evolved).length}</span></button>
           <button class="btn" data-act="options">${icon('gear')} Opcje</button>
         </div>
         <div class="menu-foot">${best}</div>
@@ -402,24 +438,30 @@ export class UI {
       </div>`;
     }).join('');
     const silverPill = `<span class="pill big silver">${icon('coin', '#d8dde6', 16)} ${s.silver} srebra</span>`;
-    const vault = ITEMS.filter((it) => it.silver)
-      .map((it) => {
-        const owned = s.bought.includes(`item:${it.id}`);
-        const open = isUnlocked(s, it.unlock);
-        const ach = ACHIEVEMENTS.find((a) => a.id === it.unlock);
-        const can = open && !owned && s.silver >= (it.silver ?? 0);
-        const btn = owned
-          ? '<button class="btn small disabled">W skrzyniach</button>'
-          : open
-            ? `<button class="btn small${can ? ' primary' : ' disabled'}" data-act="buy" data-arg="item:${it.id}">${icon('coin', '#d8dde6', 14)} ${it.silver}</button>`
-            : `<button class="btn small disabled">${icon('lock', '#8a8296', 14)}</button>`;
-        return `<div class="shop-item${owned ? ' maxed' : ''}">
-          <div class="shop-icon" style="--rc:${RARITIES[it.rarity].color}">${icon(it.icon, open ? hex(it.color) : '#6f6880', 30)}</div>
-          <div class="shop-body"><h4>${open ? it.name : '???'}</h4><p>${open ? it.desc : `Odblokuj: ${ach?.desc ?? ''}`}</p><div class="shop-eff">${RARITIES[it.rarity].name}</div></div>
+    /** One thing sold for silver: locked by its achievement, for sale, or bought (`ownedLabel`). */
+    const vaultRow = (key: string, it: { name: string; desc: string; icon: string; color: number; unlock?: string; silver?: number }, tag: string, ownedLabel: string): string => {
+      const owned = s.bought.includes(key);
+      const open = isUnlocked(s, it.unlock);
+      const ach = ACHIEVEMENTS.find((a) => a.id === it.unlock);
+      const can = open && !owned && s.silver >= (it.silver ?? 0);
+      const btn = owned
+        ? `<button class="btn small disabled">${ownedLabel}</button>`
+        : open
+          ? `<button class="btn small${can ? ' primary' : ' disabled'}" data-act="buy" data-arg="${key}">${icon('coin', '#d8dde6', 14)} ${it.silver}</button>`
+          : `<button class="btn small disabled">${icon('lock', '#8a8296', 14)}</button>`;
+      return `<div class="shop-item${owned ? ' maxed' : ''}">
+          <div class="shop-icon">${icon(it.icon, open ? hex(it.color) : '#6f6880', 30)}</div>
+          <div class="shop-body"><h4>${open ? it.name : '???'}</h4><p>${open ? it.desc : `Odblokuj: ${ach?.desc ?? ''}`}</p>${open ? '' : progressHtml(s, ach)}<div class="shop-eff">${tag}</div></div>
           ${btn}
         </div>`;
-      })
-      .join('');
+    };
+    const vault =
+      WEAPONS.filter((w) => w.silver && !w.evolved)
+        .map((w) => vaultRow(`weapon:${w.id}`, w, 'Broń', s.disabled.includes(`w:${w.id}`) ? 'Wyłączona z puli' : 'Na kartach'))
+        .join('') +
+      ITEMS.filter((it) => it.silver)
+        .map((it) => vaultRow(`item:${it.id}`, it, RARITIES[it.rarity].name, 'W skrzyniach'))
+        .join('');
     const hasToggler = s.bought.includes('toggler');
     const toggler = `<div class="shop-item${hasToggler ? ' maxed' : ''}">
         <div class="shop-icon">${icon('wand', '#d8dde6', 30)}</div>
@@ -451,7 +493,7 @@ export class UI {
         <p class="lead">Złoto wyniesione z boru zamienia się w trwałe ulepszenia, a srebro z każdego runu otwiera Skarbiec. <span class="pill big">${icon('coin', '#ffd040', 16)} ${s.gold}</span> ${silverPill}</p>
         <div class="shop">${items}</div>
         <h3 class="shop-head">Skarbiec (srebro)</h3>
-        <p class="muted">Skarb odblokowany osiągnięciem kupisz tu za srebro; od tej chwili trafia do skrzyń.</p>
+        <p class="muted">Skarb lub broń odblokowane osiągnięciem kupisz tu za srebro; od tej chwili skarb trafia do skrzyń, a broń na karty.</p>
         <div class="shop">${vault}${toggler}</div>
         ${pools}
         <div class="row"><button class="btn" data-act="back">Wróć</button></div>
@@ -471,6 +513,40 @@ export class UI {
       `<div class="sheet">
         <h2>Osiągnięcia</h2>
         <div class="achs">${rows}</div>
+        <div class="row"><button class="btn" data-act="back">Wróć</button></div>
+      </div>`,
+      'dim',
+    );
+  }
+
+  /** Every base weapon: what it does and what it evolves into, or how to unlock it and how far that is. */
+  showArsenal(): void {
+    const s = this.save;
+    const rows = WEAPONS.filter((w) => !w.evolved)
+      .map((w) => {
+        const ach = ACHIEVEMENTS.find((a) => a.id === w.unlock);
+        if (!isUnlocked(s, w.unlock)) {
+          return `<div class="shop-item arsenal-item locked">
+          <div class="shop-icon">${icon('lock', '#8a8296', 28)}</div>
+          <div class="shop-body"><h4>???</h4><p>Odblokuj: ${ach?.desc ?? ''}</p>${progressHtml(s, ach)}</div>
+        </div>`;
+        }
+        const into = w.evolution ? WEAPON_BY_ID[w.evolution.into] : undefined;
+        const book = w.evolution ? PASSIVE_BY_ID[w.evolution.passive] : undefined;
+        const evo = !into ? '' : s.evolutionsSeen.includes(into.id) ? `Ewolucja: ${into.name}${book ? ` (${book.name})` : ''}` : 'Ewolucja: ???';
+        const toBuy = w.silver && !s.bought.includes(`weapon:${w.id}`) ? `<div class="arsenal-buy">Do kupienia w Skarbcu za ${w.silver} srebra</div>` : '';
+        return `<div class="shop-item arsenal-item${toBuy ? ' locked' : ''}">
+          <div class="shop-icon">${icon(w.icon, hex(w.color), 30)}</div>
+          <div class="shop-body"><h4>${w.name}</h4><p>${w.desc}</p><div class="shop-eff">Typ ataku: ${KIND_NAMES[w.kind]}</div><div class="arsenal-evo">${evo}</div>${toBuy}</div>
+        </div>`;
+      })
+      .join('');
+    this.open(
+      'arsenal',
+      `<div class="sheet wide">
+        <h2>Arsenał</h2>
+        <p class="lead">Bronie, które mogą trafić na karty. Kolejne odblokujesz stylem gry.</p>
+        <div class="shop">${rows}</div>
         <div class="row"><button class="btn" data-act="back">Wróć</button></div>
       </div>`,
       'dim',

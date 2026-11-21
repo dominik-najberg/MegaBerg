@@ -1,6 +1,6 @@
 /**
  * Headless balance simulation: plays whole runs with the bot and prints how they went.
- * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [set=sila:2,zdrowie:1] [character=wojmir] [pool=all] [books=pas,serce] [verbose=1]
+ * Usage: npm run sim -- [runs=6] [skill=good|novice] [shop=0..5] [set=sila:2,zdrowie:1] [character=wojmir] [pool=all] [books=pas,serce] [weapon=roj] [verbose=1]
  *        npm run sim -- career=12 [skill=novice] [careers=4]
  *
  * `career=N` plays N runs in a row on one save file, the way a new player would: gold left in the purse
@@ -23,7 +23,9 @@ const args = Object.fromEntries(process.argv.slice(2).map((a: string) => a.split
 const runs = Number(args.runs ?? 6);
 const skill = (args.skill ?? 'good') as BotSkill;
 const shopLevel = Number(args.shop ?? 0);
-const character = CHARACTER_BY_ID[args.character ?? 'wojmir'];
+const hero = CHARACTER_BY_ID[args.character ?? 'wojmir'];
+// weapon=roj starts every run with that weapon instead of the hero's own (for comparing weapons).
+const character = hero && args.weapon ? { ...hero, startWeapon: args.weapon } : hero;
 const maxMinutes = Number(args.maxMinutes ?? 15);
 const all = args.pool === 'all';
 const verbose = args.verbose === '1';

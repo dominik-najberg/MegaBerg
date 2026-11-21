@@ -9,18 +9,18 @@ import { WEAPON_MAX_LEVEL } from '../data/weaponLines';
 import { applyLines, type LineStat } from '../data/weaponLines';
 import type { BlessingDef, CharacterDef, EnemyDef, Rarity, Stats, WeaponDef, WeaponStats } from '../data/types';
 import { ELITE_HP_MUL, enemyDamageMul, enemyHpMul, finalWaveMul, RUN_LENGTH, xpForLevel } from '../data/waves';
-import { WEAPON_BY_ID, WEAPONS, weaponStatsAt } from '../data/weapons';
+import { DICE_CAP, DICE_CAP_EVOLVED, DICE_CRIT, FANG_CAP, FANG_CAP_EVOLVED, FANG_CHANCE, FANG_HP, REAP_KILLS, REAP_MAX, WEAPON_BY_ID, weaponLine, WEAPONS, weaponStatsAt } from '../data/weapons';
 import { updateEnemies } from './ai';
 import { Bonuses } from './bonuses';
 import { applyCard, canBanish, chestCards, itemCard, levelUpCards, rollItem, type Card } from './cards';
 import { Ev, EventQueue } from './events';
 import { MoveFx, Player, stepPlayer, type InputState } from './player';
-import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, Zones } from './pools';
+import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, ZoneKind, Zones } from './pools';
 import { Spawner } from './spawner';
-import { absorbShield, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, type ItemInst, type PassiveInst } from './stats';
+import { absorbShield, attackInterval, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, type ItemInst, type PassiveInst } from './stats';
 import { Explored } from './fog';
 import { GameMap, MAP_HALF, PLAY_RADIUS, type ShrineKind } from './terrain';
-import { updateProjectiles, updateWeapons, updateZones } from './weapons';
+import { minInterval, updateProjectiles, updateWeapons, updateZones } from './weapons';
 
 export { RUN_LENGTH };
 
@@ -73,7 +73,28 @@ export interface WeaponInst {
   fxCount: number;
   fxArea: number;
   ravens: Raven[];
+  /** Kosa Południcy: charged swings in stock, and kills counted toward the next one. */
+  charge: number;
+  tally: number;
+  /** Trail: where and when the last patch of fire was left. Lunge: centre of the current cut. */
+  lx: number;
+  lz: number;
+  lastT: number;
+  /** Tether: enemy index held by each thread (-1 = none). */
+  targets: number[];
 }
+
+/** Something hidden on the map; walking up to it finds it. */
+export interface SecretSpot {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  found: boolean;
+}
+
+/** How close the hero has to come to a secret to pick it up (metres). */
+export const SECRET_REACH = 2.2;
 
 export interface Chest {
   x: number;
@@ -150,6 +171,8 @@ export interface WorldOptions {
   passivePool?: string[];
   /** Ids of items chests may give. Defaults to everything without an unlock requirement. */
   itemPool?: string[];
+  /** Secrets already in the save: they are not hidden on the map again. */
+  foundSecrets?: readonly string[];
 }
 
 export interface RunSummary {
@@ -182,6 +205,16 @@ export interface RunSummary {
   books: Record<string, number>;
   lifestealHealed: number;
   burnDealt: number;
+  /** Kills banked by this summary per weapon line (id of the base weapon); burn counts for the weapon that lit it. */
+  killsByWeapon: Record<string, number>;
+  /** Longest stretch of the whole run without losing health, in seconds (the one still running at the end counts). */
+  longestUnhurt: number;
+  /** Damage that armour took off blows that landed, over the whole run. */
+  armorBlocked: number;
+  /** Book id -> run time at which each of its levels was taken (index 0 = level 1). */
+  bookTimes: Record<string, number[]>;
+  /** Secrets found in this run. */
+  secrets: string[];
 }
 
 const PICKUP_BASE = 2.6;
@@ -252,6 +285,12 @@ export class World {
   /** Texts for the announcer banner; the UI drains this. */
   readonly announce: string[] = [];
   readonly killsByType = new Int32Array(ENEMIES.length);
+  /** Kills per weapon line since the last banking (like `kills`, restarted by endless mode). */
+  killsByWeapon: Record<string, number> = {};
+  /** Run time at which each level of a book was taken (index 0 = level 1). */
+  readonly bookTimes: Record<string, number[]> = {};
+  /** Secrets found in this run; the game writes them to the save at once. */
+  readonly secrets: string[] = [];
   readonly prompt: Prompt = { kind: '', cost: 0, affordable: false, progress: 0 };
 
   stats: Stats;
@@ -296,12 +335,24 @@ export class World {
   evolved = 0;
   shrinesUsed = 0;
   damageTaken = 0;
+  /** Damage that armour took off blows that landed (before the shield). */
+  armorBlocked = 0;
+  /** Run time of the last health loss, and the longest stretch without one that has already ended. */
+  private unhurtSince = 0;
+  private unhurtBest = 0;
   burnDealt = 0;
   thornsDealt = 0;
   procDealt = 0;
   executions = 0;
   /** Permanent damage bonus collected by Czaszka upiora. */
   skullBonus = 0;
+  /** Max health gained in this run by Kieł wąpierza, and crit chance gained by Kostki Welesa. */
+  runHp = 0;
+  runCrit = 0;
+  /** Blows stopped by Puklerz. */
+  guardBlocks = 0;
+  /** The stick of Krzywula under one of the oaks, until it is in the save. */
+  secret: SecretSpot | null = null;
   /** Seconds the hero has stood still (Mech pustelnika). */
   stillT = 0;
   /** Metres walked toward the next Sakiewka wędrowca coin. */
@@ -346,6 +397,32 @@ export class World {
     for (const s of map.shrines) this.shrines.push({ x: s.x, y: map.heightAt(s.x, s.z), z: s.z, kind: s.kind, used: false, progress: 0 });
     this.landmarksFound = map.landmarks.map(() => false);
     this.fog.reveal(p.x, p.z);
+    if (!opts.foundSecrets?.includes('krzywula')) this.hideSecret('krzywula', opts.seed ?? 1);
+  }
+
+  /** Hides a secret at the foot of one oak, picked by the seed without touching the run's random stream. */
+  private hideSecret(id: string, seed: number): void {
+    const oaks = this.map.obstacles.filter((o) => o.kind === 'oak' && Math.hypot(o.x, o.z) > 45 && Math.hypot(o.x, o.z) < PLAY_RADIUS - 15);
+    if (oaks.length === 0) return;
+    const oak = oaks[(Math.imul(seed | 0, 2654435761) >>> 0) % oaks.length] as (typeof oaks)[number];
+    // On the side facing the middle of the map, just outside the trunk.
+    const d = Math.hypot(oak.x, oak.z) || 1;
+    const x = oak.x - (oak.x / d) * (oak.r + 0.9);
+    const z = oak.z - (oak.z / d) * (oak.r + 0.9);
+    this.secret = { id, x, y: this.map.heightAt(x, z), z, found: false };
+  }
+
+  private updateSecret(): void {
+    const s = this.secret;
+    if (!s || s.found) return;
+    const p = this.player;
+    const dx = p.x - s.x;
+    const dz = p.z - s.z;
+    if (dx * dx + dz * dz > SECRET_REACH * SECRET_REACH) return;
+    s.found = true;
+    this.findSecret(s.id);
+    this.announce.push('Krzywy kij spod dębu! Krzywula czeka w Skarbcu.');
+    this.events.emit(Ev.Secret, s.x, s.y, s.z, 1);
   }
 
   /** 0 (dusk) .. 1 (night) for the renderer. */
@@ -399,6 +476,7 @@ export class World {
     this.updateShots(dt);
     this.updatePickups(dt);
     this.updateInteract(dt, input.interact);
+    this.updateSecret();
     this.explore();
 
     if (!this.dead && this.pendingLevels > 0 && this.choice === null) this.openLevelUp();
@@ -461,6 +539,31 @@ export class World {
     return best;
   }
 
+  /** Index of the toughest living enemy within range (highest full health; the nearer one on a tie), or -1. */
+  strongest(x: number, z: number, range: number): number {
+    const e = this.enemies;
+    const n = this.grid.query(x, z, range + 4, this.cand);
+    const limit = (range + 3) * (range + 3);
+    let best = -1;
+    let bestHp = 0;
+    let bestD = 0;
+    for (let k = 0; k < n; k++) {
+      const j = this.cand[k] as number;
+      if (!e.alive[j] || (e.spawnT[j] as number) > 0.3) continue;
+      const dx = (e.x[j] as number) - x;
+      const dz = (e.z[j] as number) - z;
+      const d = dx * dx + dz * dz;
+      if (d >= limit) continue;
+      const hp = e.maxHp[j] as number;
+      if (best < 0 || hp > bestHp || (hp === bestHp && d < bestD)) {
+        best = j;
+        bestHp = hp;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
   /** Random living enemy within range, or -1. Uses bufB. */
   randomInRange(x: number, z: number, range: number): number {
     const n = this.collect(x, z, range, this.bufB);
@@ -473,10 +576,13 @@ export class World {
   /**
    * Damages one enemy. `slot` >= 0 attributes the hit to a weapon (crits, burn, slow, knockback stat,
    * lifesteal, statistics); slot -1 is damage over time or environmental; SLOT_THORNS is thorns.
+   * `src` is the weapon slot credited if this damage kills (burn passes the weapon that lit it); it changes
+   * nothing about the damage itself.
    */
-  damageEnemy(i: number, base: number, slot: number, kx: number, kz: number, kb: number, st: WeaponStats | null): void {
+  damageEnemy(i: number, base: number, slot: number, kx: number, kz: number, kb: number, st: WeaponStats | null, src = slot): void {
     const e = this.enemies;
     if (!e.alive[i]) return;
+    e.killSrc[i] = src >= 0 ? src : -1;
     const def = ENEMIES[e.type[i] as number] as EnemyDef;
     let dmg = base;
     let flag = 0;
@@ -502,7 +608,10 @@ export class World {
       const burn = (st ? st.burn * this.stats.damage : 0) + dmg * this.stats.burn;
       if (burn > 0) {
         e.burnT[i] = 3;
-        if (burn > (e.burnDps[i] as number)) e.burnDps[i] = burn;
+        if (burn > (e.burnDps[i] as number)) {
+          e.burnDps[i] = burn;
+          e.burnSrc[i] = slot;
+        }
       }
       if (st && st.slow > 0) {
         const k = st.slow * (1 - def.weight * 0.7);
@@ -535,6 +644,8 @@ export class World {
     else if (slot >= 0 && this.fx.marzannaScythe > 0 && !def.rank && this.rng.next() < Math.min(PROC_CHANCE_CAP, EXECUTE_CHANCE * this.fx.marzannaScythe)) {
       // Kosa Marzanny: the rest of the enemy's health goes at once.
       this.executions++;
+      // The treasure made the kill, not the weapon whose hit triggered it.
+      e.killSrc[i] = -1;
       e.hp[i] = 0;
       this.events.emit(Ev.Hit, ex, (e.y[i] as number) + (e.oy[i] as number), ez, 0, 1, def.height);
       this.killEnemy(i);
@@ -635,6 +746,26 @@ export class World {
     this.runKills++;
     if (this.fx.wraithSkull > 0) this.skullBonus = Math.min(SKULL_CAP * this.fx.wraithSkull, this.skullBonus + SKULL_PER_KILL * this.fx.wraithSkull);
     this.killsByType[t] = (this.killsByType[t] as number) + 1;
+    const killer = this.weapons[e.killSrc[i] as number];
+    if (killer) {
+      const line = weaponLine(killer.def.id);
+      this.killsByWeapon[line] = (this.killsByWeapon[line] ?? 0) + 1;
+      // Kieł wąpierza: a kill may raise max health for the rest of the run.
+      if (killer.def.rule === 'fang' && this.runHp < (killer.def.evolved ? FANG_CAP_EVOLVED : FANG_CAP) && this.rng.next() < FANG_CHANCE) {
+        this.runHp += FANG_HP;
+        this.refreshStats();
+      }
+    }
+    for (const inst of this.weapons) {
+      if (inst.def.rule !== 'reap') continue;
+      // Kosa Południcy: every elite or ranked enemy that falls charges a swing, and so do its own kills.
+      let gain = elite || def.rank ? 1 : 0;
+      if (inst === killer && ++inst.tally >= REAP_KILLS) {
+        inst.tally = 0;
+        gain++;
+      }
+      inst.charge = Math.min(REAP_MAX, inst.charge + gain);
+    }
     this.events.emit(Ev.Kill, x, (e.y[i] as number) + (e.oy[i] as number), z, t, elite, e.radius[i] as number);
     const luck = this.stats.luck;
     const rng = this.rng;
@@ -739,7 +870,9 @@ export class World {
       // Thorns can kill the boss: the run is won and the blow that triggered them no longer lands.
       if (this.won && !this.endless) return;
     }
+    if (this.guardBlock()) return;
     let d = damageAfterArmor(damage, st.armor);
+    this.armorBlocked += Math.max(0, damage - d);
     p.invuln = 0.5 + MIRROR_INVULN * this.fx.witchMirror;
     p.hurtT = 0;
     if (this.shield > 0) {
@@ -754,6 +887,8 @@ export class World {
     }
     p.hp -= d;
     this.damageTaken += d;
+    this.unhurtBest = this.longestUnhurt();
+    this.unhurtSince = this.time;
     // Heavy blows (boss attacks, charges) freeze the action for a few frames.
     if (d > this.stats.maxHp * 0.15 && this.hitstop < 0.07) this.hitstop = 0.07;
     this.events.emit(Ev.PlayerHit, p.x, p.y, p.z, d);
@@ -771,6 +906,46 @@ export class World {
         this.events.emit(Ev.Death, p.x, p.y, p.z);
       }
     }
+  }
+
+  /**
+   * Puklerz: a ready buckler stops the whole blow (no health lost, the shield is not touched) and answers
+   * with a shockwave around the hero. Returns true when the blow was blocked.
+   */
+  private guardBlock(): boolean {
+    for (const inst of this.weapons) {
+      if (inst.def.kind !== 'guard' || inst.timer > 0) continue;
+      const st = inst.stats;
+      const s = this.stats;
+      const p = this.player;
+      inst.timer = Math.max(minInterval('guard'), st.cooldown * attackInterval(s));
+      p.invuln = 0.5 + MIRROR_INVULN * this.fx.witchMirror;
+      this.guardBlocks++;
+      const r = st.area * s.area;
+      this.events.emit(Ev.ShieldHit, p.x, p.y, p.z);
+      this.events.emit(Ev.Sweep, p.x, p.y + 0.9, p.z, 0, Math.PI * 2, r, inst.def.color);
+      this.damageCircle(p.x, p.z, r, st.damage * (1 + inst.bonus) * s.damage, inst.slot, st.knockback, st);
+      return true;
+    }
+    return false;
+  }
+
+  /** Kostki Welesa rolled a six: a little crit chance for the rest of the run, up to the weapon's cap. */
+  diceSix(inst: WeaponInst): void {
+    const cap = inst.def.evolved ? DICE_CAP_EVOLVED : DICE_CAP;
+    if (this.runCrit >= cap - 1e-9) return;
+    this.runCrit = Math.min(cap, this.runCrit + DICE_CRIT);
+    this.stats.critChance += DICE_CRIT;
+  }
+
+  /** Longest stretch without losing health so far, in seconds, counting the one still running. */
+  longestUnhurt(): number {
+    return Math.max(this.unhurtBest, this.time - this.unhurtSince);
+  }
+
+  /** Records a secret found in this run (once). */
+  findSecret(id: string): void {
+    if (!this.secrets.includes(id)) this.secrets.push(id);
   }
 
   heal(amount: number): void {
@@ -881,12 +1056,13 @@ export class World {
     this.events.emit(Ev.EnemyShoot, x, y, z);
   }
 
-  addZone(x: number, z: number, r: number, life: number, dmg: number, slot: number): void {
+  addZone(x: number, z: number, r: number, life: number, dmg: number, slot: number, kind: number = ZoneKind.Tar): void {
     const zn = this.zones;
     const i = zn.list.alloc();
     if (i < 0) return;
     zn.alive[i] = 1;
     zn.slot[i] = slot;
+    zn.kind[i] = kind;
     zn.x[i] = x;
     zn.z[i] = z;
     zn.y[i] = this.map.heightAt(x, z);
@@ -895,7 +1071,7 @@ export class World {
     zn.span[i] = life;
     zn.tick[i] = 0;
     zn.dmg[i] = dmg;
-    this.events.emit(Ev.Zone, x, zn.y[i] as number, z, r);
+    this.events.emit(Ev.Zone, x, zn.y[i] as number, z, r, kind);
   }
 
   // ------------------------------------------------------------------ hazards, shots, pickups
@@ -1256,6 +1432,9 @@ export class World {
     const oldMax = this.stats.maxHp;
     const oldShield = this.stats.shield;
     this.stats = computeStats(this.character, this.shopLevels, this.passives, this.blessings, this.items, this.level);
+    // Gains of this run from weapon rules (Kieł wąpierza, Kostki Welesa).
+    this.stats.maxHp += this.runHp;
+    this.stats.critChance += this.runCrit;
     if (this.stats.maxHp > oldMax) this.player.hp += this.stats.maxHp - oldMax;
     if (this.stats.shield > oldShield) this.shield += this.stats.shield - oldShield;
     if (this.shield > this.stats.shield) this.shield = this.stats.shield;
@@ -1290,6 +1469,12 @@ export class World {
       fxCount: 0,
       fxArea: 0,
       ravens: [],
+      charge: 0,
+      tally: 0,
+      lx: 0,
+      lz: 0,
+      lastT: -1e9,
+      targets: [],
     };
     this.weapons.push(inst);
     return inst;
@@ -1310,6 +1495,7 @@ export class World {
     inst.active = 0;
     inst.queue = 0;
     inst.ravens.length = 0;
+    inst.targets.length = 0;
     this.evolved++;
     const p = this.player;
     this.events.emit(Ev.Evolve, p.x, p.y, p.z);
@@ -1401,7 +1587,8 @@ export class World {
 
   /**
    * Continue after defeating the boss. The victory has already been banked, so the counters that add up
-   * across runs (gold, kills) restart from zero; shrine and evolution progress belong to the same run and stay.
+   * across runs (gold, kills, kills per weapon and per enemy) restart from zero; shrine and evolution progress
+   * and the records of one run (longest unhurt stretch, armour, book times) belong to the same run and stay.
    */
   startEndless(): void {
     // Everything up to now was banked with the victory; the endless part is paid for from here.
@@ -1412,6 +1599,7 @@ export class World {
     this.goldCollected = 0;
     this.kills = 0;
     this.killsByType.fill(0);
+    this.killsByWeapon = {};
   }
 
   summary(): RunSummary {
@@ -1442,6 +1630,11 @@ export class World {
       books: Object.fromEntries(this.passives.map((p) => [p.def.id, p.level])),
       lifestealHealed: Math.round(this.lifestealHealed),
       burnDealt: Math.round(this.burnDealt),
+      killsByWeapon: { ...this.killsByWeapon },
+      longestUnhurt: this.longestUnhurt(),
+      armorBlocked: Math.round(this.armorBlocked),
+      bookTimes: Object.fromEntries(Object.entries(this.bookTimes).map(([id, t]) => [id, t.slice()])),
+      secrets: this.secrets.slice(),
     };
   }
 }

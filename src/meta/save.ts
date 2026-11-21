@@ -16,7 +16,7 @@ export interface SaveData {
   gold: number;
   /** Silver (meta currency, stage 7): earned by every run, spent in the Skarbiec. */
   silver: number;
-  /** Skarbiec purchases: 'item:<id>' for treasures, 'toggler' for Rózga wróżbity. */
+  /** Skarbiec purchases: 'item:<id>' for treasures, 'weapon:<id>' for weapons, 'toggler' for Rózga wróżbity. */
   bought: string[];
   /** Ids switched off with Rózga wróżbity: 'w:<weapon>', 'b:<book>', 'i:<item>'. */
   disabled: string[];
@@ -30,7 +30,17 @@ export interface SaveData {
     gold: number;
     bestTime: number;
     bestLevel: number;
+    /** Total kills per weapon line (id of the base weapon). Counted since this field exists. */
+    killsByWeapon: Record<string, number>;
+    /** Total kills per enemy id. Counted since this field exists. */
+    killsByEnemy: Record<string, number>;
   };
+  /** Secrets and rare drops found so far. */
+  found: string[];
+  /** Ids of evolved weapons the player has made at least once (the Arsenał shows the others as "???"). */
+  evolutionsSeen: string[];
+  /** Best single-run result toward achievements not earned yet, by achievement id (progress bars). */
+  best: Record<string, number>;
   options: Options;
   character: string;
 }
@@ -49,7 +59,9 @@ export const SAVE_KEY = 'megaberg-slowianskie-bory-v1';
  * passive items instead of books) load as they are. The books kept the passive ids and unlocks are
  * stored as achievements, so nothing needs remapping; `sanitizeSave` fills in the new fields and
  * `grantFromTotals` (meta/progress) adds achievements the old totals already earned. Bump it with the
- * first change that has to transform stored data.
+ * first change that has to transform stored data. The counters of docs/BRONIE-PLAN.md (kills per weapon and
+ * per enemy, found secrets, seen evolutions, best results) are also just filled in: an old save starts them
+ * from zero, because that history was never recorded.
  */
 export const SAVE_VERSION = 1;
 
@@ -62,7 +74,10 @@ export function defaultSave(): SaveData {
     disabled: [],
     shop: {},
     achievements: [],
-    stats: { runs: 0, wins: 0, kills: 0, gold: 0, bestTime: 0, bestLevel: 0 },
+    stats: { runs: 0, wins: 0, kills: 0, gold: 0, bestTime: 0, bestLevel: 0, killsByWeapon: {}, killsByEnemy: {} },
+    found: [],
+    evolutionsSeen: [],
+    best: {},
     options: { master: 0.8, music: 0.6, sfx: 0.8, sensitivity: 1, damageNumbers: true, shake: true, quality: 2 },
     character: (CHARACTERS[0] as { id: string }).id,
   };
@@ -80,8 +95,21 @@ export function sanitizeSave(raw: unknown): SaveData {
   d.gold = Math.floor(num(r.gold, 0, 0));
   d.silver = Math.floor(num(r.silver, 0, 0));
   const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+  /** A record of positive numbers; anything else is dropped. */
+  const counts = (v: unknown, whole: boolean): Record<string, number> => {
+    const out: Record<string, number> = {};
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return out;
+    for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+      const n = whole ? Math.floor(num(x, 0, 0)) : num(x, 0, 0);
+      if (n > 0) out[k] = n;
+    }
+    return out;
+  };
   d.bought = strings(r.bought);
   d.disabled = strings(r.disabled);
+  d.found = [...new Set(strings(r.found))];
+  d.evolutionsSeen = [...new Set(strings(r.evolutionsSeen))];
+  d.best = counts(r.best, false);
   if (r.shop && typeof r.shop === 'object') {
     for (const [k, v] of Object.entries(r.shop as Record<string, unknown>)) {
       const lvl = Math.floor(num(v, 0, 0, 99));
@@ -97,6 +125,8 @@ export function sanitizeSave(raw: unknown): SaveData {
     d.stats.gold = Math.floor(num(s.gold, 0, 0));
     d.stats.bestTime = num(s.bestTime, 0, 0);
     d.stats.bestLevel = Math.floor(num(s.bestLevel, 0, 0));
+    d.stats.killsByWeapon = counts(s.killsByWeapon, true);
+    d.stats.killsByEnemy = counts(s.killsByEnemy, true);
   }
   if (r.options && typeof r.options === 'object') {
     const o = r.options as Record<string, unknown>;

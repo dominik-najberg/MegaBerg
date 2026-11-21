@@ -73,10 +73,13 @@ export function updateEnemies(w: World, dt: number): void {
       e.burnAcc[i] = (e.burnAcc[i] as number) + dt;
       if ((e.burnAcc[i] as number) >= 0.5) {
         e.burnAcc[i] = (e.burnAcc[i] as number) - 0.5;
-        w.damageEnemy(i, (e.burnDps[i] as number) * 0.5, -1, 0, 0, 0, null);
+        w.damageEnemy(i, (e.burnDps[i] as number) * 0.5, -1, 0, 0, 0, null, e.burnSrc[i] as number);
         if (!e.alive[i]) continue;
       }
-      if ((e.burnT[i] as number) <= 0) e.burnDps[i] = 0;
+      if ((e.burnT[i] as number) <= 0) {
+        e.burnDps[i] = 0;
+        e.burnSrc[i] = -1;
+      }
     }
 
     let sp = e.speed[i] as number;

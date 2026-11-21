@@ -12,12 +12,17 @@ const browser = await chromium.launch({
 const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: dpr })).newPage();
 await page.goto(`${URL}?autostart=1&bot=good&force=${enemies}`);
 await sleep(1500);
-await page.evaluate(() => {
+await page.evaluate((ids) => {
   const g = window.__mb; const w = g.world;
   w.stats.maxHp = 1e9; w.player.hp = 1e9; w.refreshStats = () => {};
-  for (const id of ['ogien', 'grom', 'wianek', 'proca', 'ciupaga']) w.addWeapon(id);
+  // MB_WEAPONS=miotla,wnyki,wir,studnia measures another set (at most 4 fit; the hero's own weapon is dropped).
+  if (ids) w.weapons.length = 0;
+  for (const id of ids ?? ['ogien', 'grom', 'wianek', 'proca', 'ciupaga']) {
+    const inst = w.addWeapon(id);
+    if (ids && inst) { inst.level = 5; w.refreshWeapon(inst); }
+  }
   w.time = 240; g.perfFinish = true;
-});
+}, process.env.MB_WEAPONS ? process.env.MB_WEAPONS.split(',') : null);
 const measure = async (label, setup) => {
   await page.evaluate(setup);
   await sleep(2500);

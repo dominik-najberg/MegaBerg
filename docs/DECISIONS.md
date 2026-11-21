@@ -884,3 +884,208 @@ dało się przeżyć. Zmiany (`src/data/waves.ts`, `src/sim/spawner.ts`, `src/da
 Symulacja (`npm run sim`, 12 runów, Wojmir), wygrane przed → po: dobry gracz Chata 0: 3 → 4, Chata 2:
 7 → 8, Chata 4: 11 → 11; nowicjusz Chata 0: 0 → 0, Chata 2: 1 → 1, Chata 4: 7 → 8. Poziom bohatera przy
 wezwaniu Leszego zostaje w okolicach 37–41, bo fale dają dużo doświadczenia w krótkim czasie.
+
+## Etap A planu broni: podstawy pod odblokowania stylem gry
+
+Wdrożony etap A z `docs/BRONIE-PLAN.md`. Nie dodaje broni i nie zmienia balansu walki.
+
+- **Źródło zabójstwa** (`src/sim/pools.ts`, `src/sim/world.ts`, `src/sim/ai.ts`): tablice `killSrc`
+  i `burnSrc` na wroga, zerowane w `alloc`. `damageEnemy` dostał ostatni, opcjonalny parametr `src`
+  (domyślnie `slot`): ustawia tylko `killSrc`, obrażeń nie dotyka. Tyknięcie podpalenia podaje `burnSrc`.
+  Ciernie, efekty skarbów i egzekucja Kosy Marzanny ustawiają „brak broni”. `killEnemy` dolicza zabójstwo
+  do `killsByWeapon` według linii broni (`weaponLine` w `src/data/weapons.ts`: ewolucja liczy się jak broń,
+  z której powstała).
+- **Statystyki runu** (`RunSummary`): `killsByWeapon` (przyrostowe, `startEndless` je zeruje),
+  `longestUnhurt`, `armorBlocked`, `bookTimes`, `secrets` (rekordy całego runu, przechodzą do trybu
+  nieskończonego). `World.findSecret(id)` to na razie sam hak; obiekt sekretu na mapie przyjdzie z etapem B.
+- **Zapis** (`src/meta/save.ts`): `stats.killsByWeapon`, `stats.killsByEnemy`, `found`, `evolutionsSeen`,
+  `best`. `SAVE_VERSION` zostaje 1, stare zapisy zaczynają liczniki od zera. Sekret trafia do zapisu od razu
+  (`Game.saveSecrets`).
+- **Warunki** (`AchievementCond`, `src/meta/progress.ts`): nowe `weaponKills`, `enemyKills`, `unhurtStreak`,
+  `armorBlocked` (z opcjonalną postacią), `secret`; `weaponLevel` z opcjonalnym `weapon`, `book`
+  z opcjonalnym `before`. `applyRun` dolicza liczniki przed sprawdzeniem osiągnięć, potem zapisuje `best`
+  dla niezdobytych osiągnięć liczbowych. `grantFromTotals` obsługuje nowe warunki łączne i sekret.
+- **Postęp:** `achievementProgress(save, ach)`. Dla „przetrwaj X” i „poziom X” stary zapis korzysta
+  z `stats.bestTime` i `stats.bestLevel`, więc pasek nie startuje od zera.
+- **Zakup broni:** pole `silver` w `WeaponDef`, `buySilver('weapon:<id>')`, `purchase` (wybór srebro/złoto,
+  używany przez `Game.buy`), `unlockedWeaponIds` wymaga zakupu, gdy broń ma cenę. Skarbiec pokazuje bronie
+  z ceną przed skarbami.
+- **Ekran Arsenał** (`UI.showArsenal`, przycisk w menu): bronie podstawowe z typem ataku i ewolucją („???”
+  do pierwszej ewolucji w runie), zablokowane z warunkiem i paskiem postępu.
+
+Odstępstwa i rzeczy świadomie odłożone:
+
+- Pasek pokazuje same liczby („1240 / 3000”), bez dopisku typu „zabójstw Ciupagą”: warunek jest w zdaniu
+  nad paskiem, a dopisek wymagałby odmiany nazwy każdej broni.
+- Żadna broń nie ma jeszcze ceny w srebrze i żadne osiągnięcie nie używa nowych warunków: przyjdą razem
+  z broniami (A2 i dalej). Dlatego sekcja broni w Skarbcu jest dziś pusta.
+- Zabójstwa bez broni (ciernie, skarby, egzekucja, wybuch po wskrzeszeniu) nie trafiają do `killsByWeapon`;
+  suma liczników na broń jest więc trochę mniejsza od liczby zabójstw.
+
+Sprawdzenie: 201 testów (nowe w `tests/unlocks.test.ts`), typecheck, build. W przeglądarce
+`scripts/verify/arsenal.mjs` (Arsenał, zakup broni z tymczasową ceną, 2,5 minuty runu bota: 487 zabójstw,
+z tego 455 na kontach czterech broni, liczniki w zapisie po rozliczeniu, konsola bez błędów). Zrzut:
+`docs/screenshots/14-arsenal.png`.
+
+### Review Codexem
+
+`codex exec review --uncommitted`: brak uwag do poprawienia. Codex uruchomił testy (201), typecheck i build.
+
+## Etap A2: Łuk Dziewanny
+
+Pierwsza broń z `docs/BRONIE-PLAN.md`, jako sprawdzian całej drogi: warunek, pasek w Arsenale, odblokowanie,
+karty.
+
+- **Broń** (`luk` w `src/data/weapons.ts`): typ `bolt`, dwa nowe opcjonalne pola `WeaponDef`:
+  `aim: 'strongest'` (cel: wróg z największym pełnym zdrowiem w zasięgu, `World.strongest`; przy remisie
+  bliższy) i `rankBonus: 0.5` (+50% obrażeń pocisku w mini-bossy i bossy, liczone w `updateProjectiles`).
+  Zasięg 30 m, przebicie 8 (12 od 5. poziomu), do 3 strzał. Bez ewolucji (etap D). Bez ceny w srebrze.
+- **Odblokowanie:** osiągnięcie `luk` („Oko łowczyni”), Księga Sokoła na 10. poziom w jednym runie.
+- **Wygląd:** nowa ikona `bow`; strzały to pomniejszony model włóczni, dźwięk jak inne pociski.
+- **Wspólny budżet nowych broni** (`NEW_WEAPON_FULL` w `src/sim/cards.ts`, ryzyko z sekcji 6 planu): do 9
+  nowych broni na kartach każda ma dotychczasową wagę (4, albo 2 przy trzech broniach), większa pula dzieli
+  wagę dziewięciu. Dla puli 10 broni nic się nie zmienia. Bez tego już jedenasta broń wypychała z kart
+  ewolucje (test w `tests/cards.test.ts` przestał przechodzić).
+
+Balans (`npm run sim -- runs=48 pool=all shop=2`, dobry gracz, Wojmir):
+
+| Wersja | Wygrane | Runy z łukiem | Wygrane z łukiem |
+|---|---|---|---|
+| przed zmianami | 30 / 48 | – | – |
+| pierwsze staty łuku (34 obrażeń, co 2,2 s, przebicie 3) | 18 / 48 | 18 | 4 |
+| obecne staty (40 obrażeń, co 1,6 s, przebicie 8) | 24 / 48 | 18 | 10 |
+
+Pierwsza wersja była wyraźnie za słaba: strzał w jeden cel nie pomaga na hordę, a łuk zajmuje slot broni,
+która by ewoluowała. Po wzmocnieniu runy z łukiem wygrywają nie rzadziej niż pozostałe (10/18 wobec 14/30),
+a łuk zadaje 250–600 tys. obrażeń w wygranym runie, mniej niż ewolucje (1–1,9 mln). Łączny wynik 24 wobec
+30 mieści się w szumie 48 runów, ale to nie jest dowód, że pula się nie pogorszyła; końcowy balans i tak po
+ewolucjach (etap D). Domyślna pula (bez łuku) daje te same wyniki co przed zmianami: 11 / 12.
+
+Sprawdzenie: 208 testów (nowe w `tests/luk.test.ts`), typecheck, build. W przeglądarce
+`scripts/verify/luk.mjs`: w Arsenale zablokowany łuk z paskiem „6 / 10”, po osiągnięciu z opisem; w runie
+bota łuk jest w puli i zabija na swoje konto; konsola bez błędów. Zrzuty: `15-arsenal-luk.png`,
+`15-luk-w-walce.png`. Pomiaru przy 500 wrogach nie robiłem: łuk używa istniejących pocisków `bolt`,
+a `World.strongest` to jedno zapytanie do siatki na strzał, jak `nearest`.
+
+### Review Codexem
+
+`codex exec review --uncommitted` (etapy A i A2 razem): brak uwag do poprawienia. Codex uruchomił testy (208),
+typecheck i build.
+
+## Etapy B–D planu broni: 13 nowych broni, zasady, ewolucje
+
+Wdrożone pozostałe etapy `docs/BRONIE-PLAN.md`. Gra ma teraz 24 bronie podstawowe i 24 ewolucje.
+
+### Etap B: nowe typy ataku (`WeaponKind`)
+
+| Broń | Typ | Jak działa w kodzie |
+|---|---|---|
+| Rój pszczół | `homing` | pocisk `ProjKind.Homing`: co krok skręca (7 rad/s) do najbliższego wroga w 12 m, z pominięciem ostatnio użądlonego |
+| Wnyki | `trap` | strefa `ZoneKind.Trap`: uzbraja się po 0,5 s, zatrzaskuje raz, gdy wróg wejdzie w 45% jej promienia; rani i spowalnia cały promień. Najwyżej 24 pułapki jednej broni naraz |
+| Miotła Jagi | `trail` | strefa `ZoneKind.Fire` pod bohaterem; nowa dopiero, gdy bohater wyjdzie z poprzedniej (albo ta zgaśnie), więc stanie w miejscu nie nakłada plam |
+| Krzywula | `boomerang` | pocisk `ProjKind.Boomerang`: zwalnia równomiernie do zasięgu, potem wraca do bohatera; przechodzi przez wszystko, tego samego wroga rani co 0,4 s |
+| Wir Pochwista | `wander` | pocisk `ProjKind.Twister`: błądzi losowo z lekkim znoszeniem do wrogów, rani co 0,5 s i odrzuca od środka |
+| Studnia Nawii | `vortex` | strefa `ZoneKind.Vortex`: ściąga wrogów z 1,6 promienia (przyspieszenie 30 m/s² × (1 − waga wroga), więc bossów nie rusza) i rani jak kałuża |
+
+- Strefy dostały pole `kind`; `MAX_ZONES` wzrosło z 48 do 96, bo ślad, pułapki i wiry dzielą pulę z kałużami smoły.
+  Gdy pula się zapełni (cztery bronie strefowe naraz i wysoki czas działania), nowa strefa po prostu nie powstaje.
+- Sekret Krzywuli: `World.secret` to kij pod jednym z dębów (45 m od środka lub dalej), wybranym z seeda bez
+  ruszania strumienia losowego runu. Podejście na 2,2 m go znajduje (`findSecret`, komunikat, dźwięk), gra od razu
+  zapisuje go w `found`, a osiągnięcie „Pod starym dębem” otwiera zakup broni w Skarbcu (25 srebra). Znaleziony kij
+  nie pojawia się w kolejnych runach (`WorldOptions.foundSecrets`). Na mapie [Tab] go nie widać: ma być sekretem,
+  zdradza go tylko złoty błysk przy pniu.
+
+### Etap C: bronie z jedną dodatkową zasadą (`WeaponDef.rule`)
+
+| Broń | Typ + zasada | Zasada |
+|---|---|---|
+| Szabla | `sweep` + `lunge` | cięcie ląduje przed celem odległym nawet o `range` (6,5–9,5 m), nie wokół bohatera; bohater się nie przesuwa |
+| Puklerz | `guard` | gotowy puklerz zatrzymuje cały cios w `hurtPlayer` (po uniku i cierniach, przed pancerzem i tarczą) i oddaje falą; potem ładuje się `cooldown` sekund |
+| Wrzeciono Mokoszy | `tether` | co 0,3 s rani wszystko w pasie między bohaterem a celem; nić trzyma cel, aż zginie lub odejdzie |
+| Kieł wąpierza | `bolt` + `fang` | zabójstwo ma 4% szans dać +1 maks. zdrowia do końca runu, sufit +40 (ewolucja +80) |
+| Kostki Welesa | `bounce` + `dice` | obrażenia × oczka / 3,5 (średnio bez zmian); szóstka daje +0,25% szansy na kryt, sufit +25% (ewolucja: dwa rzuty, liczy się lepszy; sufit +40%) |
+| Miecz Nawii | `sweep` + `lowHp` | obrażenia × (1 + brakująca część zdrowia), czyli do +100% (ewolucja do +200%) |
+| Kosa Południcy | `sweep` 360° + `reap` | co 20 zabójstw kosą i po każdej zabitej elicie lub bossie następny zamach bije ×3 i sięga o 35% dalej (ewolucja ×4); w zapasie najwyżej 3 ładunki |
+
+Zyski rosnące w runie (`World.runHp`, `World.runCrit`) mają sufit, jak Czaszka upiora, i są doliczane po
+`computeStats`, więc przetrwają każde przeliczenie statystyk.
+
+### Etap D: ewolucje
+
+Pary z tabeli planu: Łuk + Wilczy Kieł → Łowy Dziewanny, Rój + Zielarka → Gniew Barci, Wnyki + Głóg → Wilcze Doły,
+Miotła + Mgła → Wiedźmi Lot, Krzywula + Strzybóg → Wicher Strzyboga, Wir + Dzik → Trąba Pochwista, Studnia +
+Czarnobóg → Otchłań Nawii, Szabla + Żar-ptak → Pióro Żar-ptaka, Puklerz + Gród → Mur Grodu, Wrzeciono + Mokosz →
+Przędza Losu, Kieł + Strzyga → Głód Strzygi, Kostki + Sokół → Wyrok Losu. Ewolucja zachowuje typ i zasadę broni.
+
+### Decyzje i odstępstwa od planu
+
+- **Wszystko w jednym kroku.** Plan zakładał bronie bez ewolucji i ewolucje „gdy broń się sprawdzi”. Zrobione razem,
+  bo polecenie brzmiało „kolejne etapy”; każda broń przeszła przebieg bota jako broń startowa (tabela niżej).
+- **Dwie brakujące księgi:** Miecz Nawii ewoluuje z Księgą Tura (jak Włócznia), Kosa Południcy z Księgą Siłacza
+  (jak Sierpy). Jedna księga otwiera więc dwie ewolucje; nowych ksiąg nie dodawałem.
+- **Księgi ewolucji nowych broni bywają zablokowane.** Dziesięć pierwszych broni ma partnera w puli od startu
+  i test dalej tego pilnuje. Bronie planu parują się z księgami z tabeli, a te w większości same wymagają
+  osiągnięcia; gracz może więc mieć broń, której jeszcze nie ewoluuje. W Arsenale ewolucja to „???” do pierwszego razu.
+- **Nazwy:** „Kosa żniwiarza” → **Kosa Południcy** (odblokowuje ją Południca, a „Kosa Marzanny” to skarb);
+  „Kości wróżbity” → **Kostki Welesa** (w Chacie są już „Kości wróżebne”).
+- **Szabla bez doskoku bohatera.** „Doskok” przesuwa cięcie, nie postać: automatyczny ruch bohatera odbierałby
+  sterowanie.
+- **Puklerz działa tylko, gdy bohater obrywa.** Zablokowany cios nie liczy się jako utrata zdrowia (seria bez
+  obrażeń trwa) i nie zużywa tarczy z Księgi Grodu.
+- **Warunki odblokowania** jak w tabeli planu, bez zmian liczb. Tylko Krzywula ma cenę w srebrze.
+- **Efekty:** nowe siatki instancjonowane tylko dla kija (Krzywula i sekret), leja wiru i szczęk wnyków; pszczoły,
+  kły i kostki korzystają z istniejących pocisków, ślad i studnia z plam stref, nić z siatki pioruna (zdarzenie
+  `Ev.Beam`, bez błysku i wstrząsu). Szerokie zamachy (powyżej 5,5 m) są przyciemniane, bo pierścień o średnicy
+  16 m zalewał ekran. Ikony: 11 nowych w `src/ui/icons.ts`. Dźwięki: istniejące odgłosy strzału, plus cichy ton
+  nici, pomruk studni i dzwonki sekretu.
+- **Nie zrobione:** osobne modele 3D broni w ręku, wskaźnik ładunków Kosy i gotowości Puklerza w HUD-zie (Puklerz
+  sygnalizuje gotowość iskrami wokół bohatera), strojenie liczb warunków odblokowania trybem `career=N`.
+
+### Balans
+
+`npm run sim -- runs=16 pool=all shop=2 weapon=<id>` (dobry bot, Wojmir, pełna pula; nowy parametr `weapon=`
+podmienia broń startową). „Obrażenia” to mediana obrażeń broni startowej (lub jej ewolucji) w runie.
+
+| Broń | Wygrane / 16 | Obrażenia | | Broń | Wygrane / 16 | Obrażenia |
+|---|---:|---:|---|---|---:|---:|
+| Sierpy | 9 | 74 tys. | | Rój pszczół | 10 | 718 tys. |
+| Ogień | 13 | 326 tys. | | Wnyki | 10 | 524 tys. |
+| Grom | 14 | 788 tys. | | Miotła Jagi | 14 | 304 tys. |
+| Ciupaga | 8 | 151 tys. | | Krzywula | 11 | 266 tys. |
+| Wianek | 11 | 101 tys. | | Wir Pochwista | 11 | 555 tys. |
+| Proca | 12 | 758 tys. | | Studnia Nawii | 14 | 615 tys. |
+| Kruki | 9 | 184 tys. | | Szabla | 14 | 290 tys. |
+| Marzanna | 9 | 160 tys. | | Puklerz | 13 | 373 tys. |
+| Włócznia | 10 | 331 tys. | | Wrzeciono | 13 | 434 tys. |
+| Garniec | 14 | 968 tys. | | Kieł wąpierza | 12 | 315 tys. |
+| Łuk | 10 | 479 tys. | | Kostki Welesa | 14 | 1002 tys. |
+| | | | | Miecz Nawii | 11 | 115 tys. |
+| | | | | Kosa Południcy | 8 | 153 tys. |
+
+Stare bronie: 8–14 wygranych, 74–968 tys. obrażeń. Nowe: 8–14 wygranych, 115–1002 tys. Żadna nowa broń nie
+wychodzi poza rozrzut starych, więc liczb nie stroiłem dalej. To 16 runów na broń, czyli różnice rzędu 2–3
+wygranych to szum; Kosa i Miecz są na dole stawki razem z Ciupagą i Sierpami, Kostki na górze z Garncem. Cała
+pula bez podmiany broni: 6 / 12 wygranych (przed tymi etapami 24 / 48 przy tych samych ustawieniach).
+
+### Sprawdzenie
+
+- 229 testów (nowe w `tests/bronie.test.ts`: dane wszystkich 24 broni, każdy nowy typ i zasada, sekret i zakup
+  Krzywuli, kolizje id, przebieg każdej z 48 broni w tłumie), typecheck, build.
+- W przeglądarce `scripts/verify/bronie.mjs` (bezgłowy Chrome): Arsenał z 24 pozycjami, zakup Krzywuli za srebro,
+  cztery zestawy broni na 5. poziomie w runie bota i ich ewolucje, blok Puklerza, znalezienie sekretu i jego zapis;
+  konsola bez błędów i ostrzeżeń. Zrzuty: `16-arsenal-pelny.png`, `17-bronie-1..4.png`, `17-puklerz-blok.png`,
+  `18-ewolucje-1..4.png`, `19-sekret-pod-debem.png`.
+- W tych zestawach bronie o krótkim zasięgu (Miecz Nawii, Miotła, Krzywula obok Roju) zadają mało, bo cztery
+  bronie na 5. poziomie w drugiej minucie zabijają wrogów, zanim ci podejdą. Sprawdziłem osobno, że to nie błąd:
+  sama Krzywula zadaje w 150 s runu bota 24 tys. obrażeń i ma 450 zabójstw, a obok Gniewu Barci rzuca 40 razy
+  i prawie nie ma w co trafić.
+- Wydajność przy 500 wrogach: `docs/PERF.md`, sekcja „Nowe typy broni”.
+- Po pierwszych zrzutach przyciemniłem i zmniejszyłem szczęki wnyków oraz lej wiru (zasłaniały walkę).
+
+### Review Codexem
+
+`codex exec review --uncommitted`: jedna uwaga (P2), przyjęta. Kieł wąpierza miał id `kiel`, to samo co Księga
+Wilczego Kła, a wygnane karty są pamiętane po samym id, więc wygnanie jednej usuwałoby z kart obie. Broń ma teraz
+id `wapierz`. Test na kolizje id, który przy tym dopisałem, znalazł drugą: `kosa` (skarb Kosa Marzanny); Kosa
+Południcy ma id `kosisko`. Ta druga nie psuła niczego (skarbów nie da się wygnać, pule i zakupy mają osobne
+klucze), ale wspólne id to proszenie się o błąd. Codex uruchomił też testy i typecheck.

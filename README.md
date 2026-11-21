@@ -179,7 +179,10 @@ Pierwszy run ma prawo skończyć się porażką. Po kilku ulepszeniach z Chaty L
 
 ## Treść
 
-**Bronie (10 bazowych i 10 ewolucji; 5 poziomów stałych, dalej linie statów do 15.)**
+**Bronie (24 bazowe i 24 ewolucje; 5 poziomów stałych, dalej linie statów do 15.)**
+
+Sześć pierwszych jest od startu, cztery kolejne odblokowują proste osiągnięcia, a czternaście ostatnich styl gry
+(warunek i postęp widać w Arsenale w menu).
 
 | Broń | Działanie | Księga do ewolucji | Ewolucja |
 |---|---|---|---|
@@ -193,6 +196,20 @@ Pierwszy run ma prawo skończyć się porażką. Po kilku ulepszeniach z Chaty L
 | Lodowy oddech Marzanny | stożek mrozu | Księga Wędrowca | Zamieć Marzanny |
 | Włócznia Świętowita | przebija szereg wrogów | Księga Tura | Cztery Oblicza |
 | Garniec dziegciu | płonąca kałuża smoły | Księga Bursztynu | Smocza Smoła |
+| Łuk Dziewanny | daleka strzała w najsilniejszego wroga, premia na bossy | Księga Wilczego Kła | Łowy Dziewanny |
+| Rój pszczół | pszczoły same odnajdują wrogów | Księga Zielarki | Gniew Barci |
+| Wnyki | pułapki, które zatrzaskują się na wrogu | Księga Głogu | Wilcze Doły |
+| Miotła Jagi | ognisty ślad za bohaterem | Księga Mgły | Wiedźmi Lot |
+| Krzywula | kij, który leci i wraca (sekret pod dębem, potem 25 srebra) | Księga Strzyboga | Wicher Strzyboga |
+| Wir Pochwista | wędrujące trąby powietrzne z odrzutem | Księga Dzika | Trąba Pochwista |
+| Studnia Nawii | wir wciągający wrogów | Księga Czarnoboga | Otchłań Nawii |
+| Szabla | szybkie cięcia z doskokiem do wroga | Księga Żar-ptaka | Pióro Żar-ptaka |
+| Puklerz | blokuje cios i oddaje falą uderzeniową | Księga Grodu | Mur Grodu |
+| Wrzeciono Mokoszy | nić do wroga rani wszystko na linii | Księga Mokoszy | Przędza Losu |
+| Kieł wąpierza | zabójstwa mogą podnieść maks. zdrowie w runie (do +40) | Księga Strzygi | Głód Strzygi |
+| Kostki Welesa | obrażenia według oczek 1–6, szóstka daje kryt w runie (do +25%) | Księga Sokoła | Wyrok Losu |
+| Miecz Nawii | bije mocniej, im mniej zdrowia ma bohater | Księga Tura | Ostrze Zaświatów |
+| Kosa Południcy | zamach dookoła; zabójstwa i elity ładują potrójny cios | Księga Siłacza | Żniwo Południa |
 
 **Księgi (22, do 20 poziomów):** Siłacza (obrażenia), Krzesiwa (szybkość ataku), Dębu (obszar),
 Wędrowca (ruch), Tura (zdrowie), Pszczół (regeneracja), Bursztynu (zbieranie), Welesa (szczęście),
@@ -263,7 +280,8 @@ skała na stromiznach.
 ## Jak dodać nową broń
 
 Dopisz jeden obiekt do tablicy `WEAPONS` w `src/data/weapons.ts` i wybierz jeden z gotowych rodzajów zachowania
-(`kind`): `orbit`, `bolt`, `lightning`, `sweep`, `aura`, `bounce`, `summon`, `cone`, `lob`.
+(`kind`): `orbit`, `bolt`, `lightning`, `sweep`, `aura`, `bounce`, `summon`, `cone`, `lob`, `homing`, `trap`, `trail`,
+`boomerang`, `wander`, `vortex`, `guard`, `tether`.
 
 ```ts
 {
@@ -287,7 +305,9 @@ To wystarczy: broń pojawi się na kartach, w HUD-zie, w statystykach końcowych
 pociski. Opcjonalnie: `evolution: { passive: 'pas', into: 'id-ewolucji' }` (i drugi obiekt z `evolved: true`),
 `unlock: 'id-osiągnięcia'`, nowa ikona w `src/ui/icons.ts`.
 
-Nowy rodzaj zachowania (inny niż istniejące) to jeden `case` w `updateWeapons` w `src/sim/weapons.ts`.
+Nowy rodzaj zachowania (inny niż istniejące) to jeden `case` w `updateWeapons` w `src/sim/weapons.ts`, wpis
+w `KIND_LINES` (`src/data/weaponLines.ts`) i nazwa w `KIND_NAMES` (`src/ui/ui.ts`). Jedna dodatkowa zasada do
+istniejącego rodzaju (np. obrażenia zależne od zdrowia) to pole `rule` w definicji broni.
 
 ## Jak dodać nowego wroga
 

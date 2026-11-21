@@ -351,7 +351,15 @@ export class AudioSys {
         [e.a ? 7 : 4, e.a ? 11 : 9, 14].forEach((d, i) => this.tone('sine', degFreq(d, 1), degFreq(d, 1), 0.7, 0.13, i * 0.12));
         break;
       case Ev.Zone:
-        if (this.ok('zone', 0.1)) this.hiss('lowpass', 2400, 300, 0.4, 0.25);
+        // b = zone kind: tar splashes, a vortex hums; fire trails and traps are laid silently.
+        if (e.b === 0 && this.ok('zone', 0.1)) this.hiss('lowpass', 2400, 300, 0.4, 0.25);
+        else if (e.b === 3 && this.ok('vortex', 0.2)) this.tone('sine', 180, 70, 0.5, 0.2);
+        break;
+      case Ev.Beam:
+        if (this.ok('beam', 0.25)) this.tone('triangle', 880, 990, 0.12, 0.05);
+        break;
+      case Ev.Secret:
+        [7, 9, 11, 14].forEach((d, i) => this.tone('sine', degFreq(d, 1), degFreq(d, 1), 0.6, 0.14, i * 0.1));
         break;
       default:
         break;

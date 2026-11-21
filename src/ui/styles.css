@@ -1622,3 +1622,38 @@ h4 {
 .devmenu-row.close {
   margin-top: 4px;
 }
+
+/* ---------------------------------------------------------------- arsenal */
+
+.arsenal-item {
+  align-items: flex-start;
+}
+
+.arsenal-item.locked {
+  opacity: 0.75;
+}
+
+.arsenal-evo {
+  font-size: 13px;
+  color: var(--gold-hi);
+}
+
+.arsenal-buy {
+  font-size: 13px;
+  color: #d8dde6;
+}
+
+.progress {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #e6ebf2;
+}
+
+.progress .dmg-bar i {
+  background: var(--gold);
+}

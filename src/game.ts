@@ -7,7 +7,7 @@ import { RUN_LENGTH } from './data/waves';
 import { Bot, type BotSkill } from './debug/bot';
 import { DevMenu } from './debug/devMenu';
 import { DebugTools } from './debug/tools';
-import { applyRun, buyShopItem, buySilver, grantFromTotals, isUnlocked, runPool, togglePool, type PoolKind } from './meta/progress';
+import { applyRun, grantFromTotals, isUnlocked, purchase, runPool, togglePool, type PoolKind } from './meta/progress';
 import { browserStorage, SaveStore } from './meta/save';
 import { Gfx, type Quality } from './render/gfx';
 import { emptyInput } from './sim/player';
@@ -40,6 +40,8 @@ export class Game {
   private hitstopT = 0;
   private endT = 0;
   private runSaved = false;
+  /** How many of the world's secrets are already in the save. */
+  private secretsSaved = 0;
   private character: CharacterDef;
   /** When set, every frame waits for the GPU (gl.finish) so frame times include GPU work. Perf test only. */
   perfFinish = false;
@@ -120,6 +122,7 @@ export class Game {
       weaponPool: runPool(save, 'w'),
       passivePool: runPool(save, 'b'),
       itemPool: runPool(save, 'i'),
+      foundSecrets: save.found,
     });
     if (idle) w.spawner.disabled = true;
     // The dev menu is created after the first (idle) world; later worlds inherit its immortality switch.
@@ -134,6 +137,7 @@ export class Game {
     this.store.save();
     this.world = this.makeWorld(false);
     this.runSaved = false;
+    this.secretsSaved = 0;
     this.hitstopT = 0;
     this.gfx.hero.setLook(this.character.look);
     this.gfx.resetRun();
@@ -173,6 +177,14 @@ export class Game {
     const res = applyRun(this.store.data, this.world.summary());
     if (!this.store.save()) this.ui.toast('Nie udało się zapisać postępu (pamięć przeglądarki niedostępna).');
     return res;
+  }
+
+  /** A found secret goes into the save at once, so closing the tab in the middle of the run does not lose it. */
+  private saveSecrets(): void {
+    const found = this.store.data.found;
+    for (const id of this.world.secrets.slice(this.secretsSaved)) if (!found.includes(id)) found.push(id);
+    this.secretsSaved = this.world.secrets.length;
+    this.store.save();
   }
 
   /** Ends the run now (death, victory or "Zakończ run") and shows the summary. */
@@ -271,9 +283,8 @@ export class Game {
   }
 
   private buy(id: string): void {
-    // Skarbiec ('item:<id>', 'toggler') is paid in silver, Chata upgrades in gold.
-    const ok = id === 'toggler' || id.startsWith('item:') ? buySilver(this.store.data, id) : buyShopItem(this.store.data, id);
-    if (ok) {
+    // Skarbiec ('item:<id>', 'weapon:<id>', 'toggler') is paid in silver, Chata upgrades in gold.
+    if (purchase(this.store.data, id)) {
       this.store.save();
       this.audio.ui('buy');
     } else {
@@ -349,6 +360,7 @@ export class Game {
     this.audio.handleEvents(w);
     this.audio.update(w, dt);
     w.events.clear();
+    if (w.secrets.length > this.secretsSaved) this.saveSecrets();
     if (w.hitstop > 0) {
       this.hitstopT = w.hitstop;
       w.hitstop = 0;

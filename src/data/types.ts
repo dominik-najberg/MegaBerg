@@ -89,7 +89,40 @@ export const BASE_STATS: Readonly<Stats> = {
   burn: 0,
 };
 
-export type WeaponKind = 'orbit' | 'bolt' | 'lightning' | 'sweep' | 'aura' | 'bounce' | 'summon' | 'cone' | 'lob';
+export type WeaponKind =
+  | 'orbit'
+  | 'bolt'
+  | 'lightning'
+  | 'sweep'
+  | 'aura'
+  | 'bounce'
+  | 'summon'
+  | 'cone'
+  | 'lob'
+  /** Projectiles that steer toward enemies. */
+  | 'homing'
+  /** Traps dropped on the ground that snap shut on the first enemy to step in. */
+  | 'trap'
+  /** Burning ground left behind the hero. */
+  | 'trail'
+  /** A thrown stick that flies out and comes back. */
+  | 'boomerang'
+  /** Whirlwinds that roam on their own. */
+  | 'wander'
+  /** A zone that drags enemies to its centre. */
+  | 'vortex'
+  /** Blocks a blow that would land and answers with a shockwave. */
+  | 'guard'
+  /** A thread from the hero to an enemy that hurts everything on the line. */
+  | 'tether';
+
+/**
+ * One extra rule on top of a weapon's kind (stage C of docs/BRONIE-PLAN.md). The numbers live in src/data/weapons.ts.
+ * lunge: a sweep struck at the target instead of around the hero; fang: kills may raise max health for the run;
+ * dice: damage rolled 1..6, a six adds crit chance for the run; lowHp: stronger the less health the hero has;
+ * reap: kills charge a triple swing.
+ */
+export type WeaponRule = 'lunge' | 'fang' | 'dice' | 'lowHp' | 'reap';
 
 export interface WeaponStats {
   damage: number;
@@ -142,6 +175,13 @@ export interface WeaponDef {
   evolved?: boolean;
   /** Achievement id required to unlock. */
   unlock?: string;
+  /** Bolt weapons: aim at the toughest enemy in range instead of the nearest. */
+  aim?: 'strongest';
+  /** Extra damage against mini-bosses and bosses (0.5 = +50%). */
+  rankBonus?: number;
+  rule?: WeaponRule;
+  /** Silver price in the Skarbiec: once unlocked, the weapon still has to be bought before it joins the pool. */
+  silver?: number;
 }
 
 export interface PassiveDef {
@@ -263,8 +303,8 @@ export type AchievementCond =
   | { type: 'win' }
   | { type: 'winWith'; character: string }
   | { type: 'shrines'; count: number }
-  /** A book (Księga) reached this level in one run. */
-  | { type: 'book'; book: string; level: number }
+  /** A book (Księga) reached this level in one run; with `before`, no later than that second of the run. */
+  | { type: 'book'; book: string; level: number; before?: number }
   /** Gold collected in one run. */
   | { type: 'runGold'; count: number }
   /** Movement speed multiplier reached in one run. */
@@ -273,10 +313,20 @@ export type AchievementCond =
   | { type: 'lifesteal'; amount: number }
   /** Weapons evolved in one run. */
   | { type: 'evolveCount'; count: number }
-  /** Any weapon reached this level in one run. */
-  | { type: 'weaponLevel'; level: number }
+  /** A weapon reached this level in one run: any weapon, or the line of `weapon` (the weapon or its evolution). */
+  | { type: 'weaponLevel'; level: number; weapon?: string }
   /** Survived this long while taking at most `damage` in total. */
-  | { type: 'unhurt'; seconds: number; damage: number };
+  | { type: 'unhurt'; seconds: number; damage: number }
+  /** Kills in total with one weapon line (the weapon or its evolution; burn counts for the weapon that lit it). */
+  | { type: 'weaponKills'; weapon: string; count: number }
+  /** One enemy type defeated this many times in total. */
+  | { type: 'enemyKills'; enemy: string; count: number }
+  /** This many seconds in a row without losing health, in one run. */
+  | { type: 'unhurtStreak'; seconds: number }
+  /** Damage taken off landed blows by armour in one run, optionally with one hero. */
+  | { type: 'armorBlocked'; amount: number; character?: string }
+  /** A secret found on the map. */
+  | { type: 'secret'; id: string };
 
 export interface AchievementDef {
   id: string;

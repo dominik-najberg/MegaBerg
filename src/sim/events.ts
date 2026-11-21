@@ -59,6 +59,10 @@ export const Ev = {
   Dodge: 35,
   /** The shield took a whole hit; HP untouched. */
   ShieldHit: 36,
+  /** A thread between the hero and an enemy: xyz = target, abc = source xyz, d = colour */
+  Beam: 37,
+  /** A secret was found: a = 1 when the hero picked it up, 0 for its glint */
+  Secret: 38,
 } as const;
 
 export interface GameEvent {

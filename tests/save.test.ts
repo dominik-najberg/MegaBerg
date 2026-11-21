@@ -59,6 +59,11 @@ const run = (over: Partial<RunSummary> = {}): RunSummary => ({
   books: {},
   lifestealHealed: 0,
   burnDealt: 0,
+  killsByWeapon: {},
+  longestUnhurt: 0,
+  armorBlocked: 0,
+  bookTimes: {},
+  secrets: [],
   ...over,
 });
 
@@ -259,7 +264,8 @@ describe('stary zapis (sprzed ksiąg i srebra)', () => {
     expect(s.data.shop).toEqual(OLD_SAVE.shop);
     for (const id of Object.keys(OLD_SAVE.shop)) expect(SHOP_BY_ID[id]).toBeDefined();
     expect(s.data.achievements).toEqual(OLD_SAVE.achievements);
-    expect(s.data.stats).toEqual(OLD_SAVE.stats);
+    // Liczniki z docs/BRONIE-PLAN.md stary zapis zaczyna od zera.
+    expect(s.data.stats).toEqual({ ...OLD_SAVE.stats, killsByWeapon: {}, killsByEnemy: {} });
     expect(s.data.options).toEqual(OLD_SAVE.options);
     expect(s.data.character).toBe('jagna');
     expect(s.data.silver).toBe(0);
