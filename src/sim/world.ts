@@ -9,18 +9,18 @@ import { WEAPON_MAX_LEVEL } from '../data/weaponLines';
 import { applyLines, type LineStat } from '../data/weaponLines';
 import type { BlessingDef, CharacterDef, EnemyDef, Rarity, Stats, WeaponDef, WeaponStats } from '../data/types';
 import { ELITE_HP_MUL, enemyDamageMul, enemyHpMul, finalWaveMul, RUN_LENGTH, xpForLevel } from '../data/waves';
-import { WEAPON_BY_ID, weaponLine, WEAPONS, weaponStatsAt } from '../data/weapons';
+import { DICE_CAP, DICE_CAP_EVOLVED, DICE_CRIT, FANG_CAP, FANG_CAP_EVOLVED, FANG_CHANCE, FANG_HP, REAP_KILLS, REAP_MAX, WEAPON_BY_ID, weaponLine, WEAPONS, weaponStatsAt } from '../data/weapons';
 import { updateEnemies } from './ai';
 import { Bonuses } from './bonuses';
 import { applyCard, canBanish, chestCards, itemCard, levelUpCards, rollItem, type Card } from './cards';
 import { Ev, EventQueue } from './events';
 import { MoveFx, Player, stepPlayer, type InputState } from './player';
-import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, Zones } from './pools';
+import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, ZoneKind, Zones } from './pools';
 import { Spawner } from './spawner';
-import { absorbShield, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, type ItemInst, type PassiveInst } from './stats';
+import { absorbShield, attackInterval, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, type ItemInst, type PassiveInst } from './stats';
 import { Explored } from './fog';
 import { GameMap, MAP_HALF, PLAY_RADIUS, type ShrineKind } from './terrain';
-import { updateProjectiles, updateWeapons, updateZones } from './weapons';
+import { minInterval, updateProjectiles, updateWeapons, updateZones } from './weapons';
 
 export { RUN_LENGTH };
 
@@ -73,7 +73,28 @@ export interface WeaponInst {
   fxCount: number;
   fxArea: number;
   ravens: Raven[];
+  /** Kosa Południcy: charged swings in stock, and kills counted toward the next one. */
+  charge: number;
+  tally: number;
+  /** Trail: where and when the last patch of fire was left. Lunge: centre of the current cut. */
+  lx: number;
+  lz: number;
+  lastT: number;
+  /** Tether: enemy index held by each thread (-1 = none). */
+  targets: number[];
 }
+
+/** Something hidden on the map; walking up to it finds it. */
+export interface SecretSpot {
+  id: string;
+  x: number;
+  y: number;
+  z: number;
+  found: boolean;
+}
+
+/** How close the hero has to come to a secret to pick it up (metres). */
+export const SECRET_REACH = 2.2;
 
 export interface Chest {
   x: number;
@@ -150,6 +171,8 @@ export interface WorldOptions {
   passivePool?: string[];
   /** Ids of items chests may give. Defaults to everything without an unlock requirement. */
   itemPool?: string[];
+  /** Secrets already in the save: they are not hidden on the map again. */
+  foundSecrets?: readonly string[];
 }
 
 export interface RunSummary {
@@ -323,6 +346,13 @@ export class World {
   executions = 0;
   /** Permanent damage bonus collected by Czaszka upiora. */
   skullBonus = 0;
+  /** Max health gained in this run by Kieł wąpierza, and crit chance gained by Kostki Welesa. */
+  runHp = 0;
+  runCrit = 0;
+  /** Blows stopped by Puklerz. */
+  guardBlocks = 0;
+  /** The stick of Krzywula under one of the oaks, until it is in the save. */
+  secret: SecretSpot | null = null;
   /** Seconds the hero has stood still (Mech pustelnika). */
   stillT = 0;
   /** Metres walked toward the next Sakiewka wędrowca coin. */
@@ -367,6 +397,32 @@ export class World {
     for (const s of map.shrines) this.shrines.push({ x: s.x, y: map.heightAt(s.x, s.z), z: s.z, kind: s.kind, used: false, progress: 0 });
     this.landmarksFound = map.landmarks.map(() => false);
     this.fog.reveal(p.x, p.z);
+    if (!opts.foundSecrets?.includes('krzywula')) this.hideSecret('krzywula', opts.seed ?? 1);
+  }
+
+  /** Hides a secret at the foot of one oak, picked by the seed without touching the run's random stream. */
+  private hideSecret(id: string, seed: number): void {
+    const oaks = this.map.obstacles.filter((o) => o.kind === 'oak' && Math.hypot(o.x, o.z) > 45 && Math.hypot(o.x, o.z) < PLAY_RADIUS - 15);
+    if (oaks.length === 0) return;
+    const oak = oaks[(Math.imul(seed | 0, 2654435761) >>> 0) % oaks.length] as (typeof oaks)[number];
+    // On the side facing the middle of the map, just outside the trunk.
+    const d = Math.hypot(oak.x, oak.z) || 1;
+    const x = oak.x - (oak.x / d) * (oak.r + 0.9);
+    const z = oak.z - (oak.z / d) * (oak.r + 0.9);
+    this.secret = { id, x, y: this.map.heightAt(x, z), z, found: false };
+  }
+
+  private updateSecret(): void {
+    const s = this.secret;
+    if (!s || s.found) return;
+    const p = this.player;
+    const dx = p.x - s.x;
+    const dz = p.z - s.z;
+    if (dx * dx + dz * dz > SECRET_REACH * SECRET_REACH) return;
+    s.found = true;
+    this.findSecret(s.id);
+    this.announce.push('Krzywy kij spod dębu! Krzywula czeka w Skarbcu.');
+    this.events.emit(Ev.Secret, s.x, s.y, s.z, 1);
   }
 
   /** 0 (dusk) .. 1 (night) for the renderer. */
@@ -420,6 +476,7 @@ export class World {
     this.updateShots(dt);
     this.updatePickups(dt);
     this.updateInteract(dt, input.interact);
+    this.updateSecret();
     this.explore();
 
     if (!this.dead && this.pendingLevels > 0 && this.choice === null) this.openLevelUp();
@@ -693,6 +750,21 @@ export class World {
     if (killer) {
       const line = weaponLine(killer.def.id);
       this.killsByWeapon[line] = (this.killsByWeapon[line] ?? 0) + 1;
+      // Kieł wąpierza: a kill may raise max health for the rest of the run.
+      if (killer.def.rule === 'fang' && this.runHp < (killer.def.evolved ? FANG_CAP_EVOLVED : FANG_CAP) && this.rng.next() < FANG_CHANCE) {
+        this.runHp += FANG_HP;
+        this.refreshStats();
+      }
+    }
+    for (const inst of this.weapons) {
+      if (inst.def.rule !== 'reap') continue;
+      // Kosa Południcy: every elite or ranked enemy that falls charges a swing, and so do its own kills.
+      let gain = elite || def.rank ? 1 : 0;
+      if (inst === killer && ++inst.tally >= REAP_KILLS) {
+        inst.tally = 0;
+        gain++;
+      }
+      inst.charge = Math.min(REAP_MAX, inst.charge + gain);
     }
     this.events.emit(Ev.Kill, x, (e.y[i] as number) + (e.oy[i] as number), z, t, elite, e.radius[i] as number);
     const luck = this.stats.luck;
@@ -798,6 +870,7 @@ export class World {
       // Thorns can kill the boss: the run is won and the blow that triggered them no longer lands.
       if (this.won && !this.endless) return;
     }
+    if (this.guardBlock()) return;
     let d = damageAfterArmor(damage, st.armor);
     this.armorBlocked += Math.max(0, damage - d);
     p.invuln = 0.5 + MIRROR_INVULN * this.fx.witchMirror;
@@ -833,6 +906,36 @@ export class World {
         this.events.emit(Ev.Death, p.x, p.y, p.z);
       }
     }
+  }
+
+  /**
+   * Puklerz: a ready buckler stops the whole blow (no health lost, the shield is not touched) and answers
+   * with a shockwave around the hero. Returns true when the blow was blocked.
+   */
+  private guardBlock(): boolean {
+    for (const inst of this.weapons) {
+      if (inst.def.kind !== 'guard' || inst.timer > 0) continue;
+      const st = inst.stats;
+      const s = this.stats;
+      const p = this.player;
+      inst.timer = Math.max(minInterval('guard'), st.cooldown * attackInterval(s));
+      p.invuln = 0.5 + MIRROR_INVULN * this.fx.witchMirror;
+      this.guardBlocks++;
+      const r = st.area * s.area;
+      this.events.emit(Ev.ShieldHit, p.x, p.y, p.z);
+      this.events.emit(Ev.Sweep, p.x, p.y + 0.9, p.z, 0, Math.PI * 2, r, inst.def.color);
+      this.damageCircle(p.x, p.z, r, st.damage * (1 + inst.bonus) * s.damage, inst.slot, st.knockback, st);
+      return true;
+    }
+    return false;
+  }
+
+  /** Kostki Welesa rolled a six: a little crit chance for the rest of the run, up to the weapon's cap. */
+  diceSix(inst: WeaponInst): void {
+    const cap = inst.def.evolved ? DICE_CAP_EVOLVED : DICE_CAP;
+    if (this.runCrit >= cap - 1e-9) return;
+    this.runCrit = Math.min(cap, this.runCrit + DICE_CRIT);
+    this.stats.critChance += DICE_CRIT;
   }
 
   /** Longest stretch without losing health so far, in seconds, counting the one still running. */
@@ -953,12 +1056,13 @@ export class World {
     this.events.emit(Ev.EnemyShoot, x, y, z);
   }
 
-  addZone(x: number, z: number, r: number, life: number, dmg: number, slot: number): void {
+  addZone(x: number, z: number, r: number, life: number, dmg: number, slot: number, kind: number = ZoneKind.Tar): void {
     const zn = this.zones;
     const i = zn.list.alloc();
     if (i < 0) return;
     zn.alive[i] = 1;
     zn.slot[i] = slot;
+    zn.kind[i] = kind;
     zn.x[i] = x;
     zn.z[i] = z;
     zn.y[i] = this.map.heightAt(x, z);
@@ -967,7 +1071,7 @@ export class World {
     zn.span[i] = life;
     zn.tick[i] = 0;
     zn.dmg[i] = dmg;
-    this.events.emit(Ev.Zone, x, zn.y[i] as number, z, r);
+    this.events.emit(Ev.Zone, x, zn.y[i] as number, z, r, kind);
   }
 
   // ------------------------------------------------------------------ hazards, shots, pickups
@@ -1328,6 +1432,9 @@ export class World {
     const oldMax = this.stats.maxHp;
     const oldShield = this.stats.shield;
     this.stats = computeStats(this.character, this.shopLevels, this.passives, this.blessings, this.items, this.level);
+    // Gains of this run from weapon rules (Kieł wąpierza, Kostki Welesa).
+    this.stats.maxHp += this.runHp;
+    this.stats.critChance += this.runCrit;
     if (this.stats.maxHp > oldMax) this.player.hp += this.stats.maxHp - oldMax;
     if (this.stats.shield > oldShield) this.shield += this.stats.shield - oldShield;
     if (this.shield > this.stats.shield) this.shield = this.stats.shield;
@@ -1362,6 +1469,12 @@ export class World {
       fxCount: 0,
       fxArea: 0,
       ravens: [],
+      charge: 0,
+      tally: 0,
+      lx: 0,
+      lz: 0,
+      lastT: -1e9,
+      targets: [],
     };
     this.weapons.push(inst);
     return inst;
@@ -1382,6 +1495,7 @@ export class World {
     inst.active = 0;
     inst.queue = 0;
     inst.ravens.length = 0;
+    inst.targets.length = 0;
     this.evolved++;
     const p = this.player;
     this.events.emit(Ev.Evolve, p.x, p.y, p.z);

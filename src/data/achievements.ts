@@ -27,6 +27,18 @@ export const ACHIEVEMENTS: (AchievementDef & { gold?: number })[] = [
   { id: 'bookDzik', name: 'Taran', desc: 'Pokonaj łącznie 5000 wrogów.', reward: 'Księga Dzika (odrzut)', cond: { type: 'totalKills', count: 5000 } },
   // Weapons unlocked by a play style (docs/BRONIE-PLAN.md).
   { id: 'luk', name: 'Oko łowczyni', desc: 'Podnieś Księgę Sokoła do 10. poziomu w jednym runie.', reward: 'Broń: Łuk Dziewanny', cond: { type: 'book', book: 'sokol', level: 10 } },
+  { id: 'szabla', name: 'Zbójnicki fach', desc: 'Pokonaj łącznie 2000 wrogów Ciupagą (lub Toporem Peruna).', reward: 'Broń: Szabla', cond: { type: 'weaponKills', weapon: 'ciupaga', count: 2000 } },
+  { id: 'wir', name: 'Siła dzika', desc: 'Podnieś Księgę Dzika do 10. poziomu w jednym runie.', reward: 'Broń: Wir Pochwista', cond: { type: 'book', book: 'dzik', level: 10 } },
+  { id: 'studnia', name: 'Szept Czarnoboga', desc: 'Podnieś Księgę Czarnoboga do 10. poziomu w jednym runie.', reward: 'Broń: Studnia Nawii', cond: { type: 'book', book: 'czarnobog', level: 10 } },
+  { id: 'roj', name: 'Bartnik', desc: 'Podnieś Wianek z ziół (lub Kwiat Paproci) do 15. poziomu w jednym runie.', reward: 'Broń: Rój pszczół', cond: { type: 'weaponLevel', weapon: 'wianek', level: 15 } },
+  { id: 'wapierz', name: 'Smak krwi', desc: 'Podnieś Księgę Strzygi do 12. poziomu w jednym runie.', reward: 'Broń: Kieł wąpierza', cond: { type: 'book', book: 'strzyga', level: 12 } },
+  { id: 'kostki', name: 'Ulubieniec Welesa', desc: 'Podnieś Księgę Welesa do 12. poziomu w jednym runie.', reward: 'Broń: Kostki Welesa', cond: { type: 'book', book: 'podkowa', level: 12 } },
+  { id: 'miotla', name: 'Pogromca wiedźmy', desc: 'Pokonaj Babę Jagę łącznie 3 razy.', reward: 'Broń: Miotła Jagi', cond: { type: 'enemyKills', enemy: 'jaga', count: 3 } },
+  { id: 'kosisko', name: 'Żniwa w południe', desc: 'Pokonaj Południcę łącznie 3 razy.', reward: 'Broń: Kosa Południcy', cond: { type: 'enemyKills', enemy: 'poludnica', count: 3 } },
+  { id: 'wnyki', name: 'Smolarz', desc: 'Pokonaj łącznie 5000 wrogów Garncem dziegciu (lub Smoczą Smołą).', reward: 'Broń: Wnyki', cond: { type: 'weaponKills', weapon: 'dziegiec', count: 5000 } },
+  { id: 'puklerz', name: 'Żelazna skóra', desc: 'Bogumiłem zatrzymaj pancerzem 500 obrażeń w jednym runie.', reward: 'Broń: Puklerz', cond: { type: 'armorBlocked', amount: 500, character: 'bogumil' } },
+  { id: 'miecz', name: 'W objęciach klątwy', desc: 'Podnieś Księgę Czarnoboga do 15. poziomu przed upływem 6. minuty runu.', reward: 'Broń: Miecz Nawii', cond: { type: 'book', book: 'czarnobog', level: 15, before: 360 } },
+  { id: 'krzywula', name: 'Pod starym dębem', desc: 'Znajdź krzywy kij ukryty pod jednym z dębów w borze.', reward: 'Skarbiec: Krzywula', cond: { type: 'secret', id: 'krzywula' } },
   // Heroes unlocked by a play style (stage 5 of docs/MEGABONK-ANALIZA.md).
   { id: 'heroRadogost', name: 'Pełny trzos', desc: 'Zbierz 400 złota w jednym runie.', reward: 'Postać: Radogost', cond: { type: 'runGold', count: 400 } },
   { id: 'heroStrzezymir', name: 'Wiatr w nogach', desc: 'Osiągnij +60% szybkości ruchu w jednym runie.', reward: 'Postać: Strzeżymir', cond: { type: 'speed', value: 1.6 } },
@@ -37,7 +49,7 @@ export const ACHIEVEMENTS: (AchievementDef & { gold?: number })[] = [
   { id: 'itemDzban', name: 'Mistrz kuźni', desc: 'Podnieś dowolną broń do 15. poziomu w jednym runie.', reward: 'Skarbiec: Dzban kowala', cond: { type: 'weaponLevel', level: 15 } },
   { id: 'itemKowadlo', name: 'Trzy przemiany', desc: 'Ewoluuj 3 bronie w jednym runie.', reward: 'Skarbiec: Kowadło Swaroga', cond: { type: 'evolveCount', count: 3 } },
   { id: 'itemKosa', name: 'Kosiarz', desc: 'Pokonaj 3000 wrogów w jednym runie.', reward: 'Skarbiec: Kosa Marzanny', cond: { type: 'runKills', count: 3000 } },
-  { id: 'winDobroslawa', name: 'Zielna moc', desc: 'Pokonaj Leszego Dobrosławą.', reward: '300 złota', cond: { type: 'winWith', character: 'dobroslawa' }, gold: 300 },
+  { id: 'winDobroslawa', name: 'Zielna moc', desc: 'Pokonaj Leszego Dobrosławą.', reward: 'Broń: Wrzeciono Mokoszy, 300 złota', cond: { type: 'winWith', character: 'dobroslawa' }, gold: 300 },
   { id: 'winBogumil', name: 'Kute żelazo', desc: 'Pokonaj Leszego Bogumiłem.', reward: '300 złota', cond: { type: 'winWith', character: 'bogumil' }, gold: 300 },
 ];
 

@@ -216,7 +216,7 @@ export class Pickups {
 }
 
 /** Player projectile kinds. */
-export const ProjKind = { Bolt: 0, Bounce: 1, Lob: 2 } as const;
+export const ProjKind = { Bolt: 0, Bounce: 1, Lob: 2, Homing: 3, Boomerang: 4, Twister: 5 } as const;
 export const MAX_PROJ = 256;
 
 export class Projectiles {
@@ -233,9 +233,9 @@ export class Projectiles {
   readonly vx = new Float32Array(MAX_PROJ);
   readonly vz = new Float32Array(MAX_PROJ);
   readonly life = new Float32Array(MAX_PROJ);
-  /** Lob: total flight time; others: unused. */
+  /** Lob: total flight time; boomerang: time of the outbound leg. */
   readonly span = new Float32Array(MAX_PROJ);
-  /** Lob: start position. */
+  /** Lob: start position. Boomerang: sx/sz = launch velocity, sy = life at launch. */
   readonly sx = new Float32Array(MAX_PROJ);
   readonly sy = new Float32Array(MAX_PROJ);
   readonly sz = new Float32Array(MAX_PROJ);
@@ -263,13 +263,17 @@ export class Projectiles {
   }
 }
 
-export const MAX_ZONES = 48;
+/** 48 was enough for tar puddles alone; fire trails, traps and vortices share the pool. */
+export const MAX_ZONES = 96;
+/** Tar: burning puddle of a lobbed pot; Fire: trail behind the hero; Trap: snaps once; Vortex: drags enemies in. */
+export const ZoneKind = { Tar: 0, Fire: 1, Trap: 2, Vortex: 3 } as const;
 
 /** Lingering damage areas left by player weapons. */
 export class Zones {
   readonly list = new FreeList(MAX_ZONES);
   readonly alive = new Uint8Array(MAX_ZONES);
   readonly slot = new Uint8Array(MAX_ZONES);
+  readonly kind = new Uint8Array(MAX_ZONES);
   readonly x = new Float32Array(MAX_ZONES);
   readonly y = new Float32Array(MAX_ZONES);
   readonly z = new Float32Array(MAX_ZONES);

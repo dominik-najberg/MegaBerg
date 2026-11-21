@@ -160,7 +160,8 @@ describe('ewolucje', () => {
       expect(PASSIVE_BY_ID[w.evolution!.passive]).toBeDefined();
       passives.add(w.evolution!.passive);
     }
-    expect(passives.size).toBe(evos.length);
+    // Dwie księgi otwierają po dwie ewolucje (Tura: Włócznia i Miecz Nawii; Siłacza: Sierpy i Kosa Południcy).
+    expect(passives.size).toBe(evos.length - 2);
   });
 
   it('wymaga poziomu ewolucji broni i posiadania księgi', () => {

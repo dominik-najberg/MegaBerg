@@ -65,3 +65,19 @@ potok postprocessingu jest ograniczony wypełnianiem pikseli. Po wprowadzeniu bu
 | Niska | brak | wyłączone | ×1 | 35% | 50% |
 | Średnia | bloom, gradacja, MSAA ×2 | 1024 | do ×1,5 (maks. 2,3 mln px) | 70% | 80% |
 | Wysoka | bloom, gradacja, MSAA ×4 | 2048 | do ×2 (maks. 3,2 mln px) | 100% | 100% |
+
+## Nowe typy broni (etapy B–D planu broni)
+
+`MB_WEAPONS=<4 bronie> node scripts/verify/perf.mjs 500 1` (500 wrogów, 1920×1080, bronie na 5. poziomie),
+jeden pomiar po 5 s na ustawienie, wszystkie trzy przebiegi tego samego dnia na tej samej maszynie:
+
+| Zestaw | Wysoka | Średnia | Niska |
+|---|---:|---:|---:|
+| dotychczasowy (Ogień, Grom, Wianek, Proca, Ciupaga) | 86 FPS / 10,6 ms | 134 / 7,0 | 205 / 4,6 |
+| Miotła, Wnyki, Wir, Studnia (strefy i wiry) | 92 / 9,9 | 113 / 8,1 | 172 / 5,4 |
+| Rój, Krzywula, Wrzeciono, Kostki | 92 / 9,9 | 116 / 8,0 | 171 / 5,2 |
+
+Na jakości wysokiej różnicy nie widać (rządzi postprocessing). Na średniej i niskiej nowe zestawy kosztują
+ok. 0,7–1 ms na klatkę więcej; to pojedyncze pomiary z rozrzutem kilku–kilkunastu procent, więc traktuję to
+jako górne oszacowanie, nie dokładną liczbę. Liczby bezwzględne są niższe niż w tabeli wyżej (110 / 161 / 276),
+bo maszyna była w tym czasie obciążona innymi zadaniami.

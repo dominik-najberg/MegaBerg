@@ -44,12 +44,14 @@ describe('księgi: dane', () => {
     for (const b of PASSIVES) expect(icon(b.icon), b.id).not.toBe(fallback);
   });
 
-  it('partnerzy ewolucji są w puli od początku, a zablokowane księgi mają istniejące osiągnięcie', () => {
+  it('partnerzy ewolucji pierwszych dziesięciu broni są w puli od początku, a zablokowane księgi mają istniejące osiągnięcie', () => {
+    // Bronie z docs/BRONIE-PLAN.md (odblokowywane stylem gry) mogą ewoluować z księgą, którą też trzeba odblokować.
+    const first = ['sierpy', 'ogien', 'grom', 'ciupaga', 'wianek', 'proca', 'kruki', 'marzanna', 'wlocznia', 'dziegiec'];
     for (const w of WEAPONS) {
       if (!w.evolution) continue;
       const b = PASSIVE_BY_ID[w.evolution.passive];
       expect(b, w.id).toBeDefined();
-      expect(b!.unlock, `${w.id} → ${b!.id}`).toBeUndefined();
+      if (first.includes(w.id)) expect(b!.unlock, `${w.id} → ${b!.id}`).toBeUndefined();
     }
     for (const b of PASSIVES) if (b.unlock) expect(ACHIEVEMENT_BY_ID[b.unlock], b.id).toBeDefined();
   });

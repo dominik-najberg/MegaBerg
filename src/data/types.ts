@@ -89,7 +89,40 @@ export const BASE_STATS: Readonly<Stats> = {
   burn: 0,
 };
 
-export type WeaponKind = 'orbit' | 'bolt' | 'lightning' | 'sweep' | 'aura' | 'bounce' | 'summon' | 'cone' | 'lob';
+export type WeaponKind =
+  | 'orbit'
+  | 'bolt'
+  | 'lightning'
+  | 'sweep'
+  | 'aura'
+  | 'bounce'
+  | 'summon'
+  | 'cone'
+  | 'lob'
+  /** Projectiles that steer toward enemies. */
+  | 'homing'
+  /** Traps dropped on the ground that snap shut on the first enemy to step in. */
+  | 'trap'
+  /** Burning ground left behind the hero. */
+  | 'trail'
+  /** A thrown stick that flies out and comes back. */
+  | 'boomerang'
+  /** Whirlwinds that roam on their own. */
+  | 'wander'
+  /** A zone that drags enemies to its centre. */
+  | 'vortex'
+  /** Blocks a blow that would land and answers with a shockwave. */
+  | 'guard'
+  /** A thread from the hero to an enemy that hurts everything on the line. */
+  | 'tether';
+
+/**
+ * One extra rule on top of a weapon's kind (stage C of docs/BRONIE-PLAN.md). The numbers live in src/data/weapons.ts.
+ * lunge: a sweep struck at the target instead of around the hero; fang: kills may raise max health for the run;
+ * dice: damage rolled 1..6, a six adds crit chance for the run; lowHp: stronger the less health the hero has;
+ * reap: kills charge a triple swing.
+ */
+export type WeaponRule = 'lunge' | 'fang' | 'dice' | 'lowHp' | 'reap';
 
 export interface WeaponStats {
   damage: number;
@@ -146,6 +179,7 @@ export interface WeaponDef {
   aim?: 'strongest';
   /** Extra damage against mini-bosses and bosses (0.5 = +50%). */
   rankBonus?: number;
+  rule?: WeaponRule;
   /** Silver price in the Skarbiec: once unlocked, the weapon still has to be bought before it joins the pool. */
   silver?: number;
 }

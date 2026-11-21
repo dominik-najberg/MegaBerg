@@ -48,6 +48,14 @@ const KIND_NAMES: Record<WeaponKind, string> = {
   summon: 'Przywołanie',
   cone: 'Stożek',
   lob: 'Rzut ze strefą',
+  homing: 'Pociski naprowadzane',
+  trap: 'Pułapki',
+  trail: 'Ognisty ślad',
+  boomerang: 'Powracający rzut',
+  wander: 'Wędrujące wiry',
+  vortex: 'Wir wciągający',
+  guard: 'Blok i kontra',
+  tether: 'Nić',
 };
 
 /** Progress bar of an achievement that counts something ("1240 / 2000"); empty for yes/no achievements. */

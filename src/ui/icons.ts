@@ -52,6 +52,17 @@ const P: Record<string, string> = {
   mirror: '<ellipse cx="12" cy="9" rx="6.500" ry="7.500"/><ellipse cx="12" cy="9" rx="4.300" ry="5.300" fill="#fff" opacity=".45"/><path d="M11 16.500h2V22h-2z"/>',
   anvil: '<path d="M2 6h15c2 0 4 1 5 3h-6l-1 3c0 1 1 2 3 2v3H6v-3c2 0 3-1 3-2L8 9H4C3 9 2 8 2 6z"/><path d="M5 18h14v3H5z"/>',
   wand: '<path d="M3 21L15 9" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" fill="none"/><path d="M17 2l1.200 3 3 1.200-3 1.200L17 10.400l-1.200-3-3-1.200 3-1.200z"/><circle cx="20.500" cy="13" r="1"/><circle cx="11" cy="3.500" r="1"/>',
+  bee: '<ellipse cx="12" cy="13.500" rx="5" ry="6.500"/><path d="M7.500 11h9M7 14.500h10M8.500 18h7" stroke="#000" stroke-opacity=".45" stroke-width="1.600"/><path d="M9 8C6 3 2 4 3 8c.500 2 3 2.500 5 1.500zM15 8c3-5 7-4 6 0-.500 2-3 2.500-5 1.500z" opacity=".6"/>',
+  trap: '<path d="M2 15a10 7 0 0 1 20 0z"/><path d="M4 15l1.500-4 2 4 2-5 2.500 5 2.500-5 2 5 2-4 1.500 4" fill="#000" opacity=".4"/><path d="M2 17h20v3H2z"/>',
+  broom: '<path d="M21 2L11 12" stroke="currentColor" stroke-width="2.400" stroke-linecap="round" fill="none"/><path d="M12.500 9.500l2 2L7 22l-5-1-1-5z"/><path d="M5 20l5-6M2.500 17l5-4" stroke="#000" stroke-opacity=".35" fill="none"/>',
+  boomerang: '<path d="M3 20C3 9 9 3 20 3c1.500 0 2 2 .500 2.500C13 7.500 8 13 5.500 20.500 5 22 3 21.500 3 20z"/>',
+  whirl: '<g fill="none" stroke="currentColor" stroke-linecap="round"><path d="M3 5h18" stroke-width="2.600"/><path d="M5.500 9.500h13" stroke-width="2.400"/><path d="M8 14h9" stroke-width="2.200"/><path d="M10 18h5" stroke-width="2"/><path d="M11.500 21.500h2" stroke-width="1.800"/></g>',
+  spiral: '<path d="M12 12a2 2 0 1 1 2 2 4.500 4.500 0 1 1-4.500-4.500 7 7 0 1 1 7 7 9.500 9.500 0 0 1-9.500 4" fill="none" stroke="currentColor" stroke-width="2.200" stroke-linecap="round"/>',
+  sabre: '<path d="M4 20C6 11 11 5 21 2c-3 8-8 13-15 17z"/><path d="M2 18l5 4M3.500 21.500l2-2" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" fill="none"/>',
+  buckler: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6.500" fill="none" stroke="#000" stroke-opacity=".3" stroke-width="1.500"/><circle cx="12" cy="12" r="3" fill="#fff" opacity=".55"/>',
+  spindle: '<path d="M12 1v22" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" fill="none"/><path d="M12 5c4 2 5 5 5 7s-1 5-5 7c-4-2-5-5-5-7s1-5 5-7z"/><path d="M7.500 10l9 3M7.500 13.500l8.500 2.500M8.500 7.500l8 2.500" stroke="#000" stroke-opacity=".35" fill="none"/>',
+  tooth: '<path d="M6 2h12c1 5-1 9-2.500 12L12 22l-3.500-8C7 11 5 7 6 2z"/><path d="M9 4c0 4 1 7 3 10" stroke="#fff" stroke-opacity=".5" fill="none" stroke-width="1.500"/>',
+  scythe: '<path d="M6 22L15 3" stroke="currentColor" stroke-width="2.200" stroke-linecap="round" fill="none"/><path d="M15 3C9 1 4 3 1 8c5-2.500 9-2 13 .500z"/>',
   sword: '<path d="M20 2l2 0 0 2-11 11-2-2z"/><path d="M6 12l6 6-2 2-2-2-4 4-2-2 4-4-2-2z"/>',
 };
 

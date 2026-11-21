@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { TAU } from '../core/math';
 import { ENEMIES } from '../data/enemies';
 import { Ev, type GameEvent } from '../sim/events';
-import { MAX_GEMS, MAX_HAZARDS, MAX_PICKUPS, MAX_PROJ, MAX_SHOTS, MAX_ZONES, PickupKind, ProjKind } from '../sim/pools';
+import { MAX_GEMS, MAX_HAZARDS, MAX_PICKUPS, MAX_PROJ, MAX_SHOTS, MAX_ZONES, PickupKind, ProjKind, ZoneKind } from '../sim/pools';
 import type { GameMap } from '../sim/terrain';
 import type { Chest, World } from '../sim/world';
 import { creatureMaterial } from './enemiesView';
@@ -129,6 +129,14 @@ function spearGeo(): THREE.BufferGeometry {
   b.cyl(0.045, 0.045, 1.5, 5, 0x8a6238, { rx: Math.PI / 2 });
   b.cone(0.13, 0.5, 4, 0xe6edf5, { z: 0.95, rx: Math.PI / 2 });
   b.box(0.2, 0.05, 0.05, 0xb3261e, { z: 0.6 });
+  return b.build();
+}
+
+/** Krzywula: a bent throwing stick, lying flat so it spins around the vertical axis. */
+function stickGeo(): THREE.BufferGeometry {
+  const b = new GeoBuilder(304);
+  b.box(0.16, 0.07, 0.8, 0xa87a44, { z: 0.3 });
+  b.box(0.8, 0.07, 0.16, 0x8a6238, { x: 0.3 });
   return b.build();
 }
 
@@ -300,6 +308,11 @@ export class FxView {
   private readonly stones: THREE.InstancedMesh;
   private readonly spears: THREE.InstancedMesh;
   private readonly pots: THREE.InstancedMesh;
+  private readonly sticks: THREE.InstancedMesh;
+  private readonly twisters: THREE.InstancedMesh;
+  private readonly trapRings: THREE.InstancedMesh;
+  /** The hidden stick of Krzywula (see World.secret). */
+  private readonly secretMesh: THREE.Mesh;
   private readonly shots: THREE.InstancedMesh;
   private readonly ravens: THREE.InstancedMesh;
   private readonly ravenFx: THREE.InstancedBufferAttribute;
@@ -418,7 +431,18 @@ export class FxView {
     this.spears = instanced(spearGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x554422 }), MAX_PROJ);
     this.pots = instanced(potGeo(), new THREE.MeshLambertMaterial({ vertexColors: true }), 64);
     this.shots = instanced(new THREE.IcosahedronGeometry(0.36, 0), new THREE.MeshBasicMaterial({ color: 0xc070ff, toneMapped: false }), MAX_SHOTS);
-    g.add(this.fire, this.stones, this.spears, this.pots, this.shots);
+    this.sticks = instanced(stickGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x443018 }), 64);
+    // Whirlwinds: an open funnel, wide at the top.
+    this.twisters = instanced(
+      new THREE.CylinderGeometry(0.75, 0.16, 2.2, 14, 3, true).translate(0, 1.1, 0),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.11, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+      32,
+      true,
+    );
+    this.twisters.renderOrder = 4;
+    this.secretMesh = new THREE.Mesh(stickGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x6a4a20 }));
+    this.secretMesh.visible = false;
+    g.add(this.fire, this.stones, this.spears, this.pots, this.shots, this.sticks, this.twisters, this.secretMesh);
 
     // --- summoned ravens share the creature shader (wing flap)
     const ravenGeo = (buildEnemyModels().kruk as { geo: THREE.BufferGeometry }).geo;
@@ -435,6 +459,9 @@ export class FxView {
     this.hazFill = instanced(disc, decal(0.4, false), MAX_HAZARDS, true);
     this.hazRing = instanced(new THREE.RingGeometry(0.93, 1, 40).rotateX(-Math.PI / 2), decal(0.95, false), MAX_HAZARDS, true);
     this.bombs = instanced(new THREE.IcosahedronGeometry(0.45, 0), new THREE.MeshBasicMaterial({ color: 0xb8ff60, toneMapped: false }), 32);
+    this.trapRings = instanced(new THREE.RingGeometry(0.72, 1, 9).rotateX(-Math.PI / 2), decal(0.85, false), MAX_ZONES, true);
+    this.trapRings.renderOrder = 3;
+    g.add(this.trapRings);
     this.zones.renderOrder = 2;
     this.hazFill.renderOrder = 3;
     this.hazRing.renderOrder = 3;
@@ -732,7 +759,18 @@ void main() {
         sp.burst(e.x, e.y + 0.9, e.z, 5, 2, 0.3, 0.3, 0xffffff);
         break;
       case Ev.Zone:
-        sp.burst(e.x, e.y + 0.3, e.z, 16, e.a * 2, 0.5, 0.4, 0xff8a3a, 5, 3);
+        if (e.b === ZoneKind.Tar) sp.burst(e.x, e.y + 0.3, e.z, 16, e.a * 2, 0.5, 0.4, 0xff8a3a, 5, 3);
+        else if (e.b === ZoneKind.Vortex) sp.burst(e.x, e.y + 0.4, e.z, 14, e.a * 1.5, 0.5, 0.36, 0x8a5cff, 2, 2);
+        else if (e.b === ZoneKind.Trap) this.dust.burst(e.x, e.y + 0.1, e.z, 3, 1.2, 0.3, 0.6, 0x6a6258, -0.3, 0.3);
+        break;
+      case Ev.Beam:
+        // A thread of Wrzeciono Mokoszy: the bolt mesh without the lightning's flash and shake.
+        this.bolt(e.a, e.b, e.c, e.x, e.y, e.z, e.d);
+        sp.burst(e.x, e.y, e.z, 2, 2, 0.25, 0.2, e.d);
+        break;
+      case Ev.Secret:
+        sp.burst(e.x, e.y + 0.6, e.z, 40, 6, 0.9, 0.4, 0xffe08a, 2, 3);
+        this.boom(e.x, e.y + 0.8, e.z, 4, 0xffd060, 0.5);
         break;
       case Ev.Magnet:
         for (let k = 0; k < 60; k++) {
@@ -791,7 +829,8 @@ void main() {
     slot.mesh.rotation.y = angle - Math.PI / 2;
     slot.t = 0;
     slot.r = reach;
-    (slot.mesh.material as THREE.MeshBasicMaterial).color.set(color);
+    // A wide swing is dimmer: an additive ring eight metres across would white out the whole fight.
+    (slot.mesh.material as THREE.MeshBasicMaterial).color.set(color).multiplyScalar(Math.min(1, Math.pow(5.5 / reach, 1.5)));
   }
 
   private bolt(fx: number, fy: number, fz: number, tx: number, ty: number, tz: number, color: number): void {
@@ -1037,6 +1076,12 @@ void main() {
             const v = 10 + Math.random() * 8;
             sp.emit(hx + Math.sin(a) * 0.8, hy + 1 + Math.random() * 0.4, hz + Math.cos(a) * 0.8, Math.sin(a) * v, (Math.random() - 0.3) * 1.5, Math.cos(a) * v, w.fxArea / v, 0.34, k ? 0xe6faff : 0x9fe8ff, 0, 0.4);
           }
+        } else if (kind === 'guard') {
+          // A ready buckler glints around the hero.
+          if (emit && w.timer <= 0) {
+            const a = time * 3;
+            for (let k = 0; k < 2; k++) sp.emit(hx + Math.cos(a + k * Math.PI) * 1.1, hy + 1, hz + Math.sin(a + k * Math.PI) * 1.1, 0, 0.4, 0, 0.35, 0.22, w.def.color, 0, 0);
+          }
         } else if (kind === 'summon') {
           for (const r of w.ravens) {
             if (nr >= 24) break;
@@ -1072,6 +1117,8 @@ void main() {
       let ns = 0;
       let nsp = 0;
       let np = 0;
+      let nk = 0;
+      let nt = 0;
       for (let i = 0; i < pr.n; i++) {
         if (!pr.alive[i]) continue;
         const w = world.weapons[pr.slot[i] as number];
@@ -1083,6 +1130,34 @@ void main() {
         if (kind === ProjKind.Lob) {
           if (np < 64) writeMatrix(this.pots.instanceMatrix.array, np++, x, y, z, time * 9, 1.2, 1.2, 1.2, time * 7);
           if (emit) sp.emit(x, y, z, 0, 0.5, 0, 0.3, 0.26, 0xff8a3a);
+          continue;
+        }
+        if (kind === ProjKind.Boomerang) {
+          if (nk < 64) writeMatrix(this.sticks.instanceMatrix.array, nk++, x, y, z, time * 22 + i, 1.15, 1.15, 1.15);
+          if (emit) sp.emit(x, y, z, 0, 0, 0, 0.2, 0.18, w.def.color);
+          continue;
+        }
+        if (kind === ProjKind.Twister) {
+          if (nt < 32) {
+            const r = pr.radius[i] as number;
+            // Grows out of the ground and sinks back at the end of its life.
+            const k = Math.min(1, (pr.life[i] as number) * 2);
+            writeMatrix(this.twisters.instanceMatrix.array, nt, x, y - 1.1, z, time * 9 + i, r, (0.8 + r * 0.25) * k, r);
+            setColor(this.twisters, nt, w.def.color, 0.7);
+            nt++;
+          }
+          if (emit) {
+            const a = Math.random() * TAU;
+            const r = (pr.radius[i] as number) * (0.3 + Math.random() * 0.7);
+            sp.emit(x + Math.cos(a) * r, y - 1 + Math.random() * 0.4, z + Math.sin(a) * r, -Math.sin(a) * 6, 3 + Math.random() * 2, Math.cos(a) * 6, 0.5, 0.22, w.def.color, 0, 0.5);
+          }
+          continue;
+        }
+        if (kind === ProjKind.Homing) {
+          // Bees: small bright dots that bob as they fly.
+          writeMatrix(this.stones.instanceMatrix.array, ns, x, y + Math.sin(time * 18 + i * 1.7) * 0.12, z, time * 12 + i, 0.6, 0.6, 0.6);
+          setColor(this.stones, ns, w.def.color, 1.6);
+          ns++;
           continue;
         }
         const yaw = Math.atan2(pr.vx[i] as number, pr.vz[i] as number);
@@ -1102,13 +1177,17 @@ void main() {
           writeMatrix(this.fire.instanceMatrix.array, nf, x, y, z, time * 8 + i, s, s, s);
           setColor(this.fire, nf, w.def.color, 1.2);
           nf++;
-          sp.emit(x + (Math.random() - 0.5) * 0.3, y + (Math.random() - 0.5) * 0.3, z + (Math.random() - 0.5) * 0.3, 0, 1.2, 0, 0.35, 0.5, Math.random() < 0.5 ? 0xff5a1a : 0xffc040, -2, 1);
+          // Fire trails sparks of flame; other bolts (Kieł wąpierza) trail their own colour.
+          const flame = w.def.icon === 'flame';
+          sp.emit(x + (Math.random() - 0.5) * 0.3, y + (Math.random() - 0.5) * 0.3, z + (Math.random() - 0.5) * 0.3, 0, 1.2, 0, 0.35, flame ? 0.5 : 0.3, flame ? (Math.random() < 0.5 ? 0xff5a1a : 0xffc040) : w.def.color, -2, 1);
         }
       }
       flush(this.fire, nf);
       flush(this.stones, ns);
       flush(this.spears, nsp);
       flush(this.pots, np);
+      flush(this.sticks, nk);
+      flush(this.twisters, nt);
     }
 
     // enemy shots
@@ -1131,14 +1210,40 @@ void main() {
     {
       const zn = world.zones;
       let n = 0;
+      let ntr = 0;
       for (let i = 0; i < zn.n; i++) {
         if (!zn.alive[i]) continue;
         const w = world.weapons[zn.slot[i] as number];
         const r = zn.r[i] as number;
         const life = zn.life[i] as number;
         const fade = Math.min(1, life * 2, ((zn.span[i] as number) - life) * 6 + 0.1);
+        const zk = zn.kind[i] as number;
+        if (zk === ZoneKind.Trap) {
+          // Iron jaws on the ground, small and dark so a field of them does not hide the fight; dull until armed.
+          const armed = (zn.span[i] as number) - life >= 0.5;
+          writeGround(this.trapRings.instanceMatrix.array, ntr, map, zn.x[i] as number, zn.z[i] as number, 0.1, (r * 0.22 + 0.2) * (0.5 + 0.5 * fade), i * 1.3);
+          setColor(this.trapRings, ntr, w?.def.color ?? 0xb8c0c8, armed ? 0.42 + Math.sin(time * 5 + i) * 0.06 : 0.2);
+          ntr++;
+          continue;
+        }
+        if (zk === ZoneKind.Vortex) {
+          writeGround(this.zones.instanceMatrix.array, n, map, zn.x[i] as number, zn.z[i] as number, 0.08, r * (0.6 + 0.4 * fade), time * 2 + i);
+          setColor(this.zones, n, 0x160a30, 1);
+          n++;
+          if (emit) {
+            // Sparks spiral into the eye of the vortex.
+            for (let k = 0; k < 2; k++) {
+              const a = Math.random() * TAU;
+              const d = r * (0.8 + Math.random() * 0.8);
+              const fx = (zn.x[i] as number) + Math.cos(a) * d;
+              const fz = (zn.z[i] as number) + Math.sin(a) * d;
+              sp.emit(fx, map.heightAt(fx, fz) + 0.3 + Math.random() * 0.8, fz, -Math.cos(a) * d * 1.6 - Math.sin(a) * 3, 0.3, -Math.sin(a) * d * 1.6 + Math.cos(a) * 3, 0.55, 0.3, k ? (w?.def.color ?? 0x8a5cff) : 0xe0d0ff, 0, 0);
+            }
+          }
+          continue;
+        }
         writeGround(this.zones.instanceMatrix.array, n, map, zn.x[i] as number, zn.z[i] as number, 0.08, r * (0.6 + 0.4 * fade), i);
-        setColor(this.zones, n, 0x2a1408, 1);
+        setColor(this.zones, n, zk === ZoneKind.Fire ? 0x3a1206 : 0x2a1408, 1);
         n++;
         if (emit) {
           const a = Math.random() * TAU;
@@ -1149,6 +1254,22 @@ void main() {
         }
       }
       flush(this.zones, n);
+      flush(this.trapRings, ntr);
+    }
+
+    // the hidden stick of Krzywula: stuck in the ground by its oak, glinting from a distance
+    {
+      const sc = world.secret;
+      const show = sc !== null && !sc.found;
+      this.secretMesh.visible = show;
+      if (show && sc) {
+        this.secretMesh.position.set(sc.x, sc.y + 0.55 + Math.sin(time * 2) * 0.08, sc.z);
+        this.secretMesh.rotation.set(1.1, time * 0.8, 0.4);
+        if (emit && Math.random() < 0.5) {
+          const a = Math.random() * TAU;
+          sp.emit(sc.x + Math.cos(a) * 0.5, sc.y + 0.3 + Math.random() * 1.2, sc.z + Math.sin(a) * 0.5, 0, 0.9, 0, 0.9, 0.24, 0xffe08a, 0, 0);
+        }
+      }
     }
 
     // hazard telegraphs

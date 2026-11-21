@@ -122,6 +122,7 @@ export class Game {
       weaponPool: runPool(save, 'w'),
       passivePool: runPool(save, 'b'),
       itemPool: runPool(save, 'i'),
+      foundSecrets: save.found,
     });
     if (idle) w.spawner.disabled = true;
     // The dev menu is created after the first (idle) world; later worlds inherit its immortality switch.

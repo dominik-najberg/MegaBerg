@@ -34,11 +34,11 @@ const build = (w: World): void => w.grid.build(w.enemies.n, w.enemies.alive, w.e
 describe('Łuk Dziewanny: dane', () => {
   const luk = WEAPON_BY_ID.luk!;
 
-  it('jest bronią typu bolt z własną ikoną, bez ewolucji, odblokowywaną osiągnięciem', () => {
+  it('jest bronią typu bolt z własną ikoną i ewolucją, odblokowywaną osiągnięciem', () => {
     expect(luk.kind).toBe('bolt');
     expect(luk.aim).toBe('strongest');
     expect(luk.rankBonus).toBeGreaterThan(0);
-    expect(luk.evolution).toBeUndefined();
+    expect(luk.evolution).toEqual({ passive: 'kiel', into: 'lowy' });
     expect(luk.silver).toBeUndefined();
     expect(icon(luk.icon)).not.toBe(icon('__brak__'));
     expect(ACHIEVEMENTS.find((a) => a.id === luk.unlock)?.cond).toEqual({ type: 'book', book: 'sokol', level: 10 });
@@ -147,7 +147,7 @@ describe('wspólny budżet nowych broni', () => {
       return weapons / total;
     };
     // 10 broni (9 nowych do wyboru) to pula sprzed planu; pełna pula ma dawać tyle samo.
-    const before = share(bases.filter((id) => id !== 'luk'));
+    const before = share(['sierpy', 'ogien', 'grom', 'ciupaga', 'wianek', 'proca', 'kruki', 'marzanna', 'wlocznia', 'dziegiec']);
     const now = share(bases);
     expect(NEW_WEAPON_WEIGHT * NEW_WEAPON_FULL).toBe(36);
     expect(Math.abs(now - before)).toBeLessThan(0.03);

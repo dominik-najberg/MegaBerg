@@ -50,6 +50,14 @@ export const KIND_LINES: Record<WeaponKind, LineStat[]> = {
   summon: ['damage', 'attackSpeed', 'speed'],
   cone: ['damage', 'attackSpeed', 'area', 'duration'],
   lob: ['damage', 'attackSpeed', 'area', 'duration'],
+  homing: ['damage', 'attackSpeed', 'speed', 'duration', 'pierce'],
+  trap: ['damage', 'attackSpeed', 'area', 'duration'],
+  trail: ['damage', 'area', 'duration'],
+  boomerang: ['damage', 'attackSpeed', 'area', 'speed', 'knockback'],
+  wander: ['damage', 'attackSpeed', 'area', 'duration', 'knockback'],
+  vortex: ['damage', 'attackSpeed', 'area', 'duration'],
+  guard: ['damage', 'attackSpeed', 'area', 'knockback'],
+  tether: ['damage', 'attackSpeed', 'area'],
 };
 
 /** Number of lines on a level-up card, by rarity. A new weapon gets one line fewer. */
