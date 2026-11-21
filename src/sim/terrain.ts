@@ -35,11 +35,16 @@ export interface Spot {
 /** god: blessing of a god; circle: stand inside to charge it; amber: pulls every gem; greed: curse for loot. */
 export type ShrineKind = 'god' | 'circle' | 'amber' | 'greed';
 
-/** Kinds of the eight shrines in placement order (six by the trails, two deep in the woods). */
+/** Kinds of the eight shrines (six by the trails, two deep in the woods); every map deals them in its own order. */
 export const SHRINE_KINDS: ShrineKind[] = ['god', 'circle', 'god', 'amber', 'god', 'circle', 'greed', 'god'];
 
 export interface ShrineSpot extends Spot {
   kind: ShrineKind;
+}
+
+export interface ChestSpot extends Spot {
+  /** The chest of a landmark: holds a better reward than the chests scattered in the woods. */
+  rich: boolean;
 }
 
 export type LandmarkKind = 'circle' | 'oak' | 'hut' | 'idol' | 'barrow' | 'lake';
@@ -54,15 +59,20 @@ export interface Landmark {
   r: number;
 }
 
-/** [kind, name, distance from the centre, angle, clearing radius] */
+/**
+ * [kind, name, nearest and farthest distance from the centre, clearing radius]. Every map puts each
+ * place at a distance of its own within the range, in a compass sector of its own (see placeLandmarkSites).
+ */
 const LANDMARK_DEFS: Array<[LandmarkKind, string, number, number, number]> = [
-  ['idol', 'Posąg Świętowita', 72, 5.3, 6],
-  ['lake', 'Topielcowe Jezioro', 92, 3.35, 15],
-  ['circle', 'Kamienny Krąg', 100, 0.9, 11],
-  ['oak', 'Święty Dąb', 124, 2.45, 8],
-  ['barrow', 'Kurhan', 146, 1.72, 12],
-  ['hut', 'Chata na Kurzej Stopce', 152, 4.25, 8],
+  ['idol', 'Posąg Świętowita', 60, 100, 6],
+  ['lake', 'Topielcowe Jezioro', 75, 120, 15],
+  ['circle', 'Kamienny Krąg', 80, 125, 11],
+  ['oak', 'Święty Dąb', 95, 140, 8],
+  ['barrow', 'Kurhan', 110, 150, 12],
+  ['hut', 'Chata na Kurzej Stopce', 120, 158, 8],
 ];
+/** Share of its compass sector a landmark may land in: the rest keeps neighbours apart. */
+const SECTOR_USE = 0.6;
 
 const LAKE_R = 12.5;
 const BARROW_H = 3.4;
@@ -71,7 +81,8 @@ const BARROW_H = 3.4;
 export const NEAR_CHESTS = 3;
 export const NEAR_CHEST_MIN = 18;
 export const NEAR_CHEST_MAX = 25;
-const NEAR_CHEST_SEED = 771;
+/** The seed of the map every test and the balance simulation use. */
+export const DEFAULT_MAP_SEED = 20261117;
 
 const OB_CELL = 8;
 const OB_DIM = Math.ceil((MAP_HALF * 2) / OB_CELL);
@@ -83,9 +94,20 @@ interface Flat {
   h: number;
 }
 
+/** The numbers 0..n-1 in a random order. */
+function shuffled(rng: Rng, n: number): number[] {
+  const out = Array.from({ length: n }, (_, i) => i);
+  for (let i = n - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [out[i], out[j]] = [out[j] as number, out[i] as number];
+  }
+  return out;
+}
+
 /**
  * Static world: heightmap, obstacles (trees, rocks, shrines, bonfires, landmarks), swamp puddles, trails.
- * Pure data + queries, no rendering. Generated deterministically from a seed.
+ * Pure data + queries, no rendering. Generated deterministically from a seed: every seed is a different
+ * forest (where the named places lie, how the trails run, the hills, the woods, the chests, the shrines).
  */
 export class GameMap {
   readonly heights = new Float32Array(GRID_N * GRID_N);
@@ -95,22 +117,25 @@ export class GameMap {
   readonly puddles: Puddle[] = [];
   readonly bonfires: Spot[] = [];
   readonly shrines: ShrineSpot[] = [];
-  readonly chestSpots: Spot[] = [];
+  readonly chestSpots: ChestSpot[] = [];
   readonly landmarks: Landmark[] = [];
   /** Trail polylines (centre -> landmark), used to put shrines and fires by the wayside. */
   private readonly trails: Array<Array<[number, number]>> = [];
   private readonly flats: Flat[] = [];
   private readonly obGrid: number[][] = [];
+  /** Offset of every noise lookup, so the hills, the woods and the bends of the trails differ per seed. */
+  private readonly nx: number;
+  private readonly nz: number;
   /** Result of the last resolveCircle call. */
   outX = 0;
   outZ = 0;
 
-  constructor(seed = 20261117) {
+  constructor(readonly seed = DEFAULT_MAP_SEED) {
     const rng = new Rng(seed);
-    for (const [kind, name, d, a, r] of LANDMARK_DEFS) {
-      this.landmarks.push({ kind, name, x: Math.cos(a) * d, z: Math.sin(a) * d, r });
-    }
-    this.buildTrails();
+    this.nx = rng.range(0, 400);
+    this.nz = rng.range(0, 400);
+    this.placeLandmarkSites(rng);
+    this.buildTrails(rng);
     this.placePuddles(rng);
     for (const l of this.landmarks) {
       if (l.kind === 'lake' || l.kind === 'barrow') continue;
@@ -123,7 +148,19 @@ export class GameMap {
     this.buildObstacleGrid();
   }
 
-  // ------------------------------------------------------------------ trails
+  // ------------------------------------------------------------------ landmarks and trails
+
+  /** One landmark per sixth of the compass, in a random order, each at a random bearing and distance. */
+  private placeLandmarkSites(rng: Rng): void {
+    const n = LANDMARK_DEFS.length;
+    const sectors = shuffled(rng, n);
+    const turn = rng.range(0, TAU);
+    LANDMARK_DEFS.forEach(([kind, name, dMin, dMax, r], i) => {
+      const a = turn + (((sectors[i] as number) + 0.5 + (rng.next() - 0.5) * SECTOR_USE) / n) * TAU;
+      const d = rng.range(dMin, dMax);
+      this.landmarks.push({ kind, name, x: Math.cos(a) * d, z: Math.sin(a) * d, r });
+    });
+  }
 
   private stamp(x: number, z: number): void {
     const R = 3.2;
@@ -151,7 +188,7 @@ export class GameMap {
     const pts: Array<[number, number]> = [];
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
-      const off = (fbm((t * len) / 34 + salt * 7.13, salt * 3.7 + 0.5, 2) - 0.5) * 2 * amp * Math.sin(Math.PI * t);
+      const off = (fbm((t * len) / 34 + salt * 7.13 + this.nx, salt * 3.7 + 0.5 + this.nz, 2) - 0.5) * 2 * amp * Math.sin(Math.PI * t);
       const x = ax + (bx - ax) * t + nx * off;
       const z = az + (bz - az) * t + nz * off;
       pts.push([x, z]);
@@ -160,7 +197,7 @@ export class GameMap {
     return pts;
   }
 
-  private buildTrails(): void {
+  private buildTrails(rng: Rng): void {
     this.landmarks.forEach((l, i) => {
       const d = Math.hypot(l.x, l.z);
       const ux = l.x / d;
@@ -169,18 +206,19 @@ export class GameMap {
       const stop = d - (l.kind === 'lake' ? LAKE_R + 1 : l.kind === 'circle' ? 4 : 3);
       this.trails.push(this.trace(ux * 9, uz * 9, ux * stop, uz * stop, i + 1));
     });
-    // Two cross-links so the outer places can be visited without returning to the clearing.
-    const link = (a: LandmarkKind, b: LandmarkKind, salt: number): void => {
-      const A = this.landmarks.find((l) => l.kind === a) as Landmark;
-      const B = this.landmarks.find((l) => l.kind === b) as Landmark;
+    // Cross-links between neighbours around the compass, one per landmark, so the outer places can be
+    // visited without returning to the clearing.
+    const ring = this.landmarks.slice().sort((a, b) => Math.atan2(a.z, a.x) - Math.atan2(b.z, b.x));
+    const inset = (l: Landmark): number => (l.kind === 'lake' ? LAKE_R + 1 : l.r - 2);
+    const first = rng.int(2);
+    for (let k = first; k < ring.length + first; k += 2) {
+      const A = ring[k % ring.length] as Landmark;
+      const B = ring[(k + 1) % ring.length] as Landmark;
       const d = Math.hypot(B.x - A.x, B.z - A.z);
       const ux = (B.x - A.x) / d;
       const uz = (B.z - A.z) / d;
-      this.trace(A.x + ux * (A.r - 2), A.z + uz * (A.r - 2), B.x - ux * (B.r - 2), B.z - uz * (B.r - 2), salt);
-    };
-    link('circle', 'barrow', 11);
-    link('barrow', 'oak', 12);
-    link('hut', 'idol', 13);
+      this.trace(A.x + ux * inset(A), A.z + uz * inset(A), B.x - ux * inset(B), B.z - uz * inset(B), 11 + k);
+    }
   }
 
   /** Trail strength 0..1 (bilinear). */
@@ -228,9 +266,11 @@ export class GameMap {
   /** Rolling hills: flat clearing in the middle, a rising rim around the playable disc. */
   private noiseHeight(x: number, z: number): number {
     const d = Math.hypot(x, z);
-    let h = (fbm(x / 42 + 3.1, z / 42 + 7.7, 3) - 0.5) * 9;
-    h += (fbm(x / 13 + 11.3, z / 13 + 2.9, 2) - 0.5) * 1.6;
-    h += (fbm(x / 110 + 40.2, z / 110 + 18.4, 2) - 0.5) * 7 * smoothstep(60, 130, d);
+    const ox = this.nx;
+    const oz = this.nz;
+    let h = (fbm(x / 42 + 3.1 + ox, z / 42 + 7.7 + oz, 3) - 0.5) * 9;
+    h += (fbm(x / 13 + 11.3 + ox, z / 13 + 2.9 + oz, 2) - 0.5) * 1.6;
+    h += (fbm(x / 110 + 40.2 + ox, z / 110 + 18.4 + oz, 2) - 0.5) * 7 * smoothstep(60, 130, d);
     h *= smoothstep(5, 30, d);
     h += smoothstep(PLAY_RADIUS - 8, PLAY_RADIUS + 26, d) * 9;
     return h;
@@ -325,31 +365,31 @@ export class GameMap {
             // The broad, carved face of every stone looks at the middle of the ring (give or take).
             this.obstacles.push({ x, z, r: 0.85, kind: 'menhir', scale: 0.85 + hash2(i * 7, 3) * 0.5, rot: -a - Math.PI / 2 + (hash2(i, 9) - 0.5) * 0.5 });
           }
-          this.chestSpots.push({ x: l.x, z: l.z, rot: face });
+          this.chestSpots.push({ x: l.x, z: l.z, rot: face, rich: true });
           break;
         }
         case 'oak': {
           this.obstacles.push({ x: l.x, z: l.z, r: 2.3, kind: 'ancientOak', scale: 1, rot: 0.7 });
           const [x, z] = at(toCentre + 0.7, 5.2);
-          this.chestSpots.push({ x, z, rot: face });
+          this.chestSpots.push({ x, z, rot: face, rich: true });
           break;
         }
         case 'hut': {
           this.obstacles.push({ x: l.x, z: l.z, r: 2.4, kind: 'hut', scale: 1, rot: face });
           const [x, z] = at(toCentre - 0.8, 5.4);
-          this.chestSpots.push({ x, z, rot: face });
+          this.chestSpots.push({ x, z, rot: face, rich: true });
           break;
         }
         case 'idol': {
           this.obstacles.push({ x: l.x, z: l.z, r: 1.0, kind: 'idol', scale: 1, rot: face });
           const [x, z] = at(toCentre + Math.PI, 3.6);
-          this.chestSpots.push({ x, z, rot: face });
+          this.chestSpots.push({ x, z, rot: face, rich: true });
           break;
         }
         case 'barrow': {
           this.obstacles.push({ x: l.x, z: l.z, r: 0.95, kind: 'menhir', scale: 1.5, rot: 0.4 });
           const [x, z] = at(toCentre + 0.5, 2.8);
-          this.chestSpots.push({ x, z, rot: face });
+          this.chestSpots.push({ x, z, rot: face, rich: true });
           for (let i = 0; i < 5; i++) {
             const a = 0.6 + (i / 5) * TAU;
             const [rx, rz] = at(a, 9.5 + hash2(i, 5) * 1.5);
@@ -365,6 +405,7 @@ export class GameMap {
 
   private placeFeatures(rng: Rng): void {
     this.placeLandmarks();
+    const kinds = shuffled(rng, SHRINE_KINDS.length).map((i) => SHRINE_KINDS[i] as ShrineKind);
     const addBonfire = (x: number, z: number): boolean => {
       if (!this.free(x, z, 1.2, 2) || this.pathAt(x, z) > 0.2) return false;
       this.bonfires.push({ x, z, rot: rng.range(0, TAU) });
@@ -374,7 +415,7 @@ export class GameMap {
     const addShrine = (x: number, z: number, faceX: number, faceZ: number): boolean => {
       if (!this.free(x, z, 1.2, 3) || this.pathAt(x, z) > 0.2) return false;
       const rot = Math.atan2(faceX - x, faceZ - z);
-      this.shrines.push({ x, z, rot, kind: SHRINE_KINDS[this.shrines.length] ?? 'god' });
+      this.shrines.push({ x, z, rot, kind: kinds[this.shrines.length] ?? 'god' });
       this.obstacles.push({ x, z, r: 0.9, kind: 'shrine', scale: 1, rot });
       return true;
     };
@@ -390,8 +431,9 @@ export class GameMap {
 
     // Bonfires: one at the start, one by every trail, the rest scattered.
     // The starting fire sits between two trails: try bearings around the clearing until one is free.
+    const fireAt = rng.range(0, TAU);
     for (let k = 0; k < 16; k++) {
-      const a = 0.6 + k * 0.4;
+      const a = fireAt + k * 0.4;
       if (addBonfire(Math.cos(a) * 9.5, Math.sin(a) * 9.5)) break;
     }
     for (let i = 0; i < this.trails.length; i++) {
@@ -433,14 +475,15 @@ export class GameMap {
     guard = 0;
     while (this.chestSpots.length < 24 && guard++ < 2000) {
       const a = rng.range(0, TAU);
-      const d = 16 + Math.sqrt(rng.next()) * (PLAY_RADIUS - 26);
+      // Further out than the chests by the starting clearing (see placeNearChests).
+      const d = NEAR_CHEST_MAX + 5 + Math.sqrt(rng.next()) * (PLAY_RADIUS - 15 - NEAR_CHEST_MAX);
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
       if (this.inClearing(x, z) || !this.free(x, z, 1, 3)) continue;
       let far = true;
       for (const c of this.chestSpots) if (Math.hypot(c.x - x, c.z - z) < 27) far = false;
       if (!far) continue;
-      this.chestSpots.push({ x, z, rot: rng.range(0, TAU) });
+      this.chestSpots.push({ x, z, rot: rng.range(0, TAU), rich: false });
     }
     // Rocks.
     guard = 0;
@@ -464,11 +507,11 @@ export class GameMap {
       const d = 12 + Math.sqrt(rng.next()) * (PLAY_RADIUS - 8);
       const x = Math.cos(a) * d;
       const z = Math.sin(a) * d;
-      const woods = smoothstep(0.34, 0.62, fbm(x / 46 + 9.3, z / 46 + 4.1, 2));
-      const density = (0.22 + 0.78 * smoothstep(30, 90, d)) * (0.3 + 0.9 * woods) + (fbm(x / 20, z / 20, 2) - 0.5) * 0.6;
+      const woods = smoothstep(0.34, 0.62, fbm(x / 46 + 9.3 + this.nx, z / 46 + 4.1 + this.nz, 2));
+      const density = (0.22 + 0.78 * smoothstep(30, 90, d)) * (0.3 + 0.9 * woods) + (fbm(x / 20 + this.nx, z / 20 + this.nz, 2) - 0.5) * 0.6;
       if (rng.next() > density) continue;
       if (this.inClearing(x, z) || this.pathAt(x, z) > 0.12) continue;
-      const grove = fbm(x / 64 + 31.7, z / 64 + 77.2, 2) > 0.56;
+      const grove = fbm(x / 64 + 31.7 + this.nx, z / 64 + 77.2 + this.nz, 2) > 0.56;
       const roll = rng.next();
       const kind: ObstacleKind = grove ? (roll < 0.78 ? 'birch' : 'pine') : roll < 0.22 ? 'oak' : 'pine';
       const s = kind === 'oak' ? rng.range(1.1, 1.7) : kind === 'birch' ? rng.range(0.95, 1.5) : rng.range(0.9, 1.6);
@@ -477,16 +520,14 @@ export class GameMap {
       this.obstacles.push({ x, z, r, kind, scale: s, rot: rng.range(0, TAU) });
       trees++;
     }
-    this.placeNearChests();
+    this.placeNearChests(rng);
   }
 
   /**
    * Chests within a short walk of the starting clearing, one per third of the compass, so the first
-   * coins of a run have something to buy. Placed last and with its own generator: the rest of the
-   * map stays exactly as it was.
+   * coins of a run have something to buy.
    */
-  private placeNearChests(): void {
-    const rng = new Rng(NEAR_CHEST_SEED);
+  private placeNearChests(rng: Rng): void {
     for (let k = 0; k < NEAR_CHESTS; k++) {
       for (let tries = 0; tries < 200; tries++) {
         const a = ((k + rng.range(0.15, 0.85)) / NEAR_CHESTS) * TAU;
@@ -494,7 +535,7 @@ export class GameMap {
         const x = Math.cos(a) * d;
         const z = Math.sin(a) * d;
         if (this.inClearing(x, z) || this.pathAt(x, z) > 0.3 || !this.free(x, z, 1, 1.2)) continue;
-        this.chestSpots.push({ x, z, rot: Math.atan2(-x, -z) });
+        this.chestSpots.push({ x, z, rot: Math.atan2(-x, -z), rich: false });
         break;
       }
     }

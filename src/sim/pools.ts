@@ -175,8 +175,8 @@ export class Gems {
   }
 }
 
-/** Magnet: pulls every amber gem and coin of the map to the hero. */
-export const PickupKind = { Coin: 0, Bread: 1, Honey: 2, Magnet: 3 } as const;
+/** Magnet: pulls every amber gem and coin of the map to the hero. Haste: faster attacks for a while. */
+export const PickupKind = { Coin: 0, Bread: 1, Honey: 2, Magnet: 3, Haste: 4 } as const;
 export const MAX_PICKUPS = 256;
 
 export class Pickups {

@@ -100,7 +100,9 @@ przeglądarki. Kod: `tools/edytor/`.
 - **Run trwa 8 minut.** Wrogowie nadchodzą według minutnika, coraz gęściej i coraz twardsi.
   W 1:40 i 6:20 przylatuje Baba Jaga, w 4:00 wychodzi Południca.
 - **Fale:** co 2,5 minuty (2:30, 5:00, 7:30) na 30 sekund wrogów robi się o ok. 60% więcej i pojawiają
-  się znacznie szybciej. Potem bór na chwilę odpuszcza.
+  się znacznie szybciej. Potem bór na chwilę odpuszcza. Pod zegarem widać wtedy pasek **„Fala boru”
+  z odliczaniem do jej końca**, a gdy fala mija, bór to ogłasza. Fala końcowa nie ma zegara: pasek mówi,
+  że potrwa, dopóki nie wezwiesz Leszego.
 - **Portal Leszego:** w 8:00 25–40 m od bohatera otwiera się zielony portal (widać go też na mapie).
   Przytrzymaj przy nim `E`, a wyjdzie **Leszy**, a bór wokół ucichnie. Pokonanie Leszego to zwycięstwo;
   potem można grać dalej w trybie nieskończonym. Razem z portalem rusza **fala końcowa**: horda przez
@@ -134,12 +136,19 @@ przeglądarki. Kod: `tools/edytor/`.
   wyraźnie droższa (10, 18, 31, 54, 94…). **Trzy skrzynie stoją 20–25 m od startu** i widać je na mapie
   od pierwszej sekundy. Elitarni wrogowie (świecą na złoto) i mini-bossy zostawiają darmową skrzynię
   i sakiewkę monet.
+- **Bogate skrzynie** stoją przy nazwanych miejscach (posąg, krąg, dąb, kurhan, chata): karmazynowe, ze
+  złotymi okuciami i rubinem, na mapie większe i czerwono-złote. Kosztują tyle, co zwykła skrzynia,
+  ale dają **dwa skarby naraz, żadnego zwykłego** (rzadkie, epickie i legendarne trafiają się częściej);
+  gotowa ewolucja zajmuje jedno z dwóch miejsc.
 - **Dar boru:** czasami (zwykle dwa razy na run) w pobliżu bohatera pojawia się darmowa skrzynia. Nie da się jej pomylić
   z płatną: jest z białej brzozy z zielonymi okuciami i stoi w słupie zielonego światła. Otwiera się
   po dotknięciu, nie kosztuje złota i nie podnosi ceny płatnych skrzyń.
 - **Magnes:** co dwie–trzy minuty w pobliżu pojawia się czerwony magnes w słupie światła.
   Podniesiony ściąga do bohatera **wszystkie bursztyny i monety z całej mapy** (jedzenie zostaje).
   Baner zapowiada magnes i dar boru, a oba widać na mapie.
+- **Szał bojowy:** co półtorej–dwie minuty w pobliżu pojawia się złota błyskawica w słupie niebieskiego
+  światła. Podniesiona daje **+50% szybkości ataku na 15 sekund**; licznik widać nad paskiem zrywu.
+  Baner ją zapowiada i widać ją na mapie.
 - **Monety** wypadają z wrogów: na początku runu z mniej więcej co czwartego, po 3,5 minuty z co
   szesnastego. **Monety z zabitych wrogów zbierają się same**: od razu lecą do bohatera, nie trzeba
   po nie wracać. Pierwsza minuta wystarcza na pierwszą skrzynię; gra podpowie, kiedy cię na nią stać.
@@ -161,8 +170,11 @@ przeglądarki. Kod: `tools/edytor/`.
 - **Bagienne kałuże** spowalniają; wyłażą z nich utopce.
 - **Bór jest duży** (polana o promieniu 180 m, prawie cztery razy większa niż dawniej). Z polany startowej
   rozchodzi się sześć ścieżek do nazwanych miejsc: Posąg Świętowita, Topielcowe Jezioro, Kamienny Krąg,
-  Święty Dąb, Kurhan i Chata na Kurzej Stopce. Przy każdym (poza jeziorem) czeka skrzynia, a przy ścieżkach
-  stoją kapliczki i ogniska.
+  Święty Dąb, Kurhan i Chata na Kurzej Stopce. Przy każdym (poza jeziorem) czeka bogata skrzynia, a przy
+  ścieżkach stoją kapliczki i ogniska.
+- **Każdy run to inny bór.** Mapa losuje się przy starcie runu: miejsca leżą w innych stronach świata
+  i w innej odległości, inaczej biegną ścieżki, inne są wzgórza, lasy, kałuże, rozkład kapliczek
+  i **położenie wszystkich skrzyń**.
 - **Mapa (`Tab`)** jest na początku zakryta. Odkrywa się w promieniu 30 m wokół bohatera i pokazuje teren,
   ścieżki, wodę, drzewa oraz znaczniki: kapliczki (jasne, dopóki mają błogosławieństwo), zamknięte skrzynie,
   ogniska i odkryte miejsca z nazwami. Bossa widać na mapie zawsze, także w nieodkrytej części.
@@ -339,6 +351,8 @@ __mb.debug.time(590);             // przeskocz do końcówki runu
 __mb.debug.god();                 // nieśmiertelność
 __mb.debug.magnet();              // magnes w pobliżu (tak jak z minutnika)
 __mb.debug.gift();                // dar boru: darmowa skrzynia w pobliżu
+__mb.debug.haste();               // szał bojowy w pobliżu
+__mb.newMap(123);                 // bór z podanego ziarna (kolejny run i tak wylosuje nowy)
 __mb.setBot('good');              // autopilot (null wyłącza)
 ```
 

@@ -52,7 +52,7 @@ export class MapScreen {
 
   constructor(
     parent: HTMLElement,
-    private readonly map: GameMap,
+    private map: GameMap,
   ) {
     this.root = document.createElement('div');
     this.root.className = 'mapscreen';
@@ -82,6 +82,14 @@ export class MapScreen {
     };
     this.parchment.src = parchmentUrl;
     window.addEventListener('resize', () => (this.size = 0));
+  }
+
+  /** A new run may bring a new forest: the picture of the map is drawn again. */
+  setMap(map: GameMap): void {
+    if (map === this.map) return;
+    this.map = map;
+    this.base = null;
+    this.fogVersion = -1;
   }
 
   setVisible(v: boolean): void {
@@ -494,17 +502,55 @@ export class MapScreen {
         ctx.arc(x, y, 11 * u, 0, TAU);
         ctx.fill();
       }
-      ctx.fillStyle = c.gift ? '#3fd0a8' : c.free ? '#ffd040' : '#b9772f';
+      // The rich chest of a landmark is drawn larger, in crimson and gold.
+      const k = c.rich ? 1.35 * u : u;
+      if (c.rich) {
+        ctx.fillStyle = `rgba(255, 200, 60, ${0.3 + Math.sin(this.clock * 3) * 0.1})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 12 * u, 0, TAU);
+        ctx.fill();
+      }
+      ctx.fillStyle = c.gift ? '#3fd0a8' : c.rich ? '#a8242e' : c.free ? '#ffd040' : '#b9772f';
       ctx.strokeStyle = INK;
       ctx.lineWidth = 1.3 * u;
       ctx.beginPath();
-      ctx.rect(x - 5 * u, y - 3.5 * u, 10 * u, 7.5 * u);
+      ctx.rect(x - 5 * k, y - 3.5 * k, 10 * k, 7.5 * k);
       ctx.fill();
       ctx.stroke();
+      if (c.rich) {
+        ctx.strokeStyle = '#ffd24a';
+        ctx.lineWidth = 1.6 * u;
+      }
       ctx.beginPath();
-      ctx.moveTo(x - 5 * u, y - 0.5 * u);
-      ctx.lineTo(x + 5 * u, y - 0.5 * u);
+      ctx.moveTo(x - 5 * k, y - 0.5 * k);
+      ctx.lineTo(x + 5 * k, y - 0.5 * k);
       ctx.stroke();
+    }
+    // Haste pickups waiting to be picked up: a yellow lightning bolt on a blue glow.
+    {
+      const k = world.pickups;
+      for (let i = 0; i < k.n; i++) {
+        if (!k.alive[i] || k.kind[i] !== PickupKind.Haste || k.mag[i]) continue;
+        const x = X(k.x[i] as number);
+        const y = X(k.z[i] as number);
+        ctx.fillStyle = `rgba(70, 150, 240, ${0.3 + Math.sin(this.clock * 4) * 0.12})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 11 * u, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = '#ffe45a';
+        ctx.strokeStyle = INK;
+        ctx.lineWidth = 1.2 * u;
+        ctx.beginPath();
+        ctx.moveTo(x + 2.5 * u, y - 7 * u);
+        ctx.lineTo(x - 4.5 * u, y + 1 * u);
+        ctx.lineTo(x - 0.5 * u, y + 1 * u);
+        ctx.lineTo(x - 2.5 * u, y + 7 * u);
+        ctx.lineTo(x + 4.5 * u, y - 1.5 * u);
+        ctx.lineTo(x + 0.5 * u, y - 1.5 * u);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     // Magnets waiting to be picked up: a red horseshoe with pale poles.
     {
@@ -639,7 +685,7 @@ export class MapScreen {
     const text = `Odkryto ${pct}% boru  •  miejsca: ${found}/${map.landmarks.length}`;
     if (this.info.dataset.t !== text) {
       this.info.dataset.t = text;
-      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-gift"></i>dar boru</span><span><i class="mk mk-magnet"></i>magnes</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><span><i class="mk mk-portal"></i>portal</span><b>${text}</b>`;
+      this.info.innerHTML = `<span><i class="mk mk-hero"></i>ty</span><span><i class="mk mk-shrine"></i>kapliczka</span><span><i class="mk mk-chest"></i>skrzynia</span><span><i class="mk mk-rich"></i>bogata skrzynia</span><span><i class="mk mk-gift"></i>dar boru</span><span><i class="mk mk-magnet"></i>magnes</span><span><i class="mk mk-haste"></i>szał bojowy</span><span><i class="mk mk-fire"></i>ognisko</span><span><i class="mk mk-boss"></i>boss</span><span><i class="mk mk-portal"></i>portal</span><b>${text}</b>`;
     }
   }
 }

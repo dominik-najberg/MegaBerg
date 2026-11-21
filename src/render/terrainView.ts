@@ -291,6 +291,18 @@ float mbEdge(float w, float n, float soft) {
     }
   }
 
+  /** Frees the GPU buffers of this terrain (a new run builds a new forest). Textures are shared and stay. */
+  dispose(): void {
+    const mats = new Set<THREE.Material>();
+    this.group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.geometry.dispose();
+      mats.add(m.material as THREE.Material);
+    });
+    for (const m of mats) m.dispose();
+  }
+
   /** Per-frame water state: night darkens it, the sky colour and the light direction drive reflections. */
   update(time: number, night: number, sky: THREE.Color, lightDir: THREE.Vector3, lightCol: THREE.Color): void {
     const u = this.water.uniforms as Record<string, THREE.IUniform>;

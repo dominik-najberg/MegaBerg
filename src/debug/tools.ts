@@ -78,6 +78,11 @@ export class DebugTools {
     return this.game.world.bonuses.dropMagnet(this.game.world);
   }
 
+  /** Drops a haste pickup near the hero, as the timer would. */
+  haste(): boolean {
+    return this.game.world.bonuses.dropHaste(this.game.world);
+  }
+
   /** Drops a gift chest near the hero, as the timer would. */
   gift(): boolean {
     return this.game.world.bonuses.dropGift(this.game.world);

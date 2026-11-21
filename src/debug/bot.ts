@@ -168,8 +168,8 @@ export class Bot {
       const dx = (k.x[i] as number) - p.x;
       const dz = (k.z[i] as number) - p.z;
       const d = Math.hypot(dx, dz);
-      // A magnet is worth a detour (it was announced and shines from afar); other loot only when close.
-      const magnet = k.kind[i] === PickupKind.Magnet;
+      // A magnet or a haste pickup is worth a detour (it was announced and shines from afar); other loot only when close.
+      const magnet = k.kind[i] === PickupKind.Magnet || k.kind[i] === PickupKind.Haste;
       if (d > (magnet ? (good ? 45 : 28) : 25) || d < 0.01) continue;
       const wgt = magnet ? (good ? 1.6 : 1.1) / (d * 0.08 + 1) : 3 / (d + 2);
       ax += (dx / d) * wgt;

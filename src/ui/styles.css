@@ -143,6 +143,99 @@ kbd {
   text-align: center;
 }
 
+/* A surge (or the final wave) sits under the timer and pushes the boss bar down. */
+.hud.surging .boss {
+  top: 138px;
+}
+
+.surge {
+  position: absolute;
+  top: 80px;
+  left: 50%;
+  width: min(34vw, 420px);
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.surge-text {
+  font-size: 15px;
+  letter-spacing: 0.06em;
+  color: #ffd9c2;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.7);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.surge-text b {
+  margin-right: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ff8a5a;
+}
+
+.surge-bar {
+  height: 8px;
+  margin-top: 4px;
+  border: 2px solid #5a2412;
+  border-radius: 2px;
+  background: rgba(10, 4, 4, 0.8);
+}
+
+.surge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffb84a, #ff5a2a);
+  transition: width 0.25s linear;
+}
+
+.surge.final .surge-fill {
+  background: linear-gradient(90deg, #b3261e, #ff5a2a, #b3261e);
+  animation: surge-final 1.6s ease-in-out infinite;
+}
+
+@keyframes surge-final {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.haste {
+  position: absolute;
+  left: 50%;
+  bottom: 104px;
+  min-width: 190px;
+  transform: translateX(-50%);
+  padding: 5px 14px 8px;
+  border: 2px solid rgba(88, 180, 255, 0.75);
+  border-radius: 8px;
+  background: rgba(8, 14, 28, 0.78);
+  box-shadow: 0 0 18px rgba(88, 180, 255, 0.35);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  color: #d8ecff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.haste svg {
+  vertical-align: -2px;
+}
+
+.haste b {
+  margin-left: 6px;
+  color: #ffe45a;
+  font-variant-numeric: tabular-nums;
+}
+
+.haste i {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #58b4ff, #ffe45a);
+}
+
 .boss.big {
   width: min(56vw, 800px);
 }
@@ -986,6 +1079,11 @@ h4 {
   width: min(1040px, 96vw);
 }
 
+.choice h2.rich {
+  color: #ffd86a;
+  text-shadow: 0 0 26px rgba(255, 190, 60, 0.75), 0 3px 0 rgba(0, 0, 0, 0.6);
+}
+
 .choice h2.gift {
   color: #9ff5d8;
   text-shadow: 0 0 26px rgba(63, 208, 168, 0.7), 0 3px 0 rgba(0, 0, 0, 0.6);
@@ -1397,6 +1495,17 @@ h4 {
 
 .mk.mk-chest {
   background: #b9772f;
+}
+
+.mk.mk-rich {
+  background: #a8242e;
+  box-shadow: 0 0 0 2px #ffd24a;
+}
+
+.mk.mk-haste {
+  background: #ffe45a;
+  box-shadow: 0 0 0 2px #4696f0;
+  transform: skewX(-18deg);
 }
 
 .mk.mk-gift {

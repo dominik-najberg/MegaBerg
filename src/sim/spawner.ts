@@ -25,6 +25,7 @@ export class Spawner {
   forceAlive = 0;
   private finalWaveTold = false;
   private surgeTold = 0;
+  private surgeOn = false;
   disabled = false;
 
   private pickSpot(w: World, ground: boolean): boolean {
@@ -162,8 +163,13 @@ export class Spawner {
       rate *= SURGE_RATE;
       if (surge !== this.surgeTold) {
         this.surgeTold = surge;
+        this.surgeOn = true;
         w.announce.push('Nadciąga fala! Bór rzuca na ciebie wszystko, co ma.');
       }
+    } else if (this.surgeOn) {
+      this.surgeOn = false;
+      // The last surge runs straight into the final wave, which has an announcement of its own.
+      if (!w.endless && w.time < RUN_LENGTH) w.announce.push('Fala minęła. Bór łapie oddech.');
     }
     if (!w.endless && w.time >= RUN_LENGTH && !w.bossSummoned) {
       // Final wave: the horde thickens (and grows stronger, see finalWaveMul) while the portal waits.

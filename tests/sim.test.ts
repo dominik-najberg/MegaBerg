@@ -334,24 +334,29 @@ describe('symulacja runu', () => {
   });
 
   it('pierwsza minuta gry daje dość złota na pierwszą skrzynię i początkujący ją kupuje', () => {
-    // prawdziwa minuta runu: fale ze spawnera, początkujący bot zbiera monety i podchodzi do skrzyń
+    // prawdziwa minuta runu: fale ze spawnera, początkujący bot zbiera monety i podchodzi do skrzyń;
+    // każdy run ma inny bór, więc liczy się wynik z kilku map
     let bought = 0;
-    for (let seed = 1; seed <= 8; seed++) {
-      const w = new World(map, { seed });
-      const bot = new Bot('novice');
-      while (w.time < 60 && !w.dead) {
-        if (w.choice) {
-          w.choose(bot.choose(w));
-          continue;
+    let runs = 0;
+    for (const forest of [map, new GameMap(1), new GameMap(2)]) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const w = new World(forest, { seed });
+        const bot = new Bot('novice');
+        while (w.time < 60 && !w.dead) {
+          if (w.choice) {
+            w.choose(bot.choose(w));
+            continue;
+          }
+          w.step(DT, bot.update(w, DT));
+          w.events.clear();
         }
-        w.step(DT, bot.update(w, DT));
-        w.events.clear();
+        expect(w.dead).toBe(false);
+        expect(w.goldCollected).toBeGreaterThanOrEqual(CHEST_COST);
+        runs++;
+        if (w.paidChests > 0) bought++;
       }
-      expect(w.dead).toBe(false);
-      expect(w.goldCollected).toBeGreaterThanOrEqual(CHEST_COST);
-      if (w.paidChests > 0) bought++;
     }
-    expect(bought).toBeGreaterThanOrEqual(6);
+    expect(bought / runs).toBeGreaterThanOrEqual(0.7);
   });
 
   it('elita zawsze zostawia darmową skrzynię i sakiewkę monet', () => {

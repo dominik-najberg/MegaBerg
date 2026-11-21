@@ -8,6 +8,8 @@ import { RARITIES } from '../data/rarity';
 import { SHOP, shopCost } from '../data/shop';
 import type { AchievementDef, EnemyDef, WeaponKind } from '../data/types';
 import { WEAPON_BY_ID, WEAPONS } from '../data/weapons';
+import { RUN_LENGTH, SURGE_LENGTH, surgeLeft } from '../data/waves';
+import { HASTE_TIME } from '../sim/bonuses';
 import { achievementProgress, isUnlocked, MIN_ENABLED, poolIds, runPool, TOGGLER_PRICE, unlockedWeaponIds, type PoolKind, type RunResult } from '../meta/progress';
 import type { SaveData } from '../meta/save';
 import { canBanish, type Card } from '../sim/cards';
@@ -100,6 +102,12 @@ export class UI {
   private readonly bossName: HTMLElement;
   private readonly bossFill: HTMLElement;
   private readonly toasts: HTMLElement;
+  private readonly surge: HTMLElement;
+  private readonly surgeText: HTMLElement;
+  private readonly surgeFill: HTMLElement;
+  private readonly haste: HTMLElement;
+  private readonly hasteText: HTMLElement;
+  private readonly hasteFill: HTMLElement;
   private readonly cache: Record<string, string | number> = {};
   private bannerT = 0;
   private bannerQueue: string[] = [];
@@ -120,6 +128,9 @@ export class UI {
     this.xpFill = el('div', 'xp-fill', xp);
     this.xpLevel = el('div', 'xp-level', xp);
     this.timer = el('div', 'timer', this.hud);
+    this.surge = el('div', 'surge hidden', this.hud);
+    this.surgeText = el('div', 'surge-text', this.surge);
+    this.surgeFill = el('div', 'surge-fill', el('div', 'surge-bar', this.surge));
     this.boss = el('div', 'boss hidden', this.hud);
     this.bossName = el('div', 'boss-name', this.boss);
     this.bossFill = el('div', 'boss-fill', el('div', 'boss-bar', this.boss));
@@ -137,6 +148,9 @@ export class UI {
     const dash = el('div', 'dash', this.hud);
     this.dashFill = el('div', 'dash-fill', dash);
     el('span', '', dash).textContent = 'ZRYW';
+    this.haste = el('div', 'haste hidden', this.hud);
+    this.hasteText = el('span', '', this.haste);
+    this.hasteFill = el('i', '', this.haste);
     this.prompt = el('div', 'prompt hidden', this.hud);
     this.banner = el('div', 'banner hidden', this.hud);
     this.hint = el('div', 'hint hidden', this.hud);
@@ -290,7 +304,8 @@ export class UI {
         this.actions.choose(digit - 1);
         return true;
       }
-      if ((code === 'Enter' || code === 'Space') && n === 1) {
+      // A chest has a "take" button: Enter takes it whole, however many treasures it holds.
+      if ((code === 'Enter' || code === 'Space') && (n === 1 || this.panel.querySelector('button[data-act="choose"]'))) {
         this.actions.choose(0);
         return true;
       }
@@ -680,8 +695,11 @@ export class UI {
         ? '<h2>Ołtarz chciwości</h2><p class="lead">Złoto i skarb… za klątwę do końca runu.</p>'
         : ch.gift
           ? '<h2 class="gift">Dar boru</h2><p class="lead">Bór obdarza cię za darmo…</p>'
-          : '<h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p>';
-      this.open('choice', `<div class="choice">${head}<div class="cards">${cards}</div><div class="row"><button class="btn primary" data-act="choose" data-arg="0">Weź <kbd>Enter</kbd></button></div></div>`, 'dim chest');
+          : ch.rich
+            ? '<h2 class="rich">Bogata skrzynia</h2><p class="lead">Skarby strzeżone przez to miejsce są twoje, wszystkie naraz…</p>'
+            : '<h2>Skrzynia</h2><p class="lead">W środku znajdujesz…</p>';
+      const take = ch.rich && ch.cards.length > 1 ? 'Weź wszystko' : 'Weź';
+      this.open('choice', `<div class="choice">${head}<div class="cards">${cards}</div><div class="row"><button class="btn primary" data-act="choose" data-arg="0">${take} <kbd>Enter</kbd></button></div></div>`, 'dim chest');
     } else {
       const opts = ch.options
         .map(
@@ -770,6 +788,9 @@ export class UI {
 
   resetHud(): void {
     for (const k of Object.keys(this.cache)) delete this.cache[k];
+    this.surge.classList.add('hidden');
+    this.haste.classList.add('hidden');
+    this.hud.classList.remove('surging');
     this.bannerQueue = [];
     this.bannerT = 0;
     this.banner.classList.add('hidden');
@@ -821,7 +842,10 @@ export class UI {
     // interaction prompt
     const pr = world.prompt;
     let ptxt = '';
-    if (pr.kind === 'chest') ptxt = pr.affordable ? `Przytrzymaj [E], aby otworzyć skrzynię (${pr.cost} złota)` : `Skrzynia kosztuje ${pr.cost} złota`;
+    if (pr.kind === 'chest') {
+      const name = pr.rich ? 'bogatą skrzynię' : 'skrzynię';
+      ptxt = pr.affordable ? `Przytrzymaj [E], aby otworzyć ${name} (${pr.cost} złota)` : `${pr.rich ? 'Bogata skrzynia' : 'Skrzynia'} kosztuje ${pr.cost} złota`;
+    }
     else if (pr.kind === 'shrine') ptxt = 'Przytrzymaj [E], aby pokłonić się w kapliczce';
     else if (pr.kind === 'circle') ptxt = 'Stój w świętym kręgu, aż się naładuje';
     else if (pr.kind === 'amber') ptxt = 'Przytrzymaj [E]: kapliczka bursztynowa przyciągnie bursztyny z całego boru';
@@ -834,6 +858,30 @@ export class UI {
     if (ptxt) {
       const bar = this.prompt.lastElementChild as HTMLElement | null;
       if (bar) bar.style.width = `${Math.round(pr.progress * 100)}%`;
+    }
+
+    // Surge: how long until the forest lets go. The final wave has no clock: it lasts until Leszy is summoned.
+    const left = world.endless ? 0 : surgeLeft(world.time);
+    const finalWave = !world.endless && !world.bossSummoned && world.time >= RUN_LENGTH;
+    this.set('surge', left > 0 ? 1 : finalWave ? 2 : 0, (v) => {
+      this.surge.classList.toggle('hidden', v === 0);
+      this.surge.classList.toggle('final', v === 2);
+      this.hud.classList.toggle('surging', v !== 0);
+      if (v === 2) {
+        this.surgeText.innerHTML = '<b>Fala końcowa</b> potrwa, dopóki nie wezwiesz Leszego';
+        this.surgeFill.style.width = '100%';
+      }
+    });
+    if (left > 0) {
+      this.set('surgeT', Math.ceil(left), (v) => (this.surgeText.innerHTML = `<b>Fala boru</b> koniec za ${v} s`));
+      this.set('surgeW', Math.round((left / SURGE_LENGTH) * 200), (v) => (this.surgeFill.style.width = `${(v as number) / 2}%`));
+    }
+
+    // Haste: seconds of faster attacks left.
+    this.set('haste', world.hasteT > 0 ? 1 : 0, (v) => this.haste.classList.toggle('hidden', v === 0));
+    if (world.hasteT > 0) {
+      this.set('hasteT', Math.ceil(world.hasteT), (v) => (this.hasteText.innerHTML = `${icon('flint', '#ffe45a', 15)} Szał bojowy <b>${v} s</b>`));
+      this.set('hasteW', Math.round((world.hasteT / HASTE_TIME) * 200), (v) => (this.hasteFill.style.width = `${(v as number) / 2}%`));
     }
 
     // boss bar

@@ -1089,3 +1089,64 @@ Wilczego Kła, a wygnane karty są pamiętane po samym id, więc wygnanie jednej
 id `wapierz`. Test na kolizje id, który przy tym dopisałem, znalazł drugą: `kosa` (skarb Kosa Marzanny); Kosa
 Południcy ma id `kosisko`. Ta druga nie psuła niczego (skarbów nie da się wygnać, pule i zakupy mają osobne
 klucze), ale wspólne id to proszenie się o błąd. Codex uruchomił też testy i typecheck.
+
+## Losowa mapa, bogate skrzynie, szał bojowy, koniec fali
+
+Cztery prośby: mapa ma być losowa, skrzynie przy nazwanych miejscach mają dawać więcej niż zwykłe, skrzynie
+mają stać za każdym razem gdzie indziej, co jakiś czas ma się pojawiać znajdźka przyspieszająca ataki, a przy
+fali „bór rzuca wszystko” ma być widać, kiedy się skończy.
+
+### Losowa mapa
+
+- `GameMap(seed)` już brał ziarno, ale gra budowała jedną mapę przy starcie, a położenie miejsc, sól ścieżek,
+  szum wzgórz i trzy skrzynie przy starcie były stałe. Teraz z ziarna idzie wszystko: każde miejsce dostaje
+  własną szóstą część kompasu (kolejność losowa, w sektorze środkowe 60%, żeby sąsiedzi się nie stykali)
+  i odległość z zakresu (posąg 60–100 m, chata 120–158 m), szum ma losowe przesunięcie, kapliczki są rozdawane
+  w losowej kolejności, a ścieżki łączące idą między sąsiadami po kompasie (po jednej na miejsce).
+- `Game.newMap()` losuje bór przy każdym `startRun`; `Gfx.setMap` zwalnia stary teren i scenerię (`dispose`)
+  i buduje nowe, `FxView` i ekran mapy dostają nową mapę. Start runu trwa przez to ok. 130–170 ms dłużej
+  (generacja ok. 70 ms, reszta to siatki). Liczba geometrii po trzech restartach stoi w miejscu (139–150).
+- Menu zostaje na mapie ostatniego runu: nowy bór powstaje dopiero, gdy jest potrzebny.
+- Testy i `npm run sim` dalej używają mapy domyślnej (`DEFAULT_MAP_SEED`), więc są powtarzalne. Reguły mapy
+  (`tests/map.test.ts`) sprawdzam teraz dla 13 ziaren. Test „początkujący kupuje pierwszą skrzynię” był strojony
+  pod starą mapę (6 z 8); na 12 mapach wychodzi 5–8 z 8, średnio 6,9, więc liczy teraz 70% z trzech map.
+- Zwykłe skrzynie stoją od 30 m od środka (było 16), żeby nigdy nie wpadły między trzy skrzynie przy starcie.
+
+### Bogate skrzynie
+
+Skrzynia miejsca (`ChestSpot.rich`) kosztuje tyle, co zwykła, i daje dwa skarby naraz (`RICH_CHEST_ITEMS`),
+bez zwykłych i z większym szczęściem (`RICH_CHEST_LUCK` 1,6 zamiast 0,6); w 600 losowaniach epickie i legendarne
+trafiają się ponad 1,5 raza częściej. Gotowa ewolucja zajmuje jedno z dwóch miejsc. Skarby w jednej skrzyni są
+różne, o ile pula na to pozwala. Darmowe ich nie zrobiłem: cena rośnie z każdą kupioną skrzynią, więc dalej
+trzeba wybierać, na co wydać złoto, a nagrodą za wyprawę jest zawartość. `Enter` bierze całą skrzynię.
+
+### Szał bojowy
+
+Znajdźka (`PickupKind.Haste`) z własnego strumienia losowego (magnesy i dary danego ziarna zostają, gdzie były):
+pierwsza po 60–90 s, kolejne co 90–130 s, +50% szybkości ataku na 15 s (mnożnik w `refreshStats`, w granicach
+limitu szybkości ataku). Nie pojawia się, dopóki trwa poprzedni; niepodniesiona znika, gdy pojawia się następna.
+
+### Koniec fali
+
+Pod zegarem pasek „Fala boru, koniec za N s” (`surgeLeft`), po fali baner „Fala minęła”. Fala końcowa nie ma
+końca w czasie, więc pasek mówi wprost, że potrwa, dopóki gracz nie wezwie Leszego. Pasek bossa zjeżdża niżej.
+
+### Balans
+
+`npm run sim -- runs=24`, Wojmir, Chata 0, przed → po: dobry gracz 10 → 15 wygranych (średni czas 7:47 → 8:29),
+początkujący 0 → 1 (2:40 → 3:16). To łączny efekt dwóch nagród (szał, bogate skrzynie) i innej mapy domyślnej;
+24 runy to próba, w której 2–3 wygrane są szumem. Gra jest wyraźnie łatwiejsza dla gracza, który chodzi do
+miejsc. Liczb nie stroiłem: to zamierzony skutek prośby, a do decyzji gracza, czy chce to wyrównać.
+
+### Sprawdzenie
+
+- 361 testów (nowe: `tests/losowa.test.ts`, reguły mapy dla 13 ziaren), typecheck, build.
+- `scripts/verify/losowa.mjs` (bezgłowy Chrome): trzy runy z rzędu mają trzy różne bory, bogata skrzynia
+  otwiera się i daje dwa skarby, szał podnosi szybkość ataku 1 → 1,5 na 15 s, pasek fali odlicza i znika,
+  fala końcowa ma swój opis; konsola bez błędów. Zrzuty: `20-*.png`.
+
+
+### Review Codexem
+
+`codex exec review --uncommitted`: bez uwag. Codex uruchomił testy i typecheck oraz sam sprawdził generator
+mapy na 337 ziarnach.

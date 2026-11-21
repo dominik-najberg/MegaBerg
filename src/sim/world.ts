@@ -11,13 +11,13 @@ import type { BlessingDef, CharacterDef, EnemyDef, Rarity, Stats, WeaponDef, Wea
 import { ELITE_HP_MUL, enemyDamageMul, enemyHpMul, finalWaveMul, RUN_LENGTH, xpForLevel } from '../data/waves';
 import { DICE_CAP, DICE_CAP_EVOLVED, DICE_CRIT, FANG_CAP, FANG_CAP_EVOLVED, FANG_CHANCE, FANG_HP, REAP_KILLS, REAP_MAX, WEAPON_BY_ID, weaponLine, WEAPONS, weaponStatsAt } from '../data/weapons';
 import { updateEnemies } from './ai';
-import { Bonuses } from './bonuses';
+import { Bonuses, HASTE_MUL, HASTE_TIME } from './bonuses';
 import { applyCard, canBanish, chestCards, itemCard, levelUpCards, rollItem, type Card } from './cards';
 import { Ev, EventQueue } from './events';
 import { MoveFx, Player, stepPlayer, type InputState } from './player';
 import { Enemies, Gems, Hazards, MAX_ENEMIES, PickupKind, Pickups, Projectiles, Shots, ZoneKind, Zones } from './pools';
 import { Spawner } from './spawner';
-import { absorbShield, attackInterval, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, type ItemInst, type PassiveInst } from './stats';
+import { absorbShield, attackInterval, computeStats, critCount, critMultiplier, curseEffects, damageAfterArmor, dodgeChance, lifestealHeal, SHIELD_DELAY, SHIELD_RECHARGE, STAT_CAPS, type ItemInst, type PassiveInst } from './stats';
 import { Explored } from './fog';
 import { GameMap, MAP_HALF, PLAY_RADIUS, type ShrineKind } from './terrain';
 import { minInterval, updateProjectiles, updateWeapons, updateZones } from './weapons';
@@ -104,6 +104,8 @@ export interface Chest {
   free: boolean;
   /** A gift of the forest (see Bonuses): free, and looks unlike the paid chests. */
   gift: boolean;
+  /** The chest of a landmark: several better treasures at once (see chestCards). */
+  rich: boolean;
   opened: boolean;
   progress: number;
 }
@@ -151,12 +153,15 @@ export const CIRCLE_DECAY = 0.5;
 
 export type Choice =
   | { type: 'levelup'; cards: Card[] }
-  | { type: 'chest'; cards: Card[]; gift: boolean; greed?: boolean }
+  /** `rich`: the chest of a landmark, every card of it is taken. */
+  | { type: 'chest'; cards: Card[]; gift: boolean; greed?: boolean; rich?: boolean }
   /** `circle`: boons of a charged Święty krąg instead of gods. */
   | { type: 'shrine'; index: number; options: BlessingDef[]; circle?: boolean };
 
 export interface Prompt {
   kind: '' | 'chest' | 'shrine' | 'circle' | 'amber' | 'greed' | 'portal';
+  /** The chest in reach is the rich chest of a landmark. */
+  rich: boolean;
   cost: number;
   affordable: boolean;
   progress: number;
@@ -291,12 +296,14 @@ export class World {
   readonly bookTimes: Record<string, number[]> = {};
   /** Secrets found in this run; the game writes them to the save at once. */
   readonly secrets: string[] = [];
-  readonly prompt: Prompt = { kind: '', cost: 0, affordable: false, progress: 0 };
+  readonly prompt: Prompt = { kind: '', rich: false, cost: 0, affordable: false, progress: 0 };
 
   stats: Stats;
   /** Current shield points (maximum is `stats.shield`). */
   shield = 0;
   time = 0;
+  /** Seconds of haste left (see Bonuses.dropHaste): attack speed is multiplied by HASTE_MUL meanwhile. */
+  hasteT = 0;
   level = 1;
   xp = 0;
   xpNeed = xpForLevel(1);
@@ -392,7 +399,7 @@ export class World {
     this.revivesLeft = Math.floor(this.stats.revives);
     this.addWeapon(this.character.startWeapon);
     for (const c of map.chestSpots) {
-      this.chests.push({ x: c.x, y: map.heightAt(c.x, c.z), z: c.z, rot: c.rot, free: false, gift: false, opened: false, progress: 0 });
+      this.chests.push({ x: c.x, y: map.heightAt(c.x, c.z), z: c.z, rot: c.rot, free: false, gift: false, rich: c.rich, opened: false, progress: 0 });
     }
     for (const s of map.shrines) this.shrines.push({ x: s.x, y: map.heightAt(s.x, s.z), z: s.z, kind: s.kind, used: false, progress: 0 });
     this.landmarksFound = map.landmarks.map(() => false);
@@ -442,6 +449,13 @@ export class World {
     p.savePrev();
     this.time += dt;
     this.updateEnemyScaling();
+    if (this.hasteT > 0) {
+      this.hasteT -= dt;
+      if (this.hasteT <= 0) {
+        this.hasteT = 0;
+        this.refreshStats();
+      }
+    }
 
     const fx = stepPlayer(p, input, this.stats, this.map, dt);
     if (fx & MoveFx.Jump) this.events.emit(Ev.Jump, p.x, p.y, p.z);
@@ -1018,7 +1032,7 @@ export class World {
 
   /** Without `rot` the chest gets a random facing from the world's random stream. */
   spawnChest(x: number, z: number, free: boolean, gift = false, rot = this.rng.range(0, 6.28)): Chest {
-    const c: Chest = { x, y: this.map.heightAt(x, z), z, rot, free, gift, opened: false, progress: 0 };
+    const c: Chest = { x, y: this.map.heightAt(x, z), z, rot, free, gift, rich: false, opened: false, progress: 0 };
     this.chests.push(c);
     return c;
   }
@@ -1211,6 +1225,11 @@ export class World {
         }
       }
       this.events.emit(Ev.Magnet, p.x, p.y, p.z);
+    } else if (kind === PickupKind.Haste) {
+      this.hasteT = HASTE_TIME;
+      this.refreshStats();
+      this.announce.push('Szał bojowy! Twoje bronie biją szybciej.');
+      this.events.emit(Ev.Haste, p.x, p.y, p.z);
     }
   }
 
@@ -1259,6 +1278,7 @@ export class World {
       }
       const cost = this.chestCost();
       pr.kind = 'chest';
+      pr.rich = c.rich;
       pr.cost = cost;
       pr.affordable = this.gold >= cost;
       if (interact && pr.affordable) {
@@ -1417,8 +1437,8 @@ export class World {
 
   private openChest(c: Chest): void {
     c.opened = true;
-    this.events.emit(Ev.ChestOpen, c.x, c.y, c.z, c.gift ? 1 : 0);
-    this.choice = { type: 'chest', cards: chestCards(this), gift: c.gift };
+    this.events.emit(Ev.ChestOpen, c.x, c.y, c.z, c.gift ? 1 : c.rich ? 2 : 0);
+    this.choice = { type: 'chest', cards: chestCards(this, c.rich), gift: c.gift, rich: c.rich };
   }
 
   // ------------------------------------------------------------------ inventory & choices
@@ -1435,6 +1455,7 @@ export class World {
     // Gains of this run from weapon rules (Kieł wąpierza, Kostki Welesa).
     this.stats.maxHp += this.runHp;
     this.stats.critChance += this.runCrit;
+    if (this.hasteT > 0) this.stats.attackSpeed = Math.min(STAT_CAPS.attackSpeed as number, this.stats.attackSpeed * HASTE_MUL);
     if (this.stats.maxHp > oldMax) this.player.hp += this.stats.maxHp - oldMax;
     if (this.stats.shield > oldShield) this.shield += this.stats.shield - oldShield;
     if (this.shield > this.stats.shield) this.shield = this.stats.shield;
@@ -1526,9 +1547,13 @@ export class World {
       if (b.instant === 'gold') this.addGold(25);
       this.announce.push(c.circle ? `Święty krąg obdarza: ${b.name}` : `${b.god} błogosławi: ${b.name}`);
     } else {
-      const card = c.cards[i];
-      if (!card) return;
-      applyCard(this, card);
+      if (c.type === 'chest' && c.rich) {
+        for (const card of c.cards) applyCard(this, card);
+      } else {
+        const card = c.cards[i];
+        if (!card) return;
+        applyCard(this, card);
+      }
     }
     this.choice = null;
     this.player.invuln = Math.max(this.player.invuln, 0.6);

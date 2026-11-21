@@ -152,16 +152,21 @@ function potGeo(): THREE.BufferGeometry {
  * Paid chests are dark oak with brass fittings. The gift chest must never be mistaken for one:
  * white birch with emerald fittings, a green gem and two sprouting leaves on the lid.
  */
-function chestGeo(gift: boolean): { base: THREE.BufferGeometry; lid: THREE.BufferGeometry } {
-  const wood = gift ? 0xe9e4d4 : 0x6e4526;
-  const woodDark = gift ? 0xcfc8b4 : 0x4a2c18;
-  const lidWood = gift ? 0xf2eee0 : 0x80522c;
-  const band = gift ? 0x2fae8a : 0xd9a441;
-  const stud = gift ? 0x9ff5d8 : 0xf6d47a;
+type ChestLook = 'paid' | 'gift' | 'rich';
+
+/** The rich chest of a landmark: crimson lacquer, bright gold fittings and a ruby on the lid. */
+function chestGeo(look: ChestLook): { base: THREE.BufferGeometry; lid: THREE.BufferGeometry } {
+  const gift = look === 'gift';
+  const rich = look === 'rich';
+  const wood = gift ? 0xe9e4d4 : rich ? 0x7a1c26 : 0x6e4526;
+  const woodDark = gift ? 0xcfc8b4 : rich ? 0x4a0e16 : 0x4a2c18;
+  const lidWood = gift ? 0xf2eee0 : rich ? 0x94242e : 0x80522c;
+  const band = gift ? 0x2fae8a : rich ? 0xffcf4a : 0xd9a441;
+  const stud = gift ? 0x9ff5d8 : rich ? 0xfff2b8 : 0xf6d47a;
   const W = 1.1;
   const D = 0.75;
   const STRAPS = [-0.36, 0.36];
-  const b = new GeoBuilder(gift ? 314 : 304);
+  const b = new GeoBuilder(gift ? 314 : rich ? 324 : 304);
   b.box(W, 0.52, D, wood, { y: 0.3 });
   // Plank seams on the front, the back and the sides.
   for (const y of [0.22, 0.39]) {
@@ -184,7 +189,7 @@ function chestGeo(gift: boolean): { base: THREE.BufferGeometry; lid: THREE.Buffe
   b.octa(0.04, 0x241408, { y: 0.43, z: D / 2 + 0.045, jitter: 0 });
 
   // The lid hinges on its back edge: its origin is there, the geometry reaches forward (+z).
-  const l = new GeoBuilder(gift ? 315 : 305);
+  const l = new GeoBuilder(gift ? 315 : rich ? 325 : 305);
   const cz = D / 2;
   const R = D / 2;
   const RISE = 0.62;
@@ -211,6 +216,14 @@ function chestGeo(gift: boolean): { base: THREE.BufferGeometry; lid: THREE.Buffe
     l.cone(0.08, 0.3, 4, 0x58c878, { x: -0.3, y: top + 0.08, z: cz, rz: 0.55 });
     l.cone(0.08, 0.3, 4, 0x58c878, { x: 0.3, y: top + 0.08, z: cz, rz: -0.55 });
   }
+  if (rich) {
+    // A ruby in a gold setting on top of the lid, and a third strap down the middle.
+    const top = 0.05 + R * RISE;
+    barrel(0.09, R + 0.03, band, 0);
+    l.box(0.3, 0.05, 0.3, band, { y: top + 0.02, z: cz, jitter: 0.01 });
+    l.octa(0.17, 0xff3a5a, { y: top + 0.18, z: cz, sy: 1.2, jitter: 0.02 });
+    for (const x of [-0.5, 0.5]) b.octa(0.07, 0xff3a5a, { x, y: 0.3, z: D / 2 + 0.03, jitter: 0.02 });
+  }
   return { base: b.build(), lid: l.build() };
 }
 
@@ -225,6 +238,16 @@ function honeyGeo(): THREE.BufferGeometry {
   const b = new GeoBuilder(307);
   b.cyl(0.2, 0.24, 0.34, 7, 0xb9783c, { y: 0.17 });
   b.cyl(0.22, 0.22, 0.07, 7, 0xf0b030, { y: 0.36 });
+  return b.build();
+}
+
+/** Haste pickup: a thick lightning bolt standing on its tip. */
+function hasteGeo(): THREE.BufferGeometry {
+  const b = new GeoBuilder(309);
+  b.box(0.24, 0.46, 0.14, 0xffc21a, { x: 0.11, y: 0.8, rz: -0.5, jitter: 0.02 });
+  b.box(0.46, 0.15, 0.14, 0xffd84a, { y: 0.56, rz: 0.12, jitter: 0.02 });
+  b.box(0.24, 0.46, 0.14, 0xffc21a, { x: -0.11, y: 0.32, rz: -0.5, jitter: 0.02 });
+  b.cone(0.12, 0.24, 4, 0xffd84a, { x: -0.22, y: 0.05, rz: Math.PI - 0.5, jitter: 0.02 });
   return b.build();
 }
 
@@ -270,7 +293,10 @@ function beamMaterial(color: number): THREE.MeshBasicMaterial {
 const MAGNET_COLOR = 0xff5060;
 const PORTAL_COLOR = 0x5aff8a;
 const GIFT_COLOR = 0x7dffd0;
+const HASTE_COLOR = 0x58b4ff;
+const RICH_COLOR = 0xffd24a;
 const MAX_MAGNETS = 16;
+const MAX_HASTES = 8;
 
 interface Timed {
   mesh: THREE.Mesh;
@@ -300,6 +326,8 @@ export class FxView {
   private readonly honey: THREE.InstancedMesh;
   private readonly magnets: THREE.InstancedMesh;
   private readonly magnetBeams: THREE.InstancedMesh;
+  private readonly hastes: THREE.InstancedMesh;
+  private readonly hasteBeams: THREE.InstancedMesh;
   private readonly beamGeo = beamGeo();
   private readonly giftBeamMat = beamMaterial(GIFT_COLOR);
   private readonly blades: THREE.InstancedMesh;
@@ -337,10 +365,13 @@ export class FxView {
   private readonly chestLight = new THREE.PointLight(0xffa238, 0, 19, 1.4);
   private chestLit = -1;
   private readonly chestPoolGeo = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
-  private readonly chestParts = chestGeo(false);
+  private readonly chestParts = chestGeo('paid');
   /** A trace of its own warmth, so the oak and the brass read at night before the hero's light reaches them. */
   private readonly chestMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x2a1606 });
-  private readonly giftParts = chestGeo(true);
+  private readonly richParts = chestGeo('rich');
+  /** Glows a little by itself: the richest chests of the forest are meant to be noticed. */
+  private readonly richMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x3a1408 });
+  private readonly giftParts = chestGeo('gift');
   /** Slightly self-lit, so the white birch still reads as white deep in the night. */
   private readonly giftMat = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x16382e });
   private readonly gemGlow: THREE.InstancedMesh;
@@ -357,7 +388,7 @@ export class FxView {
   private readonly portalRing: THREE.Mesh;
 
   constructor(
-    private readonly map: GameMap,
+    private map: GameMap,
     private readonly overlay: Overlay,
     private readonly glowTex: THREE.Texture,
   ) {
@@ -385,7 +416,10 @@ export class FxView {
     this.magnets = instanced(magnetGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x5a1414 }), MAX_MAGNETS);
     this.magnetBeams = instanced(this.beamGeo, beamMaterial(MAGNET_COLOR), MAX_MAGNETS);
     this.magnetBeams.renderOrder = 3;
-    g.add(this.gems, this.coins, this.bread, this.honey, this.magnets, this.magnetBeams);
+    this.hastes = instanced(hasteGeo(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x5a3a00 }), MAX_HASTES);
+    this.hasteBeams = instanced(this.beamGeo, beamMaterial(HASTE_COLOR), MAX_HASTES);
+    this.hasteBeams.renderOrder = 3;
+    g.add(this.gems, this.coins, this.bread, this.honey, this.magnets, this.magnetBeams, this.hastes, this.hasteBeams);
     // Soft additive glow on the ground under every gem (cheap: one instanced quad each).
     this.gemGlow = instanced(
       new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
@@ -682,14 +716,14 @@ void main() {
         for (let k = 0; k < 10; k++) sp.emit(e.x + (Math.random() - 0.5) * 1.2, e.y + 0.3 + Math.random(), e.z + (Math.random() - 0.5) * 1.2, 0, 2.2, 0, 0.8, 0.3, 0x7dff7a, 0, 0.5);
         break;
       case Ev.ChestOpen: {
-        const color = e.a ? GIFT_COLOR : 0xffd860;
-        sp.burst(e.x, e.y + 0.8, e.z, 36, 8, 0.8, 0.4, color, 6, 4);
-        this.boom(e.x, e.y + 0.8, e.z, 3.5, color, 0.4);
+        const color = e.a === 1 ? GIFT_COLOR : e.a === 2 ? RICH_COLOR : 0xffd860;
+        sp.burst(e.x, e.y + 0.8, e.z, e.a === 2 ? 70 : 36, e.a === 2 ? 10 : 8, 0.8, 0.4, color, 6, 4);
+        this.boom(e.x, e.y + 0.8, e.z, e.a === 2 ? 6 : 3.5, color, e.a === 2 ? 0.6 : 0.4);
         break;
       }
       case Ev.Bonus: {
         // The bonus drops out of thin air: a ring on the ground and sparks rising along the pillar.
-        const color = e.a === 2 ? PORTAL_COLOR : e.a ? GIFT_COLOR : MAGNET_COLOR;
+        const color = e.a === 3 ? HASTE_COLOR : e.a === 2 ? PORTAL_COLOR : e.a ? GIFT_COLOR : MAGNET_COLOR;
         this.boom(e.x, e.y + 0.8, e.z, 4.5, color, 0.6);
         for (let k = 0; k < 36; k++) {
           const a = Math.random() * TAU;
@@ -771,6 +805,14 @@ void main() {
       case Ev.Secret:
         sp.burst(e.x, e.y + 0.6, e.z, 40, 6, 0.9, 0.4, 0xffe08a, 2, 3);
         this.boom(e.x, e.y + 0.8, e.z, 4, 0xffd060, 0.5);
+        break;
+      case Ev.Haste:
+        // Sparks shoot up around the hero like a struck flint.
+        for (let k = 0; k < 48; k++) {
+          const a = (k / 48) * TAU;
+          sp.emit(e.x + Math.cos(a) * 0.7, e.y + 0.3 + Math.random() * 1.4, e.z + Math.sin(a) * 0.7, Math.cos(a) * 3, 3 + Math.random() * 4, Math.sin(a) * 3, 0.8, 0.34, k % 3 ? HASTE_COLOR : 0xfff2a0, -2, 0.6);
+        }
+        this.boom(e.x, e.y + 0.8, e.z, 6, HASTE_COLOR, 0.45);
         break;
       case Ev.Magnet:
         for (let k = 0; k < 60; k++) {
@@ -949,6 +991,8 @@ void main() {
       let nh = 0;
       let nm = 0;
       let nbeam = 0;
+      let nhs = 0;
+      let nhb = 0;
       for (let i = 0; i < k.n; i++) {
         if (!k.alive[i]) continue;
         const kind = k.kind[i] as number;
@@ -965,6 +1009,13 @@ void main() {
             if (emit && Math.random() < 0.2) sp.emit(x + (Math.random() - 0.5) * 0.9, gy + 0.3, z + (Math.random() - 0.5) * 0.9, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, MAGNET_COLOR, 0, 0.3);
           }
           writeMatrix(this.magnets.instanceMatrix.array, nm++, x, y + 0.25, z, time * 2.2, 1.7, 1.7, 1.7, 0.3);
+        } else if (kind === PickupKind.Haste && nhs < MAX_HASTES) {
+          if (!k.mag[i]) {
+            const gy = k.y[i] as number;
+            writeMatrix(this.hasteBeams.instanceMatrix.array, nhb++, x, gy, z, 0, 1, 1, 1);
+            if (emit && Math.random() < 0.2) sp.emit(x + (Math.random() - 0.5) * 0.9, gy + 0.3, z + (Math.random() - 0.5) * 0.9, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, HASTE_COLOR, 0, 0.3);
+          }
+          writeMatrix(this.hastes.instanceMatrix.array, nhs++, x, y + 0.15, z, time * 2.6, 2, 2, 2);
         }
       }
       flush(this.coins, nc);
@@ -972,8 +1023,16 @@ void main() {
       flush(this.honey, nh);
       flush(this.magnets, nm);
       flush(this.magnetBeams, nbeam);
+      flush(this.hastes, nhs);
+      flush(this.hasteBeams, nhb);
       const pulse = 0.27 + Math.sin(time * 2.6) * 0.08;
       (this.magnetBeams.material as THREE.MeshBasicMaterial).opacity = pulse;
+      (this.hasteBeams.material as THREE.MeshBasicMaterial).opacity = pulse;
+      // While the haste lasts, sparks keep rising around the hero.
+      if (world.hasteT > 0 && emit && Math.random() < 0.6) {
+        const a = Math.random() * TAU;
+        sp.emit(hx + Math.cos(a) * 0.6, hy + 0.2 + Math.random() * 1.2, hz + Math.sin(a) * 0.6, Math.cos(a) * 0.6, 2 + Math.random() * 2, Math.sin(a) * 0.6, 0.6, 0.22, Math.random() < 0.7 ? HASTE_COLOR : 0xfff2a0, 0, 0.4);
+      }
       this.giftBeamMat.opacity = pulse;
     }
     this.syncChests(world, dt, time, emit, night);
@@ -1388,8 +1447,8 @@ void main() {
     while (this.chestViews.length < list.length) {
       const c = list[this.chestViews.length] as Chest;
       const group = new THREE.Group();
-      const parts = c.gift ? this.giftParts : this.chestParts;
-      const mat = c.gift ? this.giftMat : this.chestMat;
+      const parts = c.gift ? this.giftParts : c.rich ? this.richParts : this.chestParts;
+      const mat = c.gift ? this.giftMat : c.rich ? this.richMat : this.chestMat;
       const base = new THREE.Mesh(parts.base, mat);
       const lid = new THREE.Mesh(parts.lid, mat);
       lid.position.set(0, 0.56, -0.375);
@@ -1400,11 +1459,11 @@ void main() {
         this.chestPoolGeo,
         new THREE.MeshBasicMaterial({ map: this.glowTex, color: 0xffa238, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.3, toneMapped: false }),
       );
-      pool.scale.setScalar(c.gift ? 6 : 7.5);
+      pool.scale.setScalar(c.gift ? 6 : c.rich ? 11 : 7.5);
       pool.position.y = 0.12;
       pool.renderOrder = 2;
       const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTex, color: 0xffd860, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.5 }));
-      glow.scale.setScalar(c.gift ? 3.8 : 3.4);
+      glow.scale.setScalar(c.gift ? 3.8 : c.rich ? 5 : 3.4);
       glow.position.y = 0.6;
       group.add(base, lid, glow, pool);
       let beam: THREE.Mesh | null = null;
@@ -1415,6 +1474,7 @@ void main() {
       }
       group.position.set(c.x, c.y, c.z);
       group.rotation.y = c.rot;
+      group.userData.size = c.rich ? 1.3 : 1;
       this.group.add(group);
       this.chestViews.push({ group, lid, glow, pool, beam, openT: 0 });
     }
@@ -1441,15 +1501,15 @@ void main() {
         else if (v.openT > 4) v.group.scale.setScalar(Math.max(0.01, 1 - (v.openT - 4) / 2));
       } else {
         v.group.visible = true;
-        v.group.scale.setScalar(c.free ? 1.15 + Math.sin(time * 6) * 0.05 : 1);
+        v.group.scale.setScalar(c.free ? 1.15 + Math.sin(time * 6) * 0.05 : (v.group.userData.size as number));
         // The gift is already lit by its pillar: a softer halo keeps the white birch readable.
-        mat.opacity = c.gift ? 0.32 + Math.sin(time * 5) * 0.1 : c.free ? 0.6 + Math.sin(time * 5) * 0.2 : 0.26 + Math.sin(time * 2 + i) * 0.08;
-        mat.color.set(c.gift ? GIFT_COLOR : c.free ? 0xffe27a : 0xffb347);
-        poolMat.color.set(c.gift ? GIFT_COLOR : 0xffa238);
-        poolMat.opacity = (c.gift ? 0.14 : 0.14 + night * 0.12) * (0.9 + Math.sin(time * 2.3 + i * 1.7) * 0.1);
+        mat.opacity = c.gift ? 0.32 + Math.sin(time * 5) * 0.1 : c.free ? 0.6 + Math.sin(time * 5) * 0.2 : c.rich ? 0.5 + Math.sin(time * 3 + i) * 0.14 : 0.26 + Math.sin(time * 2 + i) * 0.08;
+        mat.color.set(c.gift ? GIFT_COLOR : c.rich ? RICH_COLOR : c.free ? 0xffe27a : 0xffb347);
+        poolMat.color.set(c.gift ? GIFT_COLOR : c.rich ? RICH_COLOR : 0xffa238);
+        poolMat.opacity = (c.gift ? 0.14 : (c.rich ? 0.2 : 0.14) + night * 0.12) * (0.9 + Math.sin(time * 2.3 + i * 1.7) * 0.1);
         // Embers of light drift up from the lid, as if the treasure inside were breathing.
-        if (!c.gift && emit && dist < 45 && Math.random() < 0.1) {
-          this.sparks.emit(c.x + (Math.random() - 0.5) * 0.8, c.y + 0.8, c.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.3, 0.7 + Math.random() * 0.9, (Math.random() - 0.5) * 0.3, 1.3, 0.13, 0xffc04a, 0, 0.4);
+        if (!c.gift && emit && dist < 45 && Math.random() < (c.rich ? 0.35 : 0.1)) {
+          this.sparks.emit(c.x + (Math.random() - 0.5) * 0.8, c.y + 0.8, c.z + (Math.random() - 0.5) * 0.6, (Math.random() - 0.5) * 0.3, 0.7 + Math.random() * (c.rich ? 2 : 0.9), (Math.random() - 0.5) * 0.3, 1.3, c.rich ? 0.2 : 0.13, c.rich ? RICH_COLOR : 0xffc04a, 0, 0.4);
         }
         if (c.gift && emit && Math.random() < 0.2) {
           this.sparks.emit(c.x + (Math.random() - 0.5) * 1.2, c.y + 0.4, c.z + (Math.random() - 0.5) * 1.2, 0, 2 + Math.random() * 2.5, 0, 1.1, 0.26, GIFT_COLOR, 0, 0.3);
@@ -1468,6 +1528,11 @@ void main() {
       light.position.set(lit.x, lit.y + 1.25, lit.z);
     }
     light.intensity += (want - light.intensity) * Math.min(1, dt * 6);
+  }
+
+  /** A new run may bring a new forest: ground heights and bonfires are read from it every frame. */
+  setMap(map: GameMap): void {
+    this.map = map;
   }
 
   /** Removes chest meshes of a finished run. */
