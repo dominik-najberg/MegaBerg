@@ -3,6 +3,7 @@ import { clamp, damp, lerp, TAU } from '../core/math';
 import type { CharacterDef } from '../data/types';
 import type { Player } from '../sim/player';
 import { GeoBuilder } from './geo';
+import { groundDecal } from './groundDecal';
 
 type Look = CharacterDef['look'];
 
@@ -66,8 +67,8 @@ totalEmissiveRadiance += vec3(0.75, 0.62, 0.45) * mbRim * 0.22;`,
     this.body.add(this.torso, this.legL, this.legR);
     this.torso.add(this.armL, this.armR);
     this.shadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.7, 1.7).rotateX(-Math.PI / 2),
-      new THREE.MeshBasicMaterial({ map: blobTex, color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false }),
+      new THREE.PlaneGeometry(1.7, 1.7, 2, 2).rotateX(-Math.PI / 2),
+      groundDecal(new THREE.MeshBasicMaterial({ map: blobTex, color: 0x000000, transparent: true, opacity: 0.5, depthWrite: false })),
     );
     this.shadow.renderOrder = 2;
     this.group.add(this.shadow);

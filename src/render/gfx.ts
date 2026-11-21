@@ -4,6 +4,7 @@ import type { World } from '../sim/world';
 import type { GameMap } from '../sim/terrain';
 import { EnemiesView } from './enemiesView';
 import { FxView } from './fxView';
+import { setGroundMap } from './groundDecal';
 import { HeroView } from './hero';
 import { Overlay } from './overlay';
 import { Post } from './post';
@@ -57,6 +58,7 @@ export class Gfx {
     quality: Quality,
   ) {
     this.quality = quality;
+    setGroundMap(map);
     // Anti-aliasing comes from the multisampled HDR target of the post pipeline, not from the canvas.
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -89,6 +91,7 @@ export class Gfx {
   setMap(map: GameMap): void {
     if (map === this.map) return;
     this.map = map;
+    setGroundMap(map);
     this.scene.remove(this.terrain.group, this.props.group);
     this.terrain.dispose();
     this.props.dispose();
