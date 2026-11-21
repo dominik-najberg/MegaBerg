@@ -271,6 +271,25 @@ export const WEAPONS: WeaponDef[] = [
     evolved: true,
   },
   {
+    // First weapon of docs/BRONIE-PLAN.md (stage A2). No evolution yet: evolutions come in stage D.
+    id: 'luk',
+    name: 'Łuk Dziewanny',
+    desc: 'Daleka strzała w najsilniejszego wroga w zasięgu; przebija i mocniej rani bossy.',
+    kind: 'bolt',
+    color: 0x9be37a,
+    icon: 'bow',
+    aim: 'strongest',
+    rankBonus: 0.5,
+    base: { damage: 40, cooldown: 1.6, count: 1, area: 0.6, speed: 40, duration: 0.9, pierce: 8, range: 30, knockback: 2, arc: 0.12 },
+    levels: [
+      { damage: 52, note: 'Większe obrażenia' },
+      { count: 2, note: '+1 strzała' },
+      { damage: 66, cooldown: 1.35, note: 'Mocniejsze, częstsze strzały' },
+      { count: 3, pierce: 12, note: '+1 strzała, głębsze przebicie' },
+    ],
+    unlock: 'luk',
+  },
+  {
     id: 'dziegiec',
     name: 'Garniec dziegciu',
     desc: 'Rzucony garniec zostawia płonącą kałużę smoły.',
@@ -323,4 +342,11 @@ export function weaponStatsAt(def: WeaponDef, level: number): WeaponStats {
     Object.assign(s, over);
   }
   return s;
+}
+
+const LINE_OF: Record<string, string> = Object.fromEntries(WEAPONS.filter((w) => w.evolution).map((w) => [w.evolution?.into as string, w.id]));
+
+/** Id of the base weapon of a weapon's line: an evolved weapon counts as the weapon it came from. */
+export function weaponLine(id: string): string {
+  return LINE_OF[id] ?? id;
 }

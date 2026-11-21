@@ -142,6 +142,12 @@ export interface WeaponDef {
   evolved?: boolean;
   /** Achievement id required to unlock. */
   unlock?: string;
+  /** Bolt weapons: aim at the toughest enemy in range instead of the nearest. */
+  aim?: 'strongest';
+  /** Extra damage against mini-bosses and bosses (0.5 = +50%). */
+  rankBonus?: number;
+  /** Silver price in the Skarbiec: once unlocked, the weapon still has to be bought before it joins the pool. */
+  silver?: number;
 }
 
 export interface PassiveDef {
@@ -263,8 +269,8 @@ export type AchievementCond =
   | { type: 'win' }
   | { type: 'winWith'; character: string }
   | { type: 'shrines'; count: number }
-  /** A book (Księga) reached this level in one run. */
-  | { type: 'book'; book: string; level: number }
+  /** A book (Księga) reached this level in one run; with `before`, no later than that second of the run. */
+  | { type: 'book'; book: string; level: number; before?: number }
   /** Gold collected in one run. */
   | { type: 'runGold'; count: number }
   /** Movement speed multiplier reached in one run. */
@@ -273,10 +279,20 @@ export type AchievementCond =
   | { type: 'lifesteal'; amount: number }
   /** Weapons evolved in one run. */
   | { type: 'evolveCount'; count: number }
-  /** Any weapon reached this level in one run. */
-  | { type: 'weaponLevel'; level: number }
+  /** A weapon reached this level in one run: any weapon, or the line of `weapon` (the weapon or its evolution). */
+  | { type: 'weaponLevel'; level: number; weapon?: string }
   /** Survived this long while taking at most `damage` in total. */
-  | { type: 'unhurt'; seconds: number; damage: number };
+  | { type: 'unhurt'; seconds: number; damage: number }
+  /** Kills in total with one weapon line (the weapon or its evolution; burn counts for the weapon that lit it). */
+  | { type: 'weaponKills'; weapon: string; count: number }
+  /** One enemy type defeated this many times in total. */
+  | { type: 'enemyKills'; enemy: string; count: number }
+  /** This many seconds in a row without losing health, in one run. */
+  | { type: 'unhurtStreak'; seconds: number }
+  /** Damage taken off landed blows by armour in one run, optionally with one hero. */
+  | { type: 'armorBlocked'; amount: number; character?: string }
+  /** A secret found on the map. */
+  | { type: 'secret'; id: string };
 
 export interface AchievementDef {
   id: string;

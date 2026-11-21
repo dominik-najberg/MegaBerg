@@ -9,7 +9,7 @@ import { WEAPON_MAX_LEVEL } from '../data/weaponLines';
 import { applyLines, type LineStat } from '../data/weaponLines';
 import type { BlessingDef, CharacterDef, EnemyDef, Rarity, Stats, WeaponDef, WeaponStats } from '../data/types';
 import { ELITE_HP_MUL, enemyDamageMul, enemyHpMul, finalWaveMul, RUN_LENGTH, xpForLevel } from '../data/waves';
-import { WEAPON_BY_ID, WEAPONS, weaponStatsAt } from '../data/weapons';
+import { WEAPON_BY_ID, weaponLine, WEAPONS, weaponStatsAt } from '../data/weapons';
 import { updateEnemies } from './ai';
 import { Bonuses } from './bonuses';
 import { applyCard, canBanish, chestCards, itemCard, levelUpCards, rollItem, type Card } from './cards';
@@ -182,6 +182,16 @@ export interface RunSummary {
   books: Record<string, number>;
   lifestealHealed: number;
   burnDealt: number;
+  /** Kills banked by this summary per weapon line (id of the base weapon); burn counts for the weapon that lit it. */
+  killsByWeapon: Record<string, number>;
+  /** Longest stretch of the whole run without losing health, in seconds (the one still running at the end counts). */
+  longestUnhurt: number;
+  /** Damage that armour took off blows that landed, over the whole run. */
+  armorBlocked: number;
+  /** Book id -> run time at which each of its levels was taken (index 0 = level 1). */
+  bookTimes: Record<string, number[]>;
+  /** Secrets found in this run. */
+  secrets: string[];
 }
 
 const PICKUP_BASE = 2.6;
@@ -252,6 +262,12 @@ export class World {
   /** Texts for the announcer banner; the UI drains this. */
   readonly announce: string[] = [];
   readonly killsByType = new Int32Array(ENEMIES.length);
+  /** Kills per weapon line since the last banking (like `kills`, restarted by endless mode). */
+  killsByWeapon: Record<string, number> = {};
+  /** Run time at which each level of a book was taken (index 0 = level 1). */
+  readonly bookTimes: Record<string, number[]> = {};
+  /** Secrets found in this run; the game writes them to the save at once. */
+  readonly secrets: string[] = [];
   readonly prompt: Prompt = { kind: '', cost: 0, affordable: false, progress: 0 };
 
   stats: Stats;
@@ -296,6 +312,11 @@ export class World {
   evolved = 0;
   shrinesUsed = 0;
   damageTaken = 0;
+  /** Damage that armour took off blows that landed (before the shield). */
+  armorBlocked = 0;
+  /** Run time of the last health loss, and the longest stretch without one that has already ended. */
+  private unhurtSince = 0;
+  private unhurtBest = 0;
   burnDealt = 0;
   thornsDealt = 0;
   procDealt = 0;
@@ -461,6 +482,31 @@ export class World {
     return best;
   }
 
+  /** Index of the toughest living enemy within range (highest full health; the nearer one on a tie), or -1. */
+  strongest(x: number, z: number, range: number): number {
+    const e = this.enemies;
+    const n = this.grid.query(x, z, range + 4, this.cand);
+    const limit = (range + 3) * (range + 3);
+    let best = -1;
+    let bestHp = 0;
+    let bestD = 0;
+    for (let k = 0; k < n; k++) {
+      const j = this.cand[k] as number;
+      if (!e.alive[j] || (e.spawnT[j] as number) > 0.3) continue;
+      const dx = (e.x[j] as number) - x;
+      const dz = (e.z[j] as number) - z;
+      const d = dx * dx + dz * dz;
+      if (d >= limit) continue;
+      const hp = e.maxHp[j] as number;
+      if (best < 0 || hp > bestHp || (hp === bestHp && d < bestD)) {
+        best = j;
+        bestHp = hp;
+        bestD = d;
+      }
+    }
+    return best;
+  }
+
   /** Random living enemy within range, or -1. Uses bufB. */
   randomInRange(x: number, z: number, range: number): number {
     const n = this.collect(x, z, range, this.bufB);
@@ -473,10 +519,13 @@ export class World {
   /**
    * Damages one enemy. `slot` >= 0 attributes the hit to a weapon (crits, burn, slow, knockback stat,
    * lifesteal, statistics); slot -1 is damage over time or environmental; SLOT_THORNS is thorns.
+   * `src` is the weapon slot credited if this damage kills (burn passes the weapon that lit it); it changes
+   * nothing about the damage itself.
    */
-  damageEnemy(i: number, base: number, slot: number, kx: number, kz: number, kb: number, st: WeaponStats | null): void {
+  damageEnemy(i: number, base: number, slot: number, kx: number, kz: number, kb: number, st: WeaponStats | null, src = slot): void {
     const e = this.enemies;
     if (!e.alive[i]) return;
+    e.killSrc[i] = src >= 0 ? src : -1;
     const def = ENEMIES[e.type[i] as number] as EnemyDef;
     let dmg = base;
     let flag = 0;
@@ -502,7 +551,10 @@ export class World {
       const burn = (st ? st.burn * this.stats.damage : 0) + dmg * this.stats.burn;
       if (burn > 0) {
         e.burnT[i] = 3;
-        if (burn > (e.burnDps[i] as number)) e.burnDps[i] = burn;
+        if (burn > (e.burnDps[i] as number)) {
+          e.burnDps[i] = burn;
+          e.burnSrc[i] = slot;
+        }
       }
       if (st && st.slow > 0) {
         const k = st.slow * (1 - def.weight * 0.7);
@@ -535,6 +587,8 @@ export class World {
     else if (slot >= 0 && this.fx.marzannaScythe > 0 && !def.rank && this.rng.next() < Math.min(PROC_CHANCE_CAP, EXECUTE_CHANCE * this.fx.marzannaScythe)) {
       // Kosa Marzanny: the rest of the enemy's health goes at once.
       this.executions++;
+      // The treasure made the kill, not the weapon whose hit triggered it.
+      e.killSrc[i] = -1;
       e.hp[i] = 0;
       this.events.emit(Ev.Hit, ex, (e.y[i] as number) + (e.oy[i] as number), ez, 0, 1, def.height);
       this.killEnemy(i);
@@ -635,6 +689,11 @@ export class World {
     this.runKills++;
     if (this.fx.wraithSkull > 0) this.skullBonus = Math.min(SKULL_CAP * this.fx.wraithSkull, this.skullBonus + SKULL_PER_KILL * this.fx.wraithSkull);
     this.killsByType[t] = (this.killsByType[t] as number) + 1;
+    const killer = this.weapons[e.killSrc[i] as number];
+    if (killer) {
+      const line = weaponLine(killer.def.id);
+      this.killsByWeapon[line] = (this.killsByWeapon[line] ?? 0) + 1;
+    }
     this.events.emit(Ev.Kill, x, (e.y[i] as number) + (e.oy[i] as number), z, t, elite, e.radius[i] as number);
     const luck = this.stats.luck;
     const rng = this.rng;
@@ -740,6 +799,7 @@ export class World {
       if (this.won && !this.endless) return;
     }
     let d = damageAfterArmor(damage, st.armor);
+    this.armorBlocked += Math.max(0, damage - d);
     p.invuln = 0.5 + MIRROR_INVULN * this.fx.witchMirror;
     p.hurtT = 0;
     if (this.shield > 0) {
@@ -754,6 +814,8 @@ export class World {
     }
     p.hp -= d;
     this.damageTaken += d;
+    this.unhurtBest = this.longestUnhurt();
+    this.unhurtSince = this.time;
     // Heavy blows (boss attacks, charges) freeze the action for a few frames.
     if (d > this.stats.maxHp * 0.15 && this.hitstop < 0.07) this.hitstop = 0.07;
     this.events.emit(Ev.PlayerHit, p.x, p.y, p.z, d);
@@ -771,6 +833,16 @@ export class World {
         this.events.emit(Ev.Death, p.x, p.y, p.z);
       }
     }
+  }
+
+  /** Longest stretch without losing health so far, in seconds, counting the one still running. */
+  longestUnhurt(): number {
+    return Math.max(this.unhurtBest, this.time - this.unhurtSince);
+  }
+
+  /** Records a secret found in this run (once). */
+  findSecret(id: string): void {
+    if (!this.secrets.includes(id)) this.secrets.push(id);
   }
 
   heal(amount: number): void {
@@ -1401,7 +1473,8 @@ export class World {
 
   /**
    * Continue after defeating the boss. The victory has already been banked, so the counters that add up
-   * across runs (gold, kills) restart from zero; shrine and evolution progress belong to the same run and stay.
+   * across runs (gold, kills, kills per weapon and per enemy) restart from zero; shrine and evolution progress
+   * and the records of one run (longest unhurt stretch, armour, book times) belong to the same run and stay.
    */
   startEndless(): void {
     // Everything up to now was banked with the victory; the endless part is paid for from here.
@@ -1412,6 +1485,7 @@ export class World {
     this.goldCollected = 0;
     this.kills = 0;
     this.killsByType.fill(0);
+    this.killsByWeapon = {};
   }
 
   summary(): RunSummary {
@@ -1442,6 +1516,11 @@ export class World {
       books: Object.fromEntries(this.passives.map((p) => [p.def.id, p.level])),
       lifestealHealed: Math.round(this.lifestealHealed),
       burnDealt: Math.round(this.burnDealt),
+      killsByWeapon: { ...this.killsByWeapon },
+      longestUnhurt: this.longestUnhurt(),
+      armorBlocked: Math.round(this.armorBlocked),
+      bookTimes: Object.fromEntries(Object.entries(this.bookTimes).map(([id, t]) => [id, t.slice()])),
+      secrets: this.secrets.slice(),
     };
   }
 }

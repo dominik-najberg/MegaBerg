@@ -65,6 +65,10 @@ export class Enemies {
   readonly burnT = new Float32Array(MAX_ENEMIES);
   readonly burnDps = new Float32Array(MAX_ENEMIES);
   readonly burnAcc = new Float32Array(MAX_ENEMIES);
+  /** Weapon slot of the last damage taken, -1 when it was not a weapon (thorns, item effects). Kill credit only. */
+  readonly killSrc = new Int8Array(MAX_ENEMIES);
+  /** Weapon slot that lit the current burn, -1 for none. */
+  readonly burnSrc = new Int8Array(MAX_ENEMIES);
   /** Contact attack cooldown. */
   readonly atk = new Float32Array(MAX_ENEMIES);
   /** Spawn-in / fade-in timer; the enemy is harmless while > 0. */
@@ -104,6 +108,8 @@ export class Enemies {
     this.burnT[i] = 0;
     this.burnDps[i] = 0;
     this.burnAcc[i] = 0;
+    this.killSrc[i] = -1;
+    this.burnSrc[i] = -1;
     this.atk[i] = 0;
     this.spawnT[i] = 0.5;
     this.t1[i] = 0;

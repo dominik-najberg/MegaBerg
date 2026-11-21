@@ -1086,8 +1086,10 @@ void main() {
           continue;
         }
         const yaw = Math.atan2(pr.vx[i] as number, pr.vz[i] as number);
-        if (w.def.icon === 'spear') {
-          writeMatrix(this.spears.instanceMatrix.array, nsp++, x, y, z, yaw, 1.2, 1.2, 1.2);
+        if (w.def.icon === 'spear' || w.def.icon === 'bow') {
+          // Arrows of Łuk Dziewanny reuse the spear mesh, thinner and shorter.
+          const s = w.def.icon === 'bow' ? 0.75 : 1.2;
+          writeMatrix(this.spears.instanceMatrix.array, nsp++, x, y, z, yaw, s, s, s);
           if (emit) sp.emit(x, y, z, 0, 0, 0, 0.25, 0.22, w.def.color);
         } else if (kind === ProjKind.Bounce) {
           const s = w.def.evolved ? 1.5 : 1.1;

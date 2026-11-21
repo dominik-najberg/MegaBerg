@@ -1,5 +1,6 @@
 import { angleLerp, TAU, wrapAngle } from '../core/math';
-import type { WeaponKind, WeaponStats } from '../data/types';
+import { ENEMIES } from '../data/enemies';
+import type { EnemyDef, WeaponKind, WeaponStats } from '../data/types';
 import { Ev } from './events';
 import { ProjKind, WEAPON_SLOTS } from './pools';
 import { attackInterval } from './stats';
@@ -208,7 +209,7 @@ export function updateWeapons(w: World, dt: number): void {
       case 'bolt': {
         inst.timer -= dt;
         if (inst.timer <= 0) {
-          const t = w.nearest(p.x, p.z, st.range);
+          const t = inst.def.aim === 'strongest' ? w.strongest(p.x, p.z, st.range) : w.nearest(p.x, p.z, st.range);
           if (t < 0) {
             inst.timer = 0.15;
             break;
@@ -468,7 +469,8 @@ export function updateProjectiles(w: World, dt: number): void {
         }
         const ex = e.x[j] as number;
         const ez = e.z[j] as number;
-        w.damageEnemy(j, pr.dmg[i] as number, slot, dirX, dirZ, st.knockback, st);
+        const rank = inst.def.rankBonus && (ENEMIES[e.type[j] as number] as EnemyDef).rank ? 1 + inst.def.rankBonus : 1;
+        w.damageEnemy(j, (pr.dmg[i] as number) * rank, slot, dirX, dirZ, st.knockback, st);
         pr.last[i] = j;
         if (st.explode > 0) {
           const r = st.explode * w.stats.area;

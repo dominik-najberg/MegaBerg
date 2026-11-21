@@ -3,7 +3,7 @@
 Źródło inspiracji: baza broni na megabonk.org (30 broni, 7 od startu, 23 do odblokowania; wersja gry 1.0.69, odczyt 2026-11-21).
 Jak w `docs/MEGABONK-ANALIZA.md`: przenosimy **mechaniki** (rodzaje ataku, rodzaje warunków odblokowania), nazwy i wygląd są nasze, słowiańskie.
 
-**Stan (2026-11-21):** plan sprawdzony z kodem (także przez Codexa), nic jeszcze nie zrobione.
+**Stan (2026-11-21):** etapy A i A2 wdrożone (opis i odstępstwa w `docs/DECISIONS.md`: „Etap A planu broni”, „Etap A2: Łuk Dziewanny”). Wspólny budżet wagi nowych broni z sekcji 6 też już działa. Etapy B–D jeszcze nie zrobione.
 
 ## 1. Punkt wyjścia
 

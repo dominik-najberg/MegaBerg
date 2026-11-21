@@ -25,6 +25,8 @@ export const ACHIEVEMENTS: (AchievementDef & { gold?: number })[] = [
   { id: 'bookStrzybog', name: 'Grad krzemieni', desc: 'Podnieś Księgę Krzemieni do 2. poziomu w jednym runie.', reward: 'Księga Strzyboga (szybkość pocisków)', cond: { type: 'book', book: 'sakwa', level: 2 } },
   { id: 'bookStrzyga', name: 'Krwawe żniwo', desc: 'Pokonaj 1500 wrogów w jednym runie.', reward: 'Księga Strzygi (kradzież życia)', cond: { type: 'runKills', count: 1500 } },
   { id: 'bookDzik', name: 'Taran', desc: 'Pokonaj łącznie 5000 wrogów.', reward: 'Księga Dzika (odrzut)', cond: { type: 'totalKills', count: 5000 } },
+  // Weapons unlocked by a play style (docs/BRONIE-PLAN.md).
+  { id: 'luk', name: 'Oko łowczyni', desc: 'Podnieś Księgę Sokoła do 10. poziomu w jednym runie.', reward: 'Broń: Łuk Dziewanny', cond: { type: 'book', book: 'sokol', level: 10 } },
   // Heroes unlocked by a play style (stage 5 of docs/MEGABONK-ANALIZA.md).
   { id: 'heroRadogost', name: 'Pełny trzos', desc: 'Zbierz 400 złota w jednym runie.', reward: 'Postać: Radogost', cond: { type: 'runGold', count: 400 } },
   { id: 'heroStrzezymir', name: 'Wiatr w nogach', desc: 'Osiągnij +60% szybkości ruchu w jednym runie.', reward: 'Postać: Strzeżymir', cond: { type: 'speed', value: 1.6 } },

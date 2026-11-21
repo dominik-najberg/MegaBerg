@@ -884,3 +884,90 @@ dało się przeżyć. Zmiany (`src/data/waves.ts`, `src/sim/spawner.ts`, `src/da
 Symulacja (`npm run sim`, 12 runów, Wojmir), wygrane przed → po: dobry gracz Chata 0: 3 → 4, Chata 2:
 7 → 8, Chata 4: 11 → 11; nowicjusz Chata 0: 0 → 0, Chata 2: 1 → 1, Chata 4: 7 → 8. Poziom bohatera przy
 wezwaniu Leszego zostaje w okolicach 37–41, bo fale dają dużo doświadczenia w krótkim czasie.
+
+## Etap A planu broni: podstawy pod odblokowania stylem gry
+
+Wdrożony etap A z `docs/BRONIE-PLAN.md`. Nie dodaje broni i nie zmienia balansu walki.
+
+- **Źródło zabójstwa** (`src/sim/pools.ts`, `src/sim/world.ts`, `src/sim/ai.ts`): tablice `killSrc`
+  i `burnSrc` na wroga, zerowane w `alloc`. `damageEnemy` dostał ostatni, opcjonalny parametr `src`
+  (domyślnie `slot`): ustawia tylko `killSrc`, obrażeń nie dotyka. Tyknięcie podpalenia podaje `burnSrc`.
+  Ciernie, efekty skarbów i egzekucja Kosy Marzanny ustawiają „brak broni”. `killEnemy` dolicza zabójstwo
+  do `killsByWeapon` według linii broni (`weaponLine` w `src/data/weapons.ts`: ewolucja liczy się jak broń,
+  z której powstała).
+- **Statystyki runu** (`RunSummary`): `killsByWeapon` (przyrostowe, `startEndless` je zeruje),
+  `longestUnhurt`, `armorBlocked`, `bookTimes`, `secrets` (rekordy całego runu, przechodzą do trybu
+  nieskończonego). `World.findSecret(id)` to na razie sam hak; obiekt sekretu na mapie przyjdzie z etapem B.
+- **Zapis** (`src/meta/save.ts`): `stats.killsByWeapon`, `stats.killsByEnemy`, `found`, `evolutionsSeen`,
+  `best`. `SAVE_VERSION` zostaje 1, stare zapisy zaczynają liczniki od zera. Sekret trafia do zapisu od razu
+  (`Game.saveSecrets`).
+- **Warunki** (`AchievementCond`, `src/meta/progress.ts`): nowe `weaponKills`, `enemyKills`, `unhurtStreak`,
+  `armorBlocked` (z opcjonalną postacią), `secret`; `weaponLevel` z opcjonalnym `weapon`, `book`
+  z opcjonalnym `before`. `applyRun` dolicza liczniki przed sprawdzeniem osiągnięć, potem zapisuje `best`
+  dla niezdobytych osiągnięć liczbowych. `grantFromTotals` obsługuje nowe warunki łączne i sekret.
+- **Postęp:** `achievementProgress(save, ach)`. Dla „przetrwaj X” i „poziom X” stary zapis korzysta
+  z `stats.bestTime` i `stats.bestLevel`, więc pasek nie startuje od zera.
+- **Zakup broni:** pole `silver` w `WeaponDef`, `buySilver('weapon:<id>')`, `purchase` (wybór srebro/złoto,
+  używany przez `Game.buy`), `unlockedWeaponIds` wymaga zakupu, gdy broń ma cenę. Skarbiec pokazuje bronie
+  z ceną przed skarbami.
+- **Ekran Arsenał** (`UI.showArsenal`, przycisk w menu): bronie podstawowe z typem ataku i ewolucją („???”
+  do pierwszej ewolucji w runie), zablokowane z warunkiem i paskiem postępu.
+
+Odstępstwa i rzeczy świadomie odłożone:
+
+- Pasek pokazuje same liczby („1240 / 3000”), bez dopisku typu „zabójstw Ciupagą”: warunek jest w zdaniu
+  nad paskiem, a dopisek wymagałby odmiany nazwy każdej broni.
+- Żadna broń nie ma jeszcze ceny w srebrze i żadne osiągnięcie nie używa nowych warunków: przyjdą razem
+  z broniami (A2 i dalej). Dlatego sekcja broni w Skarbcu jest dziś pusta.
+- Zabójstwa bez broni (ciernie, skarby, egzekucja, wybuch po wskrzeszeniu) nie trafiają do `killsByWeapon`;
+  suma liczników na broń jest więc trochę mniejsza od liczby zabójstw.
+
+Sprawdzenie: 201 testów (nowe w `tests/unlocks.test.ts`), typecheck, build. W przeglądarce
+`scripts/verify/arsenal.mjs` (Arsenał, zakup broni z tymczasową ceną, 2,5 minuty runu bota: 487 zabójstw,
+z tego 455 na kontach czterech broni, liczniki w zapisie po rozliczeniu, konsola bez błędów). Zrzut:
+`docs/screenshots/14-arsenal.png`.
+
+### Review Codexem
+
+`codex exec review --uncommitted`: brak uwag do poprawienia. Codex uruchomił testy (201), typecheck i build.
+
+## Etap A2: Łuk Dziewanny
+
+Pierwsza broń z `docs/BRONIE-PLAN.md`, jako sprawdzian całej drogi: warunek, pasek w Arsenale, odblokowanie,
+karty.
+
+- **Broń** (`luk` w `src/data/weapons.ts`): typ `bolt`, dwa nowe opcjonalne pola `WeaponDef`:
+  `aim: 'strongest'` (cel: wróg z największym pełnym zdrowiem w zasięgu, `World.strongest`; przy remisie
+  bliższy) i `rankBonus: 0.5` (+50% obrażeń pocisku w mini-bossy i bossy, liczone w `updateProjectiles`).
+  Zasięg 30 m, przebicie 8 (12 od 5. poziomu), do 3 strzał. Bez ewolucji (etap D). Bez ceny w srebrze.
+- **Odblokowanie:** osiągnięcie `luk` („Oko łowczyni”), Księga Sokoła na 10. poziom w jednym runie.
+- **Wygląd:** nowa ikona `bow`; strzały to pomniejszony model włóczni, dźwięk jak inne pociski.
+- **Wspólny budżet nowych broni** (`NEW_WEAPON_FULL` w `src/sim/cards.ts`, ryzyko z sekcji 6 planu): do 9
+  nowych broni na kartach każda ma dotychczasową wagę (4, albo 2 przy trzech broniach), większa pula dzieli
+  wagę dziewięciu. Dla puli 10 broni nic się nie zmienia. Bez tego już jedenasta broń wypychała z kart
+  ewolucje (test w `tests/cards.test.ts` przestał przechodzić).
+
+Balans (`npm run sim -- runs=48 pool=all shop=2`, dobry gracz, Wojmir):
+
+| Wersja | Wygrane | Runy z łukiem | Wygrane z łukiem |
+|---|---|---|---|
+| przed zmianami | 30 / 48 | – | – |
+| pierwsze staty łuku (34 obrażeń, co 2,2 s, przebicie 3) | 18 / 48 | 18 | 4 |
+| obecne staty (40 obrażeń, co 1,6 s, przebicie 8) | 24 / 48 | 18 | 10 |
+
+Pierwsza wersja była wyraźnie za słaba: strzał w jeden cel nie pomaga na hordę, a łuk zajmuje slot broni,
+która by ewoluowała. Po wzmocnieniu runy z łukiem wygrywają nie rzadziej niż pozostałe (10/18 wobec 14/30),
+a łuk zadaje 250–600 tys. obrażeń w wygranym runie, mniej niż ewolucje (1–1,9 mln). Łączny wynik 24 wobec
+30 mieści się w szumie 48 runów, ale to nie jest dowód, że pula się nie pogorszyła; końcowy balans i tak po
+ewolucjach (etap D). Domyślna pula (bez łuku) daje te same wyniki co przed zmianami: 11 / 12.
+
+Sprawdzenie: 208 testów (nowe w `tests/luk.test.ts`), typecheck, build. W przeglądarce
+`scripts/verify/luk.mjs`: w Arsenale zablokowany łuk z paskiem „6 / 10”, po osiągnięciu z opisem; w runie
+bota łuk jest w puli i zabija na swoje konto; konsola bez błędów. Zrzuty: `15-arsenal-luk.png`,
+`15-luk-w-walce.png`. Pomiaru przy 500 wrogach nie robiłem: łuk używa istniejących pocisków `bolt`,
+a `World.strongest` to jedno zapytanie do siatki na strzał, jak `nearest`.
+
+### Review Codexem
+
+`codex exec review --uncommitted` (etapy A i A2 razem): brak uwag do poprawienia. Codex uruchomił testy (208),
+typecheck i build.

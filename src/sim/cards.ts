@@ -87,6 +87,15 @@ export const CHEST_BOOK_WEIGHT = 1;
 export const NEW_BOOK_WEIGHT = 1.6;
 /** Total weight shared by all new books when the pool is large. */
 export const NEW_BOOK_BUDGET = 16;
+/** Weight of one new weapon on a level-up card: with fewer than 3 weapons owned, and with 3. */
+export const NEW_WEAPON_WEIGHT = 4;
+export const NEW_WEAPON_WEIGHT_LATE = 2;
+/**
+ * Most new weapons that keep their full weight. The pool before docs/BRONIE-PLAN.md had 10 weapons, so at
+ * most 9 were on offer; a larger pool shares the weight of 9, and new weapons do not push books and
+ * upgrades off the cards.
+ */
+export const NEW_WEAPON_FULL = 9;
 /** Weight of a new book that is the evolution partner of an owned weapon. */
 export const EVOLUTION_BOOK_WEIGHT = 2.6;
 
@@ -110,13 +119,13 @@ function candidates(w: World): Candidate[] {
     if (p.level < p.def.maxLevel && !statCapped(w.stats, p.def.stat)) out.push({ weight: BOOK_UPGRADE_WEIGHT, make: (r) => passiveCard(p.def, p.level + 1, r) });
   }
   if (w.weapons.length < MAX_WEAPONS) {
-    const weight = w.weapons.length < 3 ? 4 : 2;
-    for (const def of WEAPONS) {
-      if (def.evolved || !w.weaponPool.has(def.id) || w.findWeapon(def.id) || w.banished.has(def.id)) continue;
+    const fresh = WEAPONS.filter((def) => {
+      if (def.evolved || !w.weaponPool.has(def.id) || w.findWeapon(def.id) || w.banished.has(def.id)) return false;
       // Do not offer the base form again after it has been evolved.
-      if (def.evolution && ownedEvolved.has(def.evolution.into)) continue;
-      out.push({ weight, make: (r) => weaponCard(w, def, undefined, r) });
-    }
+      return !(def.evolution && ownedEvolved.has(def.evolution.into));
+    });
+    const weight = (w.weapons.length < 3 ? NEW_WEAPON_WEIGHT : NEW_WEAPON_WEIGHT_LATE) * Math.min(1, NEW_WEAPON_FULL / Math.max(1, fresh.length));
+    for (const def of fresh) out.push({ weight, make: (r) => weaponCard(w, def, undefined, r) });
   }
   if (w.passives.length < MAX_PASSIVES) {
     const fresh = PASSIVES.filter((def) => w.passivePool.has(def.id) && !w.findPassive(def.id) && !w.banished.has(def.id) && !statCapped(w.stats, def.stat));
@@ -212,9 +221,11 @@ export function applyCard(w: World, card: Card): void {
         if (inst.level < def.maxLevel) {
           inst.level++;
           inst.power += power;
+          (w.bookTimes[def.id] ??= []).push(w.time);
         }
       } else if (w.passives.length < MAX_PASSIVES) {
         w.passives.push({ def, level: 1, power });
+        w.bookTimes[def.id] = [w.time];
       }
       w.refreshStats();
       break;
