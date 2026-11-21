@@ -5,6 +5,15 @@ await page.goto(`${URL}?autostart=1`);
 await sleep(1000);
 await ev(() => { const g = window.__mb; g.debug.spawner(false); g.debug.only('zniwa', 'slonce', 'gniew', 'topor', 'kwiat'); g.debug.time(598); g.debug.spawner(true); g.setBot('good'); g.world.stats.maxHp = 400; g.world.player.hp = 400; });
 await sleep(4000);
+// Since the portal (10:00) Leszy no longer walks in on his own: clear the field, step up to the portal and hold E.
+for (let i = 0; i < 40 && !(await ev(() => window.__mb.world.portal)); i++) await sleep(250);
+await ev(() => { const g = window.__mb; const po = g.world.portal; g.debug.clearEnemies(); g.debug.teleport(po.x - 1.5, po.z); });
+await sleep(300);
+await page.keyboard.down('e');
+for (let i = 0; i < 40 && !(await ev(() => window.__mb.world.bossSummoned)); i++) await sleep(100);
+await page.keyboard.up('e');
+for (let i = 0; i < 40 && (await ev(() => window.__mb.world.bossIdx)) < 0; i++) await sleep(100);
+await sleep(2500);
 await shot(page, '07-leszy-nadchodzi.png');
 await ev(() => { const w = window.__mb.world; w.enemies.hp[w.bossIdx] = 10; });
 for (let i = 0; i < 30; i++) { await sleep(300); if (await ev(() => window.__mb.state) === 'end') break; }

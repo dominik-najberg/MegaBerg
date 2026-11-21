@@ -180,7 +180,7 @@ export class UI {
       case 'reroll':
         a.reroll();
         break;
-      case 'toggle':
+      case 'pool':
         a.toggle(arg.slice(0, 1) as PoolKind, arg.slice(2));
         break;
       case 'banish':
@@ -433,7 +433,7 @@ export class UI {
         .map((id) => {
           const l = look(id);
           const off = s.disabled.includes(`${kind}:${id}`);
-          return `<button class="chip${off ? ' off' : ''}" data-act="toggle" data-arg="${kind}:${id}" title="${off ? 'Wyłączone, kliknij, by włączyć' : 'Kliknij, by wyłączyć'}">${icon(l.icon, hex(l.color), 16)} ${l.name}</button>`;
+          return `<button class="chip${off ? ' off' : ''}" data-act="pool" data-arg="${kind}:${id}" title="${off ? 'Wyłączone, kliknij, by włączyć' : 'Kliknij, by wyłączyć'}">${icon(l.icon, hex(l.color), 16)} ${l.name}</button>`;
         })
         .join('');
       return `<div class="pool"><h4>${label} <em>${on} z ${ids.length} włączonych (min. ${MIN_ENABLED[kind]})</em></h4><div class="chips">${list}</div></div>`;
