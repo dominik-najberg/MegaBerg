@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CIRCLE_BOONS, GREED_CURSE } from '../src/data/blessings';
 import { ENEMIES, ENEMY_INDEX } from '../src/data/enemies';
-import { enemyHpMul, finalWaveMul, FINAL_WAVE_MUL, OVERTIME, RUN_LENGTH } from '../src/data/waves';
+import { enemyHpMul, finalWaveMul, FINAL_WAVE_MUL, FINAL_WAVE_STEP, RUN_LENGTH, SURGE_EVERY, SURGE_LENGTH, surgeAt } from '../src/data/waves';
 import type { InputState } from '../src/sim/player';
 import { GameMap } from '../src/sim/terrain';
 import { Bot } from '../src/debug/bot';
@@ -23,8 +23,8 @@ const standAt = (w: World, x: number, z: number): void => {
   w.player.savePrev();
 };
 
-describe('portal Leszego i nadgodzina', () => {
-  it('o 10:00 otwiera się portal zamiast bossa; przytrzymanie E przy portalu wzywa Leszego', () => {
+describe('portal Leszego i fala końcowa', () => {
+  it('o 8:00 otwiera się portal zamiast bossa; przytrzymanie E przy portalu wzywa Leszego', () => {
     const w = new World(map, { seed: 6 });
     w.bonuses.disabled = true;
     w.time = RUN_LENGTH - 0.01;
@@ -60,7 +60,7 @@ describe('portal Leszego i nadgodzina', () => {
     w.player.invuln = 99;
     w.step(DT, input());
     w.spawner.disabled = true;
-    w.time = RUN_LENGTH + OVERTIME + 45;
+    w.time = RUN_LENGTH + FINAL_WAVE_STEP * 2 + 5;
     w.step(DT, input());
     expect(w.hpMul).toBeGreaterThan(enemyHpMul(w.time) * 1.5);
     const po = w.portal!;
@@ -77,17 +77,56 @@ describe('portal Leszego i nadgodzina', () => {
     expect(w.enemies.maxHp[boss] as number).toBeCloseTo(plain, -1);
   });
 
-  it('fala końcowa wzmacnia wrogów co 30 s, dopóki boss nie zostanie wezwany', () => {
-    expect(finalWaveMul(RUN_LENGTH + OVERTIME - 1)).toBe(1);
-    expect(finalWaveMul(RUN_LENGTH + OVERTIME)).toBeCloseTo(FINAL_WAVE_MUL);
-    expect(finalWaveMul(RUN_LENGTH + OVERTIME + 61)).toBeCloseTo(FINAL_WAVE_MUL ** 3);
+  it('fala końcowa zaczyna się z końcem rundy i wzmacnia wrogów co 20 s, dopóki boss nie zostanie wezwany', () => {
+    expect(finalWaveMul(RUN_LENGTH - 1)).toBe(1);
+    expect(finalWaveMul(RUN_LENGTH)).toBeCloseTo(FINAL_WAVE_MUL);
+    expect(finalWaveMul(RUN_LENGTH + FINAL_WAVE_STEP * 2 + 1)).toBeCloseTo(FINAL_WAVE_MUL ** 3);
+    // Po trzech minutach fali końcowej wrogowie są wielokrotnie groźniejsi.
+    expect(finalWaveMul(RUN_LENGTH + 180)).toBeGreaterThan(7);
     const w = quiet();
-    w.time = RUN_LENGTH + OVERTIME + 40;
+    w.time = RUN_LENGTH + FINAL_WAVE_STEP + 5;
     w.step(DT, input());
     const hard = w.hpMul;
     w.bossSummoned = true;
     w.step(DT, input());
     expect(hard / w.hpMul).toBeCloseTo(FINAL_WAVE_MUL ** 2, 1);
+  });
+});
+
+describe('fale co 2,5 minuty', () => {
+  it('runda trwa 8 minut, a fala trwa 30 s co 2,5 minuty', () => {
+    expect(RUN_LENGTH).toBe(480);
+    expect(SURGE_EVERY).toBe(150);
+    expect(SURGE_LENGTH).toBe(30);
+    expect(surgeAt(0)).toBe(0);
+    expect(surgeAt(149)).toBe(0);
+    expect(surgeAt(150)).toBe(1);
+    expect(surgeAt(179)).toBe(1);
+    expect(surgeAt(180)).toBe(0);
+    expect(surgeAt(310)).toBe(2);
+    expect(surgeAt(460)).toBe(3);
+    expect(surgeAt(RUN_LENGTH)).toBe(0);
+  });
+
+  it('w czasie fali wrogów jest wyraźnie więcej niż tuż przed nią', () => {
+    const run = (until: number): number => {
+      const w = new World(map, { seed: 6 });
+      w.bonuses.disabled = true;
+      w.spawner.disabled = true;
+      w.time = 290;
+      w.spawner.disabled = false;
+      // Bohater nie walczy: liczy się sama gęstość, do której dąży spawner.
+      w.weapons.length = 0;
+      while (w.time < until) {
+        w.player.invuln = 99;
+        if (w.choice) w.choose(0);
+        w.step(DT, input());
+      }
+      return w.enemies.count;
+    };
+    const calm = run(299.5);
+    const surge = run(329.5);
+    expect(surge).toBeGreaterThan(calm * 1.3);
   });
 });
 

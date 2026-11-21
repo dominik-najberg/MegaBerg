@@ -3,7 +3,7 @@ const { browser, page, errors } = await launch({ width: 1600, height: 900 });
 const ev = (fn, arg) => page.evaluate(fn, arg);
 await page.goto(`${URL}?autostart=1`);
 await sleep(1000);
-await ev(() => { const g = window.__mb; g.debug.spawner(false); g.debug.only('zniwa', 'slonce', 'gniew', 'topor', 'kwiat'); g.debug.time(598); g.debug.spawner(true); g.setBot('good'); g.world.stats.maxHp = 400; g.world.player.hp = 400; });
+await ev(() => { const g = window.__mb; g.debug.spawner(false); g.debug.only('zniwa', 'slonce', 'gniew', 'topor', 'kwiat'); g.debug.time(478); g.debug.spawner(true); g.setBot('good'); g.world.stats.maxHp = 400; g.world.player.hp = 400; });
 await sleep(4000);
 // Since the portal (10:00) Leszy no longer walks in on his own: clear the field, step up to the portal and hold E.
 for (let i = 0; i < 40 && !(await ev(() => window.__mb.world.portal)); i++) await sleep(250);

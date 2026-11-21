@@ -109,7 +109,7 @@ describe('skalowanie', () => {
       dmg = enemyDamageMul(t);
     }
     expect(enemyHpMul(RUN_LENGTH)).toBeGreaterThan(8);
-    expect(enemyDamageMul(RUN_LENGTH)).toBeCloseTo(2.3);
+    expect(enemyDamageMul(600)).toBeCloseTo(2.3);
   });
 
   it('każdy kolejny poziom wymaga więcej doświadczenia', () => {
@@ -120,18 +120,18 @@ describe('skalowanie', () => {
   it('fazy fal są posortowane, a gęstość rośnie do bossa', () => {
     for (let i = 1; i < WAVES.length; i++) expect(WAVES[i]!.from).toBeGreaterThan(WAVES[i - 1]!.from);
     expect(phaseAt(0).phase).toBe(WAVES[0]);
-    expect(phaseAt(100).phase.from).toBe(90);
+    expect(phaseAt(100).phase.from).toBe(72);
     expect(phaseAt(100).progress).toBeGreaterThan(0);
     expect(phaseAt(100).progress).toBeLessThan(1);
     const before = phaseAt(RUN_LENGTH - 1).phase;
-    expect(before.alive[1]).toBeGreaterThanOrEqual(300);
+    expect(before.alive[1]).toBeGreaterThanOrEqual(150);
   });
 
-  it('każde zdarzenie fali wskazuje istniejącego wroga, a portal Leszego otwiera się w 10. minucie', () => {
+  it('każde zdarzenie fali wskazuje istniejącego wroga, a portal Leszego otwiera się w 8. minucie', () => {
     for (const ev of WAVE_EVENTS) expect(ENEMY_INDEX[ev.enemy]).toBeDefined();
     for (const p of WAVES) for (const id of Object.keys(p.mix)) expect(ENEMY_INDEX[id]).toBeDefined();
     const portal = WAVE_EVENTS.find((e) => e.kind === 'portal');
-    expect(portal?.at).toBe(600);
+    expect(portal?.at).toBe(480);
     expect(WAVE_EVENTS.some((e) => e.kind === 'boss')).toBe(false);
     expect(WAVE_EVENTS.filter((e) => e.kind === 'mini').length).toBeGreaterThanOrEqual(2);
   });

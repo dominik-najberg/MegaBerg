@@ -2,7 +2,7 @@ import { WEAPONS } from '../data/weapons';
 import { canBanish } from '../sim/cards';
 import { emptyInput, type InputState } from '../sim/player';
 import { PickupKind } from '../sim/pools';
-import { CIRCLE_RADIUS, MAX_WEAPONS, type Card, type Shrine, type World } from '../sim/world';
+import { CIRCLE_RADIUS, MAX_WEAPONS, RUN_LENGTH, type Card, type Shrine, type World } from '../sim/world';
 
 export type BotSkill = 'novice' | 'good';
 
@@ -241,7 +241,7 @@ export class Bot {
       if (d < 2.8) inp.interact = true;
       if (d > 0.01) {
         // The longer the portal waits, the harder the bot pushes toward it (overtime only gets worse).
-        const wgt = (good ? 3 : 1.5) * (1 + Math.max(0, w.time - 600) / 20);
+        const wgt = (good ? 3 : 1.5) * (1 + Math.max(0, w.time - RUN_LENGTH) / 20);
         ax += (dx / d) * wgt;
         az += (dz / d) * wgt;
       }

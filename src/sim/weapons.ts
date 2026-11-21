@@ -13,6 +13,8 @@ export function minInterval(kind: WeaponKind): number {
 
 /** Longest distance a projectile moves between two collision checks (metres). */
 const PROJ_SUBSTEP = 0.6;
+/** Half-width of an orbiting sickle's cutting spoke (metres). */
+const ORBIT_BLADE_R = 0.95;
 
 function fireProjectile(
   w: World,
@@ -175,21 +177,30 @@ export function updateWeapons(w: World, dt: number): void {
         }
         if (inst.active > 0) {
           inst.angle += st.speed * dt;
-          for (let k = 0; k < count; k++) {
-            const a = inst.angle + (k * TAU) / count;
-            const bx = p.x + Math.sin(a) * area;
-            const bz = p.z + Math.cos(a) * area;
-            const n = w.collect(bx, bz, 0.95);
-            for (let q = 0; q < n; q++) {
-              const j = w.bufA[q] as number;
-              const hi = j * WEAPON_SLOTS + slot;
-              if (w.time - (e.hitT[hi] as number) < 0.45) continue;
-              e.hitT[hi] = w.time;
-              const dx = (e.x[j] as number) - p.x;
-              const dz = (e.z[j] as number) - p.z;
-              const d = Math.hypot(dx, dz) || 1;
-              w.damageEnemy(j, dmg, slot, dx / d, dz / d, st.knockback, st);
+          // Each sickle cuts along its whole spoke (hero → blade), so enemies pressed against the hero
+          // are hit too, not only those on the blade's circle.
+          const n = w.collect(p.x, p.z, area + ORBIT_BLADE_R);
+          for (let q = 0; q < n; q++) {
+            const j = w.bufA[q] as number;
+            const hi = j * WEAPON_SLOTS + slot;
+            if (w.time - (e.hitT[hi] as number) < 0.45) continue;
+            const dx = (e.x[j] as number) - p.x;
+            const dz = (e.z[j] as number) - p.z;
+            const reach = ORBIT_BLADE_R + (e.radius[j] as number);
+            let hit = false;
+            for (let k = 0; k < count && !hit; k++) {
+              const a = inst.angle + (k * TAU) / count;
+              const ux = Math.sin(a);
+              const uz = Math.cos(a);
+              const t = Math.min(area, Math.max(0, dx * ux + dz * uz));
+              const ox = dx - ux * t;
+              const oz = dz - uz * t;
+              hit = ox * ox + oz * oz <= reach * reach;
             }
+            if (!hit) continue;
+            e.hitT[hi] = w.time;
+            const d = Math.hypot(dx, dz) || 1;
+            w.damageEnemy(j, dmg, slot, dx / d, dz / d, st.knockback, st);
           }
         }
         break;
