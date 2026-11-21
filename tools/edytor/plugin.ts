@@ -30,6 +30,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { homedir, tmpdir } from 'node:os';
 import { basename, extname, join, relative, resolve, sep } from 'node:path';
 import type { Plugin } from 'vite';
+import { Transfers, transferFiles, type TargetInfo, type TransferKind } from './transfer.ts';
 
 const API = '/__edytor';
 const PAGE = '/tools/edytor/index.html';
@@ -140,7 +141,31 @@ export function conceptEditor(): Plugin {
       const root = server.config.root;
       const concepts = resolve(root, 'concepts');
       const outDir = join(concepts, 'propozycje');
-      const editor = new Editor(root, concepts, outDir);
+      // Heroes and enemies come from the game's own data files, loaded through Vite so edits show up at once.
+      const targets = async (): Promise<TargetInfo[]> => {
+        const chars = (await server.ssrLoadModule('/src/data/characters.ts')) as { CHARACTERS: Array<{ id: string; name: string; look: { style: string } }> };
+        const foes = (await server.ssrLoadModule('/src/data/enemies.ts')) as { ENEMIES: Array<{ id: string; name: string; radius: number; height: number }> };
+        return [
+          ...chars.CHARACTERS.map((c) => {
+            const sharing = chars.CHARACTERS.filter((o) => o.id !== c.id && o.look.style === c.look.style).map((o) => o.name);
+            return {
+              kind: 'bohater' as const,
+              id: c.id,
+              name: c.name,
+              brief:
+                `Current \`look\` of this hero: ${JSON.stringify(c.look)} (colours are decimal RGB numbers).` +
+                (sharing.length > 0 ? ` Heroes sharing its style \`${c.look.style}\`: ${sharing.join(', ')}.` : ' No other hero uses its style.'),
+            };
+          }),
+          ...foes.ENEMIES.map((e) => ({
+            kind: 'wrog' as const,
+            id: e.id,
+            name: e.name,
+            brief: `In world units its collision radius is ${e.radius} and its height ${e.height}.`,
+          })),
+        ];
+      };
+      const editor = new Editor(root, concepts, outDir, targets);
       server.httpServer?.once('close', () => editor.stopAll());
 
       server.middlewares.use((req, res, next) => {
@@ -190,9 +215,13 @@ class Editor {
     private readonly root: string,
     private readonly concepts: string,
     private readonly outDir: string,
+    private readonly targets: () => Promise<TargetInfo[]>,
   ) {
     this.load();
+    this.transfers = new Transfers(root, concepts, outDir);
   }
+
+  private readonly transfers: Transfers;
 
   // ---------------------------------------------------------------- persistence
 
@@ -299,7 +328,20 @@ class Editor {
     try {
       if (req.method === 'GET' && route === '/state') {
         this.sync();
+        this.transfers.sync();
+        let targets: TargetInfo[] = [];
+        let targetsError = '';
+        try {
+          targets = await this.targets();
+        } catch (err) {
+          // The game data does not compile right now (someone is mid-edit): the editor still works.
+          targetsError = err instanceof Error ? err.message : String(err);
+        }
         send(res, 200, {
+          targets: targets.map((t) => ({ kind: t.kind, id: t.id, name: t.name, files: transferFiles(t.kind) })),
+          targetsError,
+          transfers: this.transfers.all(),
+          dirty: this.transfers.dirty(),
           refs: this.library(),
           batches: [...this.batches.values()].sort((a, b) => b.created - a.created),
           codex: codexAvailable(),
@@ -329,6 +371,10 @@ class Editor {
         send(res, 200, this.itemAction(await body(req)));
       } else if (req.method === 'POST' && route === '/batch') {
         send(res, 200, this.batchAction(await body(req)));
+      } else if (req.method === 'POST' && route === '/transfer') {
+        send(res, 200, await this.transfer(await body(req)));
+      } else if (req.method === 'POST' && route === '/transfer/action') {
+        send(res, 200, this.transferAction(await body(req)));
       } else if (req.method === 'POST' && route === '/cleanup') {
         send(res, 200, this.cleanup(await body(req)));
       } else {
@@ -754,6 +800,56 @@ class Editor {
     }
   }
 
+  // ---------------------------------------------------------------- transfer to the game
+
+  private async transfer(input: Record<string, unknown>): Promise<unknown> {
+    const { batch, item } = this.find(input);
+    if (!item || item.status !== 'done' || !item.file) throw new HttpError(400, 'Do gry można przenieść tylko gotową propozycję.');
+    if (!codexAvailable()) throw new HttpError(503, 'Przenoszenie robi agent Codex: nie znaleziono polecenia `codex` w PATH.');
+    const want = (input.target ?? {}) as { kind?: unknown; id?: unknown };
+    const target = (await this.targets()).find((t) => t.kind === (want.kind as TransferKind) && t.id === want.id);
+    if (!target) throw new HttpError(400, 'Wybierz bohatera albo wroga, którego model ma zostać przebudowany.');
+    const proposal = `propozycje/${batch.id}/${item.file}`;
+    try {
+      this.transfers.sync();
+      return this.transfers.start({
+        batch: batch.id,
+        n: item.n,
+        proposal,
+        proposalPath: this.refPath(proposal),
+        refPaths: batch.refs.filter((id) => existsSync(resolve(this.concepts, id))).map((id) => this.refPath(id)),
+        refLabels: batch.refs.filter((id) => existsSync(resolve(this.concepts, id))).map(labelOf),
+        target,
+        notes: String(input.notes ?? '').trim().slice(0, 2000),
+      });
+    } catch (err) {
+      throw new HttpError(409, err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  private transferAction(input: Record<string, unknown>): unknown {
+    const id = String(input.id ?? '');
+    this.transfers.sync();
+    try {
+      if (input.action === 'cancel') return this.transfers.cancel(id);
+      if (input.action === 'revert') return this.transfers.revert(id);
+      if (input.action === 'dismiss') {
+        this.transfers.dismiss(id);
+        return { dismissed: id };
+      }
+    } catch (err) {
+      throw new HttpError(409, err instanceof Error ? err.message : String(err));
+    }
+    throw new HttpError(400, 'Nieznana akcja.');
+  }
+
+  /** A proposal being moved into the game keeps its files until the transfer ends. */
+  private guardTransfer(batch: Batch, n?: number): void {
+    if (this.transfers.all().some((t) => t.status === 'running' && t.batch === batch.id && (n === undefined || t.n === n))) {
+      throw new HttpError(409, 'Ta propozycja jest właśnie przenoszona do gry. Poczekaj albo anuluj przenoszenie.');
+    }
+  }
+
   // ---------------------------------------------------------------- actions
 
   private find(input: Record<string, unknown>): { batch: Batch; item?: ProposalItem } {
@@ -770,6 +866,7 @@ class Editor {
     if (input.action === 'star') {
       item.starred = input.value !== false;
     } else if (input.action === 'delete') {
+      this.guardTransfer(batch, item.n);
       this.stop(item);
       if (item.file) rmSync(join(this.outDir, batch.id, basename(item.file)), { force: true });
       batch.items = batch.items.filter((i) => i !== item);
@@ -803,6 +900,7 @@ class Editor {
       return batch;
     }
     if (input.action === 'delete') {
+      this.guardTransfer(batch);
       for (const item of batch.items) this.stop(item);
       this.pump();
       return this.removeBatch(batch);
@@ -843,6 +941,7 @@ class Editor {
     let deleted = 0;
     for (const batch of [...this.batches.values()]) {
       if (only !== undefined && batch.id !== only) continue;
+      if (this.transfers.all().some((t) => t.status === 'running' && t.batch === batch.id)) continue;
       const doomed = batch.items.filter((i) => (i.status === 'error' ? true : scope === 'unstarred' && i.status === 'done' && !i.starred));
       if (doomed.length === 0) continue;
       for (const item of doomed) {
@@ -860,6 +959,7 @@ class Editor {
     this.queue = [];
     for (const job of this.running.values()) job.stop();
     for (const child of this.children) child.kill('SIGTERM');
+    this.transfers.stopAll();
   }
 }
 

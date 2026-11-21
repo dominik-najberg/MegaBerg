@@ -68,6 +68,15 @@ Narzędzie wewnętrzne do prac nad grafiką, dostępne tylko w serwerze dewelope
    gwiazdki” i „Usuń nieudane” (w serii albo u góry, dla wszystkich serii) sprzątają zbiorczo. Każde usunięcie
    pyta o potwierdzenie i kasuje pliki z dysku.
 
+7. **Do gry:** przycisk przy gotowej propozycji przenosi ją na model w grze. Modele są tu kodem, który
+   składa bryły, więc robi to agent Codex: przepisuje model bohatera (`src/render/hero.ts`,
+   `src/data/characters.ts`, `src/data/types.ts`) albo wroga (`src/render/enemyModels.ts`) według obrazu,
+   potem ogląda zrzuty przebudowanego modelu z prawdziwej gry i poprawia go, najwyżej w trzech rundach.
+   Nowy wygląd zastępuje dotychczasowy. Trwa to od kilku do kilkunastu minut; panel nad propozycjami
+   pokazuje postęp, a po zakończeniu porównanie „koncept / przed / po”, listę zmienionych plików, opis zmian
+   i przycisk „Cofnij zmiany” (przywraca pliki sprzed przenoszenia, o ile nikt ich później nie zmienił).
+   Agent niczego nie commituje i nie buduje `dist/`. Naraz działa jedno przenoszenie.
+
 Konfiguracja: polecenie `codex` w `PATH` (zalogowane) dla Codeksa oraz plik `.env` w katalogu projektu z linią
 `WAVESPEED=<klucz API>` dla modeli WaveSpeed. Plik `.env` jest w `.gitignore`, a klucz nie trafia do
 przeglądarki. Kod: `tools/edytor/`.

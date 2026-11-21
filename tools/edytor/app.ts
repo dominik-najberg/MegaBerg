@@ -1,6 +1,7 @@
 // Concept editor frontend: pick references from concepts/, describe what should come out,
 // and let the dev server produce proposal images with Codex or WaveSpeed models. Talks to tools/edytor/plugin.ts.
 import type { Batch, Engine, LibraryRef, ProposalItem } from './plugin';
+import type { Transfer, TransferKind } from './transfer';
 
 const API = '/__edytor';
 
@@ -13,6 +14,12 @@ interface ServerState {
   formats: Record<string, string>;
   resolutions: string[];
   limits: { refs: number; variants: number; items: number };
+  /** Heroes and enemies whose model a proposal can be moved onto, with the files that would change. */
+  targets: Array<{ kind: TransferKind; id: string; name: string; files: string[] }>;
+  targetsError: string;
+  transfers: Transfer[];
+  /** Model files with uncommitted changes. */
+  dirty: string[];
 }
 
 type Mode = 'koncept' | 'skorka';
@@ -164,6 +171,10 @@ let state: ServerState = {
   formats: {},
   resolutions: [],
   limits: { refs: 4, variants: 4, items: 12 },
+  targets: [],
+  targetsError: '',
+  transfers: [],
+  dirty: [],
 };
 let mode: Mode = 'koncept';
 let engines: string[] = ['codex'];
@@ -179,6 +190,7 @@ let lightbox: { images: Array<{ src: string; caption: string }>; title: string }
 let lastLibraryKey = '';
 let lastResultsKey = '';
 let lastEnginesKey = '';
+let lastTransfersKey = '';
 
 // -------------------------------------------------------------------- dom helpers
 
@@ -235,6 +247,8 @@ const modeEl = h('div', { class: 'chips' });
 const enginesEl = h('div', { class: 'chips' });
 const costEl = h('span', { class: 'hint' });
 const toolbarEl = h('div', { class: 'toolbar' });
+const transfersEl = h('div');
+const dialogHost = h('div');
 const styleEl = h('input', { type: 'checkbox', checked: true });
 const generateEl = h('button', { class: 'primary' }, 'Generuj propozycje');
 const formErrorEl = h('span', { class: 'error' });
@@ -287,8 +301,9 @@ document.getElementById('app')!.append(
         ),
       ),
     ),
-    h('section', { class: 'results' }, h('div', { class: 'head' }, h('h2', {}, 'Propozycje'), toolbarEl), h('div', { class: 'scroll' }, resultsEl)),
+    h('section', { class: 'results' }, h('div', { class: 'head' }, h('h2', {}, 'Propozycje'), toolbarEl), h('div', { class: 'scroll' }, transfersEl, resultsEl)),
   ),
+  dialogHost,
   lightboxHost,
 );
 
@@ -700,6 +715,7 @@ function renderItem(batch: Batch, item: ProposalItem): HTMLElement {
   }
   const id = `propozycje/${batch.id}/${item.file}`;
   const isRef = selected.includes(id);
+  const moved = state.transfers.find((t) => t.batch === batch.id && t.n === item.n);
   const remove = (): void => {
     const star = item.starred ? ' Ma gwiazdkę.' : '';
     if (confirm(`Usunąć propozycję ${item.n} (${engineLabel(item)}) z dysku?${star} Tego nie da się cofnąć.`)) {
@@ -733,6 +749,16 @@ function renderItem(batch: Batch, item: ProposalItem): HTMLElement {
         item.starred ? '★ Ulubiona' : '☆ Ulubiona',
       ),
       h('button', { class: 'small' + (isRef ? ' on' : ''), title: 'Pracuj dalej na tym obrazie', onclick: () => toggleRefFromResult(id) }, isRef ? 'Referencja ✓' : 'Jako referencja'),
+      h(
+        'button',
+        {
+          class: 'small' + (moved?.status === 'done' ? ' on' : ''),
+          title: 'Agent przebuduje model w kodzie gry według tego obrazu',
+          disabled: moved?.status === 'running',
+          onclick: () => openTransferDialog(batch, item),
+        },
+        moved?.status === 'running' ? 'Przenoszenie…' : moved?.status === 'done' ? 'W grze ✓' : 'Do gry',
+      ),
       h('button', { class: 'small danger', onclick: remove }, 'Usuń'),
     ),
     h('div', { class: 'note' }, h('span', { class: 'engine' }, engineLabel(item)), item.note ? ' ' + item.note : ''),
@@ -771,6 +797,202 @@ async function mutate(path: string, payload: unknown): Promise<void> {
     alert(err instanceof Error ? err.message : String(err));
   }
   await refresh();
+}
+
+// -------------------------------------------------------------------- transfer to the game
+
+const KIND_LABEL: Record<TransferKind, string> = { bohater: 'Bohaterowie', wrog: 'Wrogowie' };
+
+/** The model a batch is about, read from the name of its first reference (bohater-wojmir-przod.png). */
+function guessTarget(batch: Batch): string {
+  for (const ref of batch.refs) {
+    const m = /(?:^|\/)(bohater|wrog)-([a-z]+)-/.exec(ref);
+    if (m && state.targets.some((t) => t.kind === m[1] && t.id === m[2])) return `${m[1]}:${m[2]}`;
+  }
+  return '';
+}
+
+function openTransferDialog(batch: Batch, item: ProposalItem): void {
+  const id = `propozycje/${batch.id}/${item.file}`;
+  const close = (): void => dialogHost.replaceChildren();
+  const targetEl = h('select');
+  targetEl.append(h('option', { value: '' }, 'Wybierz model…'));
+  for (const kind of ['bohater', 'wrog'] as TransferKind[]) {
+    const group = h('optgroup', { label: KIND_LABEL[kind] });
+    for (const t of state.targets.filter((x) => x.kind === kind)) group.append(h('option', { value: `${t.kind}:${t.id}` }, t.name));
+    targetEl.append(group);
+  }
+  targetEl.value = guessTarget(batch);
+  const notesEl = h('textarea', { placeholder: 'Uwagi dla agenta (opcjonalnie), np. „zostaw fryzurę”, „najważniejszy jest haft na piersi”.' });
+  notesEl.style.minHeight = '70px';
+  const infoEl = h('div', { class: 'hint' });
+  const errorEl = h('div', { class: 'error' });
+  const goEl = h('button', { class: 'primary' }, 'Przenieś do gry');
+  const chosen = (): ServerState['targets'][number] | undefined => state.targets.find((t) => `${t.kind}:${t.id}` === targetEl.value);
+  const update = (): void => {
+    const target = chosen();
+    const busy = state.transfers.some((t) => t.status === 'running');
+    goEl.disabled = !target || busy;
+    const dirty = target ? target.files.filter((f) => state.dirty.includes(f)) : [];
+    const parts: Child[] = [
+      h(
+        'p',
+        {},
+        target
+          ? `Agent Codex przepisze model „${target.name}” w kodzie gry (${target.files.join(', ')}), obejrzy wynik na zrzutach z gry i poprawi go, najwyżej w trzech rundach. Nowy wygląd zastąpi obecny. Trwa to zwykle od kilku do kilkunastu minut.`
+          : state.targetsError
+            ? `Nie udało się wczytać listy modeli: ${state.targetsError}`
+            : 'Wybierz, czyj model ma wyglądać jak ta propozycja.',
+      ),
+      dirty.length > 0 &&
+        h('p', { class: 'warn' }, `Uwaga: ${dirty.join(', ')} ${dirty.length === 1 ? 'ma' : 'mają'} niezatwierdzone zmiany. Agent będzie pracował na nich, a „Cofnij zmiany” przywróci stan sprzed przenoszenia, czyli razem z tymi zmianami.`),
+      busy && h('p', { class: 'warn' }, 'Trwa już jedno przenoszenie. Kolejne można zacząć, gdy się skończy.'),
+      h('p', {}, 'Niczego nie commituję. Po zakończeniu zobaczysz porównanie przed i po oraz przycisk cofnięcia zmian.'),
+    ];
+    infoEl.replaceChildren(...parts.filter((p): p is Node => Boolean(p) && typeof p !== 'string'));
+  };
+  targetEl.oninput = update;
+  goEl.onclick = async () => {
+    const target = chosen();
+    if (!target) return;
+    goEl.disabled = true;
+    errorEl.textContent = '';
+    try {
+      await api('/transfer', { batch: batch.id, n: item.n, target: { kind: target.kind, id: target.id }, notes: notesEl.value });
+      close();
+      await refresh();
+    } catch (err) {
+      errorEl.textContent = err instanceof Error ? err.message : String(err);
+      goEl.disabled = false;
+    }
+  };
+  update();
+  dialogHost.replaceChildren(
+    h(
+      'div',
+      {
+        class: 'modal',
+        onclick: (e: MouseEvent) => {
+          if (e.target === e.currentTarget) close();
+        },
+        onkeydown: (e: KeyboardEvent) => {
+          if (e.key === 'Escape') close();
+        },
+      },
+      h(
+        'div',
+        { class: 'dialog', role: 'dialog', ariaLabel: 'Przenieś do gry' },
+        h('h2', {}, 'Przenieś do gry'),
+        h(
+          'div',
+          { class: 'dialog-body' },
+          h('img', { class: 'dialog-pic', src: img(id), alt: `Propozycja ${item.n}` }),
+          h(
+            'div',
+            { class: 'dialog-form' },
+            h('label', { class: 'field', style: 'margin-top:0' } as never, h('span', { class: 'name' }, 'Model w grze'), targetEl),
+            h('label', { class: 'field' }, h('span', { class: 'name' }, 'Uwagi'), notesEl),
+            infoEl,
+            errorEl,
+          ),
+        ),
+        h('div', { class: 'actions' }, goEl, h('button', { onclick: close }, 'Anuluj')),
+      ),
+    ),
+  );
+  targetEl.focus();
+}
+
+function duration(t: Transfer): string {
+  const s = Math.max(0, Math.round(((t.finishedAt ?? Date.now()) - t.startedAt) / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+const STATUS_LABEL: Record<Transfer['status'], string> = {
+  running: 'w toku',
+  done: 'gotowe',
+  error: 'nie udało się',
+  cancelled: 'anulowane',
+  reverted: 'cofnięte',
+};
+
+function renderTransfers(): void {
+  transfersEl.replaceChildren(...state.transfers.map(renderTransfer));
+}
+
+function renderTransfer(t: Transfer): HTMLElement {
+  const act = async (action: string, question?: string): Promise<void> => {
+    if (question && !confirm(question)) return;
+    try {
+      const res = await api<{ skipped?: string[] }>('/transfer/action', { id: t.id, action });
+      if (res.skipped && res.skipped.length > 0) {
+        alert(`Nie cofnięto: ${res.skipped.join(', ')}. Te pliki zmieniły się po przenoszeniu, więc zostały bez zmian.`);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : String(err));
+    }
+    await refresh();
+  };
+  const front = (shots: string[]): string | undefined => shots.find((s) => s.endsWith('-przod.png')) ?? shots[0];
+  const back = t.after.find((s) => s.endsWith('-tyl.png'));
+  const compare = (): void => {
+    const images = [{ src: img(t.proposal), caption: 'koncept' }];
+    const before = front(t.before);
+    const after = front(t.after);
+    if (before) images.push({ src: img(before), caption: 'w grze przed' });
+    if (back) images.push({ src: img(back), caption: 'w grze po, tył' });
+    if (after) images.push({ src: img(after), caption: 'w grze po' });
+    openLightbox(`${t.target.name}: koncept i model w grze`, images);
+  };
+  const running = t.status === 'running';
+  return h(
+    'div',
+    { class: `transfer ${t.status}` },
+    h(
+      'div',
+      { class: 'meta' },
+      h('img', { class: 'transfer-pic', src: img(t.proposal), alt: '' }),
+      h(
+        'div',
+        { class: 'text' },
+        h('div', {}, h('b', {}, `Do gry: ${t.target.name}`), ` · propozycja ${t.n} · `, h('span', { class: 'state' }, STATUS_LABEL[t.status]), ` · ${duration(t)}`),
+        h('div', { class: 'when' }, running ? t.phase : t.error ? t.error : t.files.length > 0 ? `Zmienione: ${t.files.join(', ')}` : 'Bez zmian w plikach modelu'),
+        t.outside.length > 0 && h('div', { class: 'warn' }, `W tym czasie zmieniły się też (agent albo inna sesja): ${t.outside.join(', ')}`),
+      ),
+      h(
+        'div',
+        { class: 'tools' },
+        running && h('button', { class: 'small', onclick: () => void act('cancel') }, 'Anuluj'),
+        t.after.length > 0 && h('button', { class: 'small', onclick: compare }, 'Porównaj'),
+        !running && t.status !== 'reverted' && h('a', { class: 'button small', href: '/', target: '_blank' }, 'Otwórz grę'),
+        !running &&
+          t.files.length > 0 &&
+          h(
+            'button',
+            {
+              class: 'small danger',
+              title: 'Przywraca pliki modelu do stanu sprzed przenoszenia',
+              onclick: () => void act('revert', `Cofnąć zmiany agenta w: ${t.files.join(', ')}? Pliki wrócą do stanu sprzed przenoszenia.`),
+            },
+            'Cofnij zmiany',
+          ),
+        !running &&
+          h(
+            'button',
+            { class: 'small', title: 'Usuwa ten wpis, zrzuty i kopie plików. Kod zostaje taki, jaki jest.', onclick: () => void act('dismiss', t.files.length > 0 ? 'Ukryć ten wpis? Kod zostanie taki, jaki jest, ale zniknie możliwość cofnięcia zmian.' : undefined) },
+            'Ukryj',
+          ),
+      ),
+    ),
+    t.after.length > 0 &&
+      h(
+        'div',
+        { class: 'transfer-shots' },
+        ...t.after.filter((s) => !s.endsWith('-bok.png')).map((s) => h('img', { src: img(s) + `?r=${t.round}`, alt: '', onclick: compare })),
+      ),
+    running && t.log.length > 0 && h('pre', { class: 'transfer-log' }, t.log.slice(-6).join('\n')),
+    !running && t.summary && h('div', { class: 'transfer-summary' }, t.summary),
+  );
 }
 
 // -------------------------------------------------------------------- lightbox
@@ -860,6 +1082,13 @@ async function refresh(): Promise<void> {
     lastLibraryKey = libraryKey;
     renderLibrary();
   }
+  const running = state.transfers.some((t) => t.status === 'running');
+  const transfersKey = JSON.stringify(state.transfers) + (running ? Date.now() : '');
+  if (transfersKey !== lastTransfersKey) {
+    lastTransfersKey = transfersKey;
+    lastResultsKey = ''; // the "Do gry" buttons reflect the transfer state
+    renderTransfers();
+  }
   renderResultsIfChanged();
   const enginesKey = JSON.stringify(state.engines);
   if (enginesKey !== lastEnginesKey && formatEl.options.length > 0) renderForm();
@@ -880,7 +1109,8 @@ async function refresh(): Promise<void> {
 
 async function loop(): Promise<void> {
   await refresh();
-  const busy = state.batches.some((b) => b.items.some((i) => i.status === 'queued' || i.status === 'running'));
+  const busy =
+    state.batches.some((b) => b.items.some((i) => i.status === 'queued' || i.status === 'running')) || state.transfers.some((t) => t.status === 'running');
   setTimeout(() => void loop(), busy ? 1500 : 8000);
 }
 

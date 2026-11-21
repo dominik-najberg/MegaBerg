@@ -9,6 +9,9 @@
 //   scenerie     the clearing, every named place, a swamp pool, a bonfire and a shrine at dusk, twilight and night
 //   walka        a bot run with a fixed seed at three moments, without the interface (plus one frame with it)
 //
+// MB_ONLY=<id> limits the `wrogowie` and `bohaterowie` groups to one model (the concept editor uses it
+// to show a freshly rebuilt model to the agent that built it); MB_PORT moves the private dev server.
+//
 // Output goes to concepts/zrzuty/ (override with MB_OUT). The camera, the place and the time of day are fixed,
 // so running it again after a graphics change gives frames that line up with the old ones.
 // Starts its own dev server, so nothing has to be running; MB_URL points it at an existing one instead.
@@ -53,7 +56,7 @@ const TIMES = [
 async function startServer() {
   if (process.env.MB_URL) return { url: process.env.MB_URL, close: async () => undefined };
   const { createServer } = await import('vite');
-  const server = await createServer({ logLevel: 'error', server: { port: 5199, hmr: false, watch: null } });
+  const server = await createServer({ logLevel: 'error', server: { port: Number(process.env.MB_PORT) || 5199, hmr: false, watch: null } });
   await server.listen();
   return { url: server.resolvedUrls.local[0], close: () => server.close() };
 }
@@ -229,8 +232,11 @@ const enemyIds = () => ev(() => window.__mb.gfx.enemies.views.map((v) => v.def.i
 /** Flat ground in the middle of the starting clearing; the hero waits out of the light's reach. */
 const STAGE = { x: 0, z: 0 };
 
+/** MB_ONLY narrows a group to one model; an id the group does not have leaves it empty. */
+const only = (id) => !process.env.MB_ONLY || id === process.env.MB_ONLY;
+
 async function enemies() {
-  const ids = await enemyIds();
+  const ids = (await enemyIds()).filter(only);
   // Subjects face a little off the light, so the front is lit and still has shading.
   const facing = (await lightYaw()) + 0.5;
   await placeHero(STAGE.x + 34, STAGE.z, 0);
@@ -280,10 +286,11 @@ async function heroes() {
     const m = await import('/src/data/characters.ts');
     return m.CHARACTERS.map((c) => ({ id: c.id, look: c.look }));
   });
+  const first = looks[0].look;
   const facing = (await lightYaw()) + 0.5;
   await placeHero(STAGE.x, STAGE.z, facing);
   await studio(true);
-  for (const { id, look } of looks) {
+  for (const { id, look } of looks.filter((l) => only(l.id))) {
     const ground = await ev((look) => {
       const g = window.__mb;
       g.gfx.hero.setLook(look);
@@ -291,7 +298,7 @@ async function heroes() {
     }, look);
     await turnaround(`bohater-${id}`, { x: STAGE.x, z: STAGE.z, bottom: ground, top: ground + 2.1, wide: 0.75, facing, hideHero: false });
   }
-  await ev((look) => window.__mb.gfx.hero.setLook(look), looks[0].look);
+  await ev((look) => window.__mb.gfx.hero.setLook(look), first);
   await studio(false);
 }
 
