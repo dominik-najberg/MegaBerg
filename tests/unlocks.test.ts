@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { ACHIEVEMENTS } from '../src/data/achievements';
-import { CHARACTER_BY_ID } from '../src/data/characters';
+import { CHARACTER_BY_ID, CHARACTERS } from '../src/data/characters';
+import { ITEMS } from '../src/data/items';
+import { PASSIVES } from '../src/data/passives';
 import { ENEMY_INDEX } from '../src/data/enemies';
 import type { AchievementCond, AchievementDef, CharacterDef } from '../src/data/types';
-import { WEAPON_BY_ID, weaponLine } from '../src/data/weapons';
-import { achievementProgress, applyRun, buySilver, grantFromTotals, isSilverPurchase, purchase, unlockedWeaponIds } from '../src/meta/progress';
+import { WEAPON_BY_ID, weaponLine, WEAPONS } from '../src/data/weapons';
+import { achievementProgress, applyRun, buySilver, grantFromTotals, isSilverPurchase, purchase, unlockAll, unlockedCharacterIds, unlockedItemIds, unlockedPassiveIds, unlockedWeaponIds } from '../src/meta/progress';
 import { defaultSave, sanitizeSave } from '../src/meta/save';
 import { applyCard, type Card } from '../src/sim/cards';
 import type { InputState } from '../src/sim/player';
@@ -404,5 +406,21 @@ describe('zakup broni za srebro', () => {
       expect(save.gold).toBeLessThan(1000);
       expect(save.silver).toBe(0);
     });
+  });
+});
+
+describe('odblokuj wszystko (menu dev)', () => {
+  it('otwiera wszystkie postacie, bronie, księgi i skarby, bez wypłaty złota', () => {
+    const s = defaultSave();
+    expect(unlockAll(s)).toBeGreaterThan(0);
+    expect(s.gold).toBe(0);
+    expect(unlockedCharacterIds(s)).toHaveLength(CHARACTERS.length);
+    expect(unlockedWeaponIds(s)).toHaveLength(WEAPONS.filter((w) => !w.evolved).length);
+    expect(unlockedPassiveIds(s)).toHaveLength(PASSIVES.length);
+    expect(unlockedItemIds(s)).toHaveLength(ITEMS.length);
+    expect(s.bought).toContain('toggler');
+    expect(s.evolutionsSeen).toHaveLength(WEAPONS.filter((w) => w.evolved).length);
+    expect(sanitizeSave(JSON.parse(JSON.stringify(s)))).toEqual(s);
+    expect(unlockAll(s)).toBe(0);
   });
 });
