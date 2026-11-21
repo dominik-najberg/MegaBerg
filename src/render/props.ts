@@ -607,6 +607,21 @@ export class PropsView {
     this.shrineAuras.push({ ground, halo, motes, phase: Math.random() * 10 });
   }
 
+  /**
+   * Frees the GPU buffers of this scenery (a new run builds a new forest). The Blender models and the
+   * shared materials stay: the next PropsView uses them again.
+   */
+  dispose(): void {
+    this.group.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) o.dispose();
+      else if (o instanceof THREE.Sprite) o.material.dispose();
+      else if (o instanceof THREE.Mesh && o.geometry !== shrineGroundGeo) o.geometry.dispose();
+    });
+    for (const g of this.geos.values()) g.dispose();
+    for (const a of this.shrineAuras) (a.ground.material as THREE.Material).dispose();
+    this.glowTex.dispose();
+  }
+
   /** Extinguishes the candles of a used shrine. */
   setShrineUsed(index: number, used: boolean): void {
     const g = this.shrineFlames[index];

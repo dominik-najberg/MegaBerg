@@ -21,8 +21,8 @@ export class Gfx {
   readonly scene = new THREE.Scene();
   readonly camera = new THREE.PerspectiveCamera(62, 1, 0.3, 700);
   readonly sky: Sky;
-  readonly terrain: TerrainView;
-  readonly props: PropsView;
+  terrain: TerrainView;
+  props: PropsView;
   readonly hero: HeroView;
   readonly enemies: EnemiesView;
   readonly fx: FxView;
@@ -53,7 +53,7 @@ export class Gfx {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     overlayCanvas: HTMLCanvasElement,
-    private readonly map: GameMap,
+    private map: GameMap,
     quality: Quality,
   ) {
     this.quality = quality;
@@ -83,6 +83,20 @@ export class Gfx {
     this.applyQuality(quality);
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Swaps the forest for another one (every run has its own map): rebuilds the terrain and the scenery. */
+  setMap(map: GameMap): void {
+    if (map === this.map) return;
+    this.map = map;
+    this.scene.remove(this.terrain.group, this.props.group);
+    this.terrain.dispose();
+    this.props.dispose();
+    this.terrain = new TerrainView(map);
+    this.scene.add(this.terrain.group);
+    this.props = new PropsView(map, this.quality);
+    this.scene.add(this.props.group);
+    this.fx.setMap(map);
   }
 
   applyQuality(q: Quality): void {

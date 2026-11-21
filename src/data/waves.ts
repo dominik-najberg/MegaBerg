@@ -31,6 +31,11 @@ export function surgeAt(t: number): number {
   return t % SURGE_EVERY < SURGE_LENGTH ? Math.floor(t / SURGE_EVERY) : 0;
 }
 
+/** Seconds until the surge running at time t ends, 0 when none is running. */
+export function surgeLeft(t: number): number {
+  return surgeAt(t) > 0 ? SURGE_LENGTH - (t % SURGE_EVERY) : 0;
+}
+
 /** Endless mode (after the boss): the densest mix, forever, while enemy health keeps scaling with time. */
 export const ENDLESS_PHASE: WavePhase = { from: RUN_LENGTH, alive: [200, 250], rate: 11, mix: { chochlik: 3, utopiec: 3.5, kruk: 2.5, ognik: 2, strzyga: 3, wilkolak: 2.5, bies: 2, licho: 2 } };
 /** Endless mode: seconds between mini-bosses, and between returns of the boss. */

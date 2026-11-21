@@ -25,7 +25,7 @@ export const Ev = {
   Coin: 14,
   /** a = amount */
   Heal: 15,
-  /** a = 1 for a gift chest */
+  /** a = 1 for a gift chest, 2 for the rich chest of a landmark */
   ChestOpen: 16,
   Shrine: 17,
   /** a = enemy type index */
@@ -53,7 +53,7 @@ export const Ev = {
   Pickup: 32,
   /** A landmark of the map was found: a = landmark index */
   Discover: 33,
-  /** A timed bonus appeared near the hero: a = 0 magnet, 1 gift chest */
+  /** A timed bonus appeared near the hero: a = 0 magnet, 1 gift chest, 2 portal, 3 haste */
   Bonus: 34,
   /** The hero dodged a hit (evasion). */
   Dodge: 35,
@@ -63,6 +63,8 @@ export const Ev = {
   Beam: 37,
   /** A secret was found: a = 1 when the hero picked it up, 0 for its glint */
   Secret: 38,
+  /** The haste bonus was picked up: attacks are faster for a while. */
+  Haste: 39,
 } as const;
 
 export interface GameEvent {

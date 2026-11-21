@@ -16,12 +16,17 @@ import { World } from './sim/world';
 import { MapScreen } from './ui/mapScreen';
 import { UI } from './ui/ui';
 
+function randomSeed(): number {
+  return (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0;
+}
+
 type State = 'menu' | 'playing' | 'paused' | 'choice' | 'ending' | 'end';
 
 /** Glue between input, simulation, rendering, audio, UI and persistent progress. */
 export class Game {
   readonly input: Input;
-  readonly map = new GameMap();
+  /** The forest of the current run: every run rolls a new one (see newMap). */
+  map = new GameMap(randomSeed());
   readonly gfx: Gfx;
   readonly loop: Loop;
   readonly audio = new AudioSys();
@@ -116,7 +121,7 @@ export class Game {
   private makeWorld(idle: boolean): World {
     const save = this.store.data;
     const w = new World(this.map, {
-      seed: (Date.now() ^ (Math.random() * 0x7fffffff)) >>> 0,
+      seed: randomSeed(),
       character: this.character,
       shop: save.shop,
       weaponPool: runPool(save, 'w'),
@@ -135,6 +140,7 @@ export class Game {
     if (c && isUnlocked(this.store.data, c.unlock)) this.character = c;
     this.store.data.character = this.character.id;
     this.store.save();
+    this.newMap();
     this.world = this.makeWorld(false);
     this.runSaved = false;
     this.secretsSaved = 0;
@@ -153,6 +159,13 @@ export class Game {
     this.input.clearPressed();
     this.input.requestLock();
     this.world.announce.push('Zapada zmierzch. Przetrwaj do świtu złych mocy!');
+  }
+
+  /** Rolls a new forest and hands it to everything that draws it. `seed` pins it (automated screenshots). */
+  newMap(seed = randomSeed()): void {
+    this.map = new GameMap(seed);
+    this.gfx.setMap(this.map);
+    this.mapScreen.setMap(this.map);
   }
 
   toMenu(): void {

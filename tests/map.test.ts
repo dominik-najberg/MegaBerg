@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { BLESSINGS } from '../src/data/blessings';
 import { Explored, FOG_CELL, SIGHT } from '../src/sim/fog';
 import { emptyInput } from '../src/sim/player';
-import { GameMap, MAP_HALF, NEAR_CHEST_MAX, NEAR_CHEST_MIN, NEAR_CHESTS, PLAY_RADIUS } from '../src/sim/terrain';
+import { DEFAULT_MAP_SEED, GameMap, MAP_HALF, NEAR_CHEST_MAX, NEAR_CHEST_MIN, NEAR_CHESTS, PLAY_RADIUS } from '../src/sim/terrain';
 import { World } from '../src/sim/world';
 
 const DT = 1 / 60;
 const map = new GameMap();
 
-describe('duża mapa', () => {
+// Każdy run losuje inny bór: te same reguły muszą trzymać dla każdego ziarna.
+describe.each([DEFAULT_MAP_SEED, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])('duża mapa (ziarno %i)', (mapSeed) => {
+  const map = new GameMap(mapSeed);
+
   it('jest wyraźnie większa niż pierwotna polana (promień 92 m)', () => {
     expect(PLAY_RADIUS).toBeGreaterThanOrEqual(170);
     expect(MAP_HALF).toBeGreaterThan(PLAY_RADIUS + 30);
@@ -36,12 +39,27 @@ describe('duża mapa', () => {
     expect(map.shrines.length).toBe(BLESSINGS.length * 2);
   });
 
-  it('przy każdym miejscu (poza jeziorem) czeka skrzynia', () => {
+  it('przy każdym miejscu (poza jeziorem) czeka bogata skrzynia, a w lesie same zwykłe', () => {
     for (const l of map.landmarks) {
       if (l.kind === 'lake') continue;
-      const near = map.chestSpots.some((c) => Math.hypot(c.x - l.x, c.z - l.z) < l.r);
-      expect(near).toBe(true);
+      const near = map.chestSpots.filter((c) => Math.hypot(c.x - l.x, c.z - l.z) < l.r);
+      expect(near.length).toBe(1);
+      expect(near[0]!.rich).toBe(true);
     }
+    expect(map.chestSpots.filter((c) => c.rich).length).toBe(map.landmarks.length - 1);
+    expect(map.chestSpots.length).toBeGreaterThanOrEqual(24);
+  });
+
+  it('miejsca nie nachodzą na siebie ani na polanę startową, a skrzynie i kapliczki nie stoją w wodzie', () => {
+    for (const a of map.landmarks) {
+      expect(Math.hypot(a.x, a.z) - a.r).toBeGreaterThan(40);
+      for (const b of map.landmarks) {
+        if (a !== b) expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(a.r + b.r + 8);
+      }
+    }
+    for (const c of map.chestSpots) expect(map.inPuddle(c.x, c.z)).toBe(false);
+    for (const s of map.shrines) expect(map.inPuddle(s.x, s.z)).toBe(false);
+    expect(map.bonfires.length).toBeGreaterThanOrEqual(12);
   });
 
   it('woda leży w płaskiej niecce: brzeg jeziora nie wystaje ponad lustro', () => {

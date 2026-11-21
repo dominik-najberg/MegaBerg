@@ -346,6 +346,11 @@ export class AudioSys {
         this.tone('sine', 200, 1600, 0.7, 0.14);
         this.tone('triangle', 100, 800, 0.7, 0.1, 0.05);
         break;
+      case Ev.Haste:
+        // A quick rising flourish: the weapons pick up the pace.
+        [0, 4, 7, 11, 14, 18].forEach((d, i) => this.tone('square', degFreq(d, 1), degFreq(d + 2, 1), 0.16, 0.07, i * 0.045));
+        this.hiss('highpass', 3000, 9000, 0.35, 0.07);
+        break;
       case Ev.Bonus:
         // Two rising bells: something good has appeared nearby.
         [e.a ? 7 : 4, e.a ? 11 : 9, 14].forEach((d, i) => this.tone('sine', degFreq(d, 1), degFreq(d, 1), 0.7, 0.13, i * 0.12));

@@ -160,35 +160,67 @@ export function levelUpCards(w: World, n: number): Card[] {
 
 /** Luck bonus of the rarity roll for chest items. */
 export const CHEST_LUCK = 0.6;
+/** The rich chest of a landmark: this many treasures at once, none of them common, with more luck. */
+export const RICH_CHEST_ITEMS = 2;
+export const RICH_CHEST_LUCK = 1.6;
 
-export function itemCard(w: World, def: ItemDef): Card {
-  const owned = w.itemCount(def.id);
+/** `extra`: copies of the same item already lying in the chest this card is for. */
+export function itemCard(w: World, def: ItemDef, extra = 0): Card {
+  const owned = w.itemCount(def.id) + extra;
   const text = owned > 0 ? `${def.desc} (masz już ${owned}).` : def.desc;
   return { kind: 'item', id: def.id, rarity: def.rarity, isNew: owned === 0, level: owned + 1, name: def.name, text, icon: def.icon, color: def.color };
 }
 
-/** Rolls one item for a chest: rarity first (boosted by luck), then an item of that rarity from the pool. */
-export function rollItem(w: World): ItemDef | undefined {
-  const pool = ITEMS.filter((i) => w.itemPool.has(i.id));
+/**
+ * Rolls one item for a chest: rarity first (boosted by luck), then an item of that rarity from the pool.
+ * A rich chest rolls with more luck and never gives a common item while the pool has a better one.
+ */
+export function rollItem(w: World, rich = false): ItemDef | undefined {
+  let pool = ITEMS.filter((i) => w.itemPool.has(i.id));
+  if (rich) {
+    const better = pool.filter((i) => i.rarity !== 'common');
+    if (better.length > 0) pool = better;
+  }
   if (pool.length === 0) return undefined;
   // Only rarities the pool actually has can be rolled; otherwise a missing rarity would funnel every
   // such roll into the one item of the rarity below it.
-  const weights = rarityWeights(w.stats.luck + CHEST_LUCK).map((wt, r) => (pool.some((i) => i.rarity === RARITY_ORDER[r]) ? wt : 0));
+  const weights = rarityWeights(w.stats.luck + (rich ? RICH_CHEST_LUCK : CHEST_LUCK)).map((wt, r) => (pool.some((i) => i.rarity === RARITY_ORDER[r]) ? wt : 0));
   const rarity = RARITY_ORDER[Math.max(0, w.rng.weighted(weights))];
   const of = pool.filter((i) => i.rarity === rarity);
   return of[w.rng.int(of.length)] ?? pool[w.rng.int(pool.length)];
 }
 
-/** Chest reward: an evolution if one is ready, otherwise one item (Skarb). */
-export function chestCards(w: World): Card[] {
+const GOLD_POT: Card = { kind: 'gold', id: 'zloto', rarity: 'rare', isNew: false, level: 60, name: 'Garniec złota', text: '+60 złota.', icon: 'coin', color: 0xffd040 };
+
+/**
+ * Chest reward: an evolution if one is ready, otherwise one item (Skarb). The rich chest of a landmark
+ * holds RICH_CHEST_ITEMS better treasures, all of them taken at once; a ready evolution replaces one.
+ */
+export function chestCards(w: World, rich = false): Card[] {
+  const cards: Card[] = [];
   for (const inst of w.weapons) {
-    if (canEvolve(w, inst)) return [evolveCard(inst)];
+    if (canEvolve(w, inst)) {
+      cards.push(evolveCard(inst));
+      break;
+    }
   }
-  const item = rollItem(w);
-  if (!item) {
-    return [{ kind: 'gold', id: 'zloto', rarity: 'rare', isNew: false, level: 60, name: 'Garniec złota', text: '+60 złota.', icon: 'coin', color: 0xffd040 }];
+  if (!rich) {
+    if (cards.length > 0) return cards;
+    const item = rollItem(w);
+    return [item ? itemCard(w, item) : GOLD_POT];
   }
-  return [itemCard(w, item)];
+  while (cards.length < RICH_CHEST_ITEMS) {
+    // Different treasures when the pool allows it: a few rolls, then whatever comes.
+    let item = rollItem(w, true);
+    for (let tries = 0; tries < 6 && item && cards.some((c) => c.kind === 'item' && c.id === item?.id); tries++) item = rollItem(w, true);
+    if (!item) {
+      cards.push(GOLD_POT);
+      continue;
+    }
+    const id = item.id;
+    cards.push(itemCard(w, item, cards.filter((c) => c.kind === 'item' && c.id === id).length));
+  }
+  return cards;
 }
 
 /** Applies a card to the world's inventory. */
